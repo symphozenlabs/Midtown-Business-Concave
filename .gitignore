@@ -1,0 +1,13 @@
+node_modules
+/build
+/.svelte-kit
+.env
+.env.*
+!.env.example
+.firebase
+*.log
+.wrangler
+.dev.vars
+
+# Raw source images (personal UPI QR photo etc.); the app uses static/poster instead
+/posters

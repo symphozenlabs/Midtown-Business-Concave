@@ -1,0 +1,7 @@
+# Cloudflare Pages project for the registration site.
+# Secrets (DATABASE_URL, R2_S3_API_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are set
+# in the Pages dashboard or with `npx wrangler pages secret put <NAME>`, never here.
+name = "midtown-business-conclave"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"

@@ -1,0 +1,327 @@
+{
+  "manifestVersion": 3,
+  "name": "SymphoZen Labs",
+  "namespace": "SymphoZen",
+  "files": [
+    "assets/Command/README.md",
+    "assets/Logos/README.md",
+    "assets/SymphoServe/README.md",
+    "components/Button/README.md",
+    "components/ServeButton/README.md",
+    "components/ServeDataTable/README.md",
+    "components/ServeKdsTicket/README.md",
+    "components/ServePageHeader/README.md",
+    "components/ServeSidebar/README.md",
+    "components/ServeStatCard/README.md",
+    "components/ServeStatusBadge/README.md",
+    "components/TextField/README.md",
+    "components/ZenDashboard/README.md",
+    "components/ZenDataTable/README.md",
+    "components/ZenMetricCard/README.md",
+    "components/ZenPageHeader/README.md",
+    "components/ZenSidebar/README.md",
+    "components/ZenStatusBadge/README.md",
+    "decision-record.md",
+    "product-family.md",
+    "symphoserve-ui.md",
+    "symphozen-command.md",
+    "tokens.css"
+  ],
+  "libraries": [],
+  "components": [
+    {
+      "name": "Button",
+      "group": "Actions",
+      "summary": "The action control: one primary button per view for the most useful next step, with secondary buttons for alternatives."
+    },
+    {
+      "name": "ServeButton",
+      "group": "SymphoServe",
+      "summary": "SymphoServe's product button, matching the shadcn-svelte Button in the admin portal and product owner dashboard."
+    },
+    {
+      "name": "ServeDataTable",
+      "group": "SymphoServe",
+      "summary": "A dense, scannable table for SymphoServe operational records (orders, bills, audit entries), inside a bordered white panel."
+    },
+    {
+      "name": "ServeKdsTicket",
+      "group": "SymphoServe",
+      "summary": "The kitchen display (KDS) order ticket (KOT card): status-first, high-contrast and touch-sized, shown on the dark kitchen board."
+    },
+    {
+      "name": "ServePageHeader",
+      "group": "SymphoServe",
+      "summary": "The top of every SymphoServe product page: an optional eyebrow, the page title, a one-sentence description and right-aligned actions."
+    },
+    {
+      "name": "ServeSidebar",
+      "group": "SymphoServe",
+      "summary": "The persistent forest navigation of the SymphoServe admin portal and product owner dashboard."
+    },
+    {
+      "name": "ServeStatCard",
+      "group": "SymphoServe",
+      "summary": "A compact metric tile for SymphoServe dashboards: label, value, optional helper line and optional icon chip."
+    },
+    {
+      "name": "ServeStatusBadge",
+      "group": "SymphoServe",
+      "summary": "An inline operational status label with a dot, coloured by the serve-status-* tokens, for orders, tables, bills and print jobs."
+    },
+    {
+      "name": "TextField",
+      "group": "Forms",
+      "summary": "A labelled single-line input with an inline required marker, optional help text, and error and success states."
+    },
+    {
+      "name": "ZenDashboard",
+      "group": "SymphoZen Command",
+      "summary": "The reference SymphoZen Command screen — Employee Management — composed from ZenSidebar, the top bar, ZenPageHeader, ZenMetricCard, ZenDataTable and ZenStatusB…",
+      "page": true
+    },
+    {
+      "name": "ZenDataTable",
+      "group": "SymphoZen Command",
+      "summary": "The SymphoZen Command data panel: segmented tabs, a toolbar, a selectable table with rich cells, and pagination."
+    },
+    {
+      "name": "ZenMetricCard",
+      "group": "SymphoZen Command",
+      "summary": "A KPI tile — label, large value, trend and caption — matching the package's MetricCard with the Command icon tile on the left."
+    },
+    {
+      "name": "ZenPageHeader",
+      "group": "SymphoZen Command",
+      "summary": "The heading block of a SymphoZen Command page: an icon tile, title, one-line description and the page's single primary action."
+    },
+    {
+      "name": "ZenSidebar",
+      "group": "SymphoZen Command",
+      "summary": "The SymphoZen Command navigation rail: product lockup, collapsible sections with Lucide icons, the open section's children, and the signed-in user."
+    },
+    {
+      "name": "ZenStatusBadge",
+      "group": "SymphoZen Command",
+      "summary": "The shared status and category pill from @symphozenlabs/ui (StatusBadge over Badge variant=\"outline\"), with a dot for states."
+    }
+  ],
+  "assetGroups": [
+    {
+      "name": "Logos",
+      "tile": "l",
+      "order": [
+        "symphozen-labs-logo.svg",
+        "symphozen-labs-logo-inverse.svg",
+        "symphozen-emblem.svg"
+      ],
+      "files": [
+        {
+          "path": "assets/Logos/symphozen-labs-logo.svg",
+          "id": "7dd3da325b7e3eafe33580f1772aeaf2"
+        },
+        {
+          "path": "assets/Logos/symphozen-labs-logo-inverse.svg",
+          "id": "c779f8a3c94e5ee934a625b97f6dbd8f"
+        },
+        {
+          "path": "assets/Logos/symphozen-emblem.svg",
+          "id": "f839aac2693ed9f691b4d3c721f81ffe"
+        }
+      ]
+    },
+    {
+      "name": "SymphoServe",
+      "tile": "l",
+      "order": [
+        "symphoserve-logo.png",
+        "symphoserve-logo-white.png",
+        "symba-hello.webp",
+        "symba-warm.webp",
+        "symba-listening.webp",
+        "symba-speaking.webp",
+        "symba-thinking.webp",
+        "symba-pointing-left.webp",
+        "symba-pointing-right.webp",
+        "symba-thumbs-up.webp",
+        "symba-thank-you.webp",
+        "symba-concerned.webp",
+        "symba.png"
+      ],
+      "files": [
+        {
+          "path": "assets/SymphoServe/symphoserve-logo.png",
+          "id": "2bc35c6d5d1c1e48450770fc4334b801"
+        },
+        {
+          "path": "assets/SymphoServe/symphoserve-logo-white.png",
+          "id": "6546e1ad3bd151d3f70c41e5b970090f"
+        },
+        {
+          "path": "assets/SymphoServe/symba-hello.webp",
+          "id": "346839b922aad2672d5a2ba8febdcb67"
+        },
+        {
+          "path": "assets/SymphoServe/symba-warm.webp",
+          "id": "ffa8d914baf49c73c111af3786ec0f28"
+        },
+        {
+          "path": "assets/SymphoServe/symba-listening.webp",
+          "id": "9e89966ec59f62205e81b6d6143b2a60"
+        },
+        {
+          "path": "assets/SymphoServe/symba-speaking.webp",
+          "id": "6b9b7694894665faf1892e4d71b09dd4"
+        },
+        {
+          "path": "assets/SymphoServe/symba-thinking.webp",
+          "id": "27ec5e63140063ae2c8b912652a1dbd7"
+        },
+        {
+          "path": "assets/SymphoServe/symba-pointing-left.webp",
+          "id": "1d36063e3a6789ea99e1fe1e77229464"
+        },
+        {
+          "path": "assets/SymphoServe/symba-pointing-right.webp",
+          "id": "2fb31b05f7bb976acc2df8a805784085"
+        },
+        {
+          "path": "assets/SymphoServe/symba-thumbs-up.webp",
+          "id": "cdc2b371172fb5fdc60bc332dd58545c"
+        },
+        {
+          "path": "assets/SymphoServe/symba-thank-you.webp",
+          "id": "c2e05fb6967a6a60d02b2cd20d909c15"
+        },
+        {
+          "path": "assets/SymphoServe/symba-concerned.webp",
+          "id": "3d33cb140cb17ccf595ecea404ac7f46"
+        },
+        {
+          "path": "assets/SymphoServe/symba.png",
+          "id": "b1f6d052e750071b4e74d6c32d3f4ea9"
+        }
+      ]
+    },
+    {
+      "name": "Command",
+      "tile": "l",
+      "order": [
+        "command-employee-management.png"
+      ],
+      "files": [
+        {
+          "path": "assets/Command/command-employee-management.png",
+          "id": "faf75e73f95186b5c965d23f051edba2"
+        }
+      ]
+    }
+  ],
+  "storage": {
+    "files": {
+      "assets/Command/command-employee-management.png": {
+        "store": "blob",
+        "id": "faf75e73f95186b5c965d23f051edba2",
+        "bytes": 1569656,
+        "type": "image/png"
+      },
+      "assets/Logos/symphozen-emblem.svg": {
+        "store": "blob",
+        "id": "f839aac2693ed9f691b4d3c721f81ffe",
+        "bytes": 11093,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/symphozen-labs-logo-inverse.svg": {
+        "store": "blob",
+        "id": "c779f8a3c94e5ee934a625b97f6dbd8f",
+        "bytes": 74016,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/symphozen-labs-logo.svg": {
+        "store": "blob",
+        "id": "7dd3da325b7e3eafe33580f1772aeaf2",
+        "bytes": 74016,
+        "type": "image/svg+xml"
+      },
+      "assets/SymphoServe/symba-concerned.webp": {
+        "store": "blob",
+        "id": "3d33cb140cb17ccf595ecea404ac7f46",
+        "bytes": 45180,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-hello.webp": {
+        "store": "blob",
+        "id": "346839b922aad2672d5a2ba8febdcb67",
+        "bytes": 51238,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-listening.webp": {
+        "store": "blob",
+        "id": "9e89966ec59f62205e81b6d6143b2a60",
+        "bytes": 49994,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-pointing-left.webp": {
+        "store": "blob",
+        "id": "1d36063e3a6789ea99e1fe1e77229464",
+        "bytes": 50932,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-pointing-right.webp": {
+        "store": "blob",
+        "id": "2fb31b05f7bb976acc2df8a805784085",
+        "bytes": 51410,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-speaking.webp": {
+        "store": "blob",
+        "id": "6b9b7694894665faf1892e4d71b09dd4",
+        "bytes": 53606,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-thank-you.webp": {
+        "store": "blob",
+        "id": "c2e05fb6967a6a60d02b2cd20d909c15",
+        "bytes": 46210,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-thinking.webp": {
+        "store": "blob",
+        "id": "27ec5e63140063ae2c8b912652a1dbd7",
+        "bytes": 45760,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-thumbs-up.webp": {
+        "store": "blob",
+        "id": "cdc2b371172fb5fdc60bc332dd58545c",
+        "bytes": 48206,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba-warm.webp": {
+        "store": "blob",
+        "id": "ffa8d914baf49c73c111af3786ec0f28",
+        "bytes": 53264,
+        "type": "image/webp"
+      },
+      "assets/SymphoServe/symba.png": {
+        "store": "blob",
+        "id": "b1f6d052e750071b4e74d6c32d3f4ea9",
+        "bytes": 935704,
+        "type": "image/png"
+      },
+      "assets/SymphoServe/symphoserve-logo-white.png": {
+        "store": "blob",
+        "id": "6546e1ad3bd151d3f70c41e5b970090f",
+        "bytes": 548505,
+        "type": "image/png"
+      },
+      "assets/SymphoServe/symphoserve-logo.png": {
+        "store": "blob",
+        "id": "2bc35c6d5d1c1e48450770fc4334b801",
+        "bytes": 560487,
+        "type": "image/png"
+      }
+    },
+    "blobBytesUsed": 4269277
+  }
+}

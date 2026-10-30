@@ -1,0 +1,324 @@
+/* SymphoZen Labs — generated from tokens.json */
+:root, [data-theme="light"] {
+  --paper: #fcfcfa; /* Page foundation. The default ground for every screen; most of any layout is paper, white and mist. */
+  --mist: #f4f5f1; /* Quiet secondary surface: alternating sections, table headers, inset panels on paper. */
+  --white: #ffffff; /* Raised surfaces that need their own boundary: field and secondary-button fills, logo panels, cards. Also the label colour on `olive-dark` buttons (5.17:1). */
+  --charcoal: #242424; /* Essential text: headings, labels, primary values. 15.11:1 on `paper`, 14.18:1 on `mist`, 13.84:1 on `olive-tint`. */
+  --ink: #171916; /* Deliberate dark bands and the footer. Text on ink is `white` (17.69:1) or `olive-soft` (10.48:1). */
+  --text-body: #454641; /* Body copy on `paper` (9.27:1), `white` and `mist` (8.70:1). */
+  --text-supporting: #62665f; /* Supporting text: help text, captions, sub-headlines, metadata. 5.70:1 on `paper`, 5.86:1 on `white`, 5.35:1 on `mist`. */
+  --olive: #5a8a45; /* Brand olive: identity and large accents only (logo, rules, scale bars, display-size emphasis). Not for small text — 3.96:1 on `paper`, and white on olive is 4.07:1, so olive fills carry only text 24px+ or bold 19px+. */
+  --olive-dark: #4d783b; /* Action olive: links, small olive text and eyebrows (5.03:1 on `paper`, 4.72:1 on `mist`, 4.60:1 on `olive-tint`), and primary-button fills with `white` labels (5.17:1). */
+  --olive-deep: #3e6230; /* PROPOSED. Hover and pressed fill of the primary button; `white` label on it 7.01:1. The brand book asks for clear surface changes but names no hover colour. */
+  --olive-soft: #b8cea9; /* Inverse accent: eyebrows, secondary text and focus rings on `ink` (10.48:1). Decorative on light grounds. */
+  --olive-tint: #edf4e9; /* Selected context: active nav item, selected row, chosen option. Pair with `charcoal` text and an `olive-dark` marker. */
+  --rule: #dfe3dc; /* Fine hairline rules between rows and sections on `paper` and `mist`. Decorative only (1.27:1): never the sole boundary of a control. */
+  --rule-inverse: #3d453a; /* Hairline rules on `ink` bands. Decorative only. */
+  --control-border: #83897e; /* Required control boundaries: fields, secondary buttons, checkboxes. 3.50:1 on `paper`, 3.59:1 on `white`, 3.28:1 on `mist` (all ≥ 3:1). */
+  --focus-ring: var(--olive-dark); /* Focus-visible ring on light grounds: 2px solid with a 2px offset. 5.03:1 on `paper`, 5.17:1 on `white`, 4.72:1 on `mist`. Proposed — the brand book asks for a visible ring with adequate contrast but names no colour. */
+  --focus-ring-inverse: var(--olive-soft); /* Focus-visible ring on `ink` bands (10.48:1). Proposed. */
+  --danger: #b03a1c; /* PROPOSED. Error text, error field borders and icons, always with a word ("Enter a work email"). 5.89:1 on `paper`, 6.06:1 on `white`; `white` label on a danger fill 6.06:1. */
+  --danger-tint: #fbede7; /* PROPOSED. Background of an error summary or failed row; `danger` text on it 5.30:1, `charcoal` 13.58:1. */
+  --success: #1f6b6e; /* PROPOSED. Confirmation text and icons, always with a word ("Message sent"). A blue-leaning teal so it is never told apart from `danger` by red/green hue alone. 6.04:1 on `paper`. */
+  --success-tint: #e6f1f0; /* PROPOSED. Background of a success summary; `success` text on it 5.38:1. */
+  --warning: #8a5300; /* PROPOSED. Caution text and icons, always with a word. 6.16:1 on `paper`. */
+  --warning-tint: #faf1df; /* PROPOSED. Background of a caution notice; `warning` text on it 5.64:1. */
+  --serve-forest: #10251f; /* SymphoServe only. Primary dark surface for SymphoServe heroes and panels; `serve-cream` text 13.90:1, `serve-mint` 8.41:1. */
+  --serve-green: #427c68; /* SymphoServe only. Secondary brand green; `white` text on it 4.87:1. */
+  --serve-mint: #93c6b6; /* SymphoServe only. Accent and primary-button fill on `serve-forest`, with `serve-forest` labels (8.41:1). */
+  --serve-cream: #f3eee4; /* SymphoServe only. Warm light surface; `charcoal` text 13.42:1. */
+  --serve-gold: #c99b52; /* SymphoServe only. Fine decorative detail on `serve-forest` (6.35:1). Decorative on cream (2.19:1) — never text there. */
+  --serve-web-forest-950: #0d2d20; /* SymphoServe website. Deep marketing backgrounds and the strongest brand text; label colour on `serve-web-sun` CTAs (9.03:1). */
+  --serve-web-forest-900: #133a29; /* SymphoServe website. Website hero and dark sections. `white` headings 12.61:1, `serve-web-sun` accents 7.66:1, light eyebrow #A9CE9A 7.20:1. */
+  --serve-web-forest-800: #17462e; /* SymphoServe website. Product sidebars and primary brand blocks (same value as `serve-app-sidebar`). */
+  --serve-web-forest-700: #28613f; /* SymphoServe website. Links, hover states, eyebrows and supporting emphasis on `serve-web-cream` (6.82:1). */
+  --serve-web-green-500: #629b4d; /* SymphoServe website. Marketing accents (large shapes, icons, highlights). Not for small text. */
+  --serve-web-green-100: #e9f2e3; /* SymphoServe website. Soft chips and website highlights. */
+  --serve-web-cream: #f8f7f2; /* SymphoServe website. Website page background. */
+  --serve-web-cream-dark: #eeece3; /* SymphoServe website. Warm alternating website bands. */
+  --serve-web-ink: #1c2921; /* SymphoServe website. Website body text on `serve-web-cream` (14.10:1). */
+  --serve-web-muted: #68736b; /* SymphoServe website. Website supporting text on `serve-web-cream` (4.60:1). */
+  --serve-web-line: #dfe4dd; /* SymphoServe website. Website hairlines and card borders. Decorative only. */
+  --serve-web-sun: #f0c45c; /* SymphoServe website. Website accent and warm CTA fill with `serve-web-forest-950` label; also the website focus ring on forest. */
+  --serve-web-sun-light: #f9e5a9; /* SymphoServe website. Soft sun highlight behind badges and quotes. */
+  --serve-app-background: #f6f8f4; /* SymphoServe admin portal and product owner dashboard (shadcn `--background`). Workspace background behind panels. */
+  --serve-app-foreground: #18231a; /* SymphoServe admin portal and product owner dashboard (shadcn `--foreground`). Body text and values on `serve-app-background` (15.18:1) and `serve-app-card`. */
+  --serve-app-card: #ffffff; /* SymphoServe admin portal and product owner dashboard (shadcn `--card`). Cards, panels, dialogs, tables and popovers. */
+  --serve-app-primary: #3f7334; /* SymphoServe admin portal and product owner dashboard (shadcn `--primary`). Primary screen action fill, links (`link` button). `serve-app-primary-foreground` on it 5.66:1. */
+  --serve-app-primary-foreground: #ffffff; /* SymphoServe admin portal and product owner dashboard (shadcn `--primary-foreground`). Label on `serve-app-primary`. */
+  --serve-app-secondary: #eef4ea; /* SymphoServe admin portal and product owner dashboard (shadcn `--secondary`). Lower-emphasis `secondary` button fill. */
+  --serve-app-secondary-foreground: #2f5a29; /* SymphoServe admin portal and product owner dashboard (shadcn `--secondary-foreground`). Label on `serve-app-secondary` (7.17:1). */
+  --serve-app-muted: #f0f3ee; /* SymphoServe admin portal and product owner dashboard (shadcn `--muted`). Input fills, subtle blocks, hover backgrounds of `outline` and `ghost` buttons. */
+  --serve-app-muted-foreground: #647064; /* SymphoServe admin portal and product owner dashboard (shadcn `--muted-foreground`). Supporting text, eyebrows, stat labels: 4.86:1 on `serve-app-background`, 5.19:1 on `serve-app-card`, 4.64:1 on `serve-app-muted`. */
+  --serve-app-accent: #e5f0df; /* SymphoServe admin portal and product owner dashboard (shadcn `--accent`). Selected and highlighted context. */
+  --serve-app-accent-foreground: #2f5f29; /* SymphoServe admin portal and product owner dashboard (shadcn `--accent-foreground`). Text on `serve-app-accent` (6.40:1). */
+  --serve-app-destructive: #b42318; /* SymphoServe admin portal and product owner dashboard (shadcn `--destructive`). Destructive actions and error text (6.57:1 on `serve-app-card`). Product owner dashboard value; the admin portal currently resolves to oklch(0.577 0.245 27.325) ≈ #E7000B. */
+  --serve-app-border: #dce5d9; /* SymphoServe admin portal and product owner dashboard (shadcn `--border`). Panel, card and table borders. Decorative (1.29:1 on white) — a control needs more than this edge alone. */
+  --serve-app-input: #cedacb; /* SymphoServe admin portal and product owner dashboard (shadcn `--input`). Input borders. Below the 3:1 control-boundary floor (1.45:1 on white); kept exact from the code — flagged. */
+  --serve-app-ring: #588c45; /* SymphoServe admin portal and product owner dashboard (shadcn `--ring`). Focus ring, chart-1 and data-grid accents. 4.00:1 on `serve-app-card`, 3.74:1 on `serve-app-background`. */
+  --serve-app-sidebar: #17462e; /* SymphoServe admin portal and product owner dashboard (shadcn `--sidebar`). Persistent desktop sidebar and mobile slide-in nav. `serve-app-sidebar-foreground` on it 10.76:1. */
+  --serve-app-sidebar-foreground: #ffffff; /* SymphoServe admin portal and product owner dashboard (shadcn `--sidebar-foreground`). Sidebar labels and icons. */
+  --serve-app-sidebar-accent: #23613f; /* SymphoServe admin portal and product owner dashboard (shadcn `--sidebar-accent`). Active sidebar item fill (white 7.36:1). */
+  --serve-app-sidebar-primary: #8dbd77; /* SymphoServe admin portal and product owner dashboard (shadcn `--sidebar-primary`). Sidebar highlights and the sidebar focus ring (4.96:1 on `serve-app-sidebar`). */
+  --serve-app-sidebar-primary-foreground: #123522; /* SymphoServe admin portal and product owner dashboard (shadcn `--sidebar-primary-foreground`). Text on `serve-app-sidebar-primary`. */
+  --serve-app-attention: #f97316; /* SymphoServe product (Tailwind orange-500). Attention only: unread and urgent counts, bill and payment urgency, chart-3. White count text on it is 2.89:1 — below 4.5:1; kept exact from the code, flagged. */
+  --serve-status-new-bg: oklch(97.9% 0.021 166.113); /* SymphoServe status badge, `.status-blue` background — New / Ordering / Issued / Occupied. */
+  --serve-status-new-border: oklch(90.5% 0.093 164.15); /* SymphoServe status badge, `.status-blue` border — New / Ordering / Issued / Occupied. */
+  --serve-status-new-text: oklch(43.2% 0.095 166.913); /* SymphoServe status badge, `.status-blue` label and dot — New / Ordering / Issued / Occupied. 7.19:1 on its `-bg`. */
+  --serve-status-accepted-bg: oklch(98.2% 0.018 155.826); /* SymphoServe status badge, `.status-indigo` background — Accepted / Billed. */
+  --serve-status-accepted-border: oklch(92.5% 0.084 155.995); /* SymphoServe status badge, `.status-indigo` border — Accepted / Billed. */
+  --serve-status-accepted-text: oklch(44.8% 0.119 151.328); /* SymphoServe status badge, `.status-indigo` label and dot — Accepted / Billed. 6.78:1 on its `-bg`. */
+  --serve-status-preparing-bg: oklch(98.7% 0.022 95.277); /* SymphoServe status badge, `.status-amber` background — Preparing. */
+  --serve-status-preparing-border: oklch(92.4% 0.12 95.746); /* SymphoServe status badge, `.status-amber` border — Preparing. */
+  --serve-status-preparing-text: oklch(47.3% 0.137 46.201); /* SymphoServe status badge, `.status-amber` label and dot — Preparing. 6.88:1 on its `-bg`. */
+  --serve-status-ready-bg: oklch(97.9% 0.021 166.113); /* SymphoServe status badge, `.status-green` background — Ready / Paid / Available / Printed. */
+  --serve-status-ready-border: oklch(90.5% 0.093 164.15); /* SymphoServe status badge, `.status-green` border — Ready / Paid / Available / Printed. */
+  --serve-status-ready-text: oklch(50.8% 0.118 165.612); /* SymphoServe status badge, `.status-green` label and dot — Ready / Paid / Available / Printed. 5.09:1 on its `-bg`. */
+  --serve-status-neutral-bg: oklch(96.7% 0.001 286.375); /* SymphoServe status badge, `.status-neutral` background — Served / Closed / Draft / Unavailable. */
+  --serve-status-neutral-border: oklch(92% 0.004 286.32); /* SymphoServe status badge, `.status-neutral` border — Served / Closed / Draft / Unavailable. */
+  --serve-status-neutral-text: oklch(37% 0.013 285.805); /* SymphoServe status badge, `.status-neutral` label and dot — Served / Closed / Draft / Unavailable. 9.50:1 on its `-bg`. */
+  --serve-status-open-bg: oklch(98.6% 0.031 120.757); /* SymphoServe status badge, `.status-cyan` background — Open. */
+  --serve-status-open-border: oklch(93.8% 0.127 124.321); /* SymphoServe status badge, `.status-cyan` border — Open. */
+  --serve-status-open-text: oklch(45.3% 0.124 130.933); /* SymphoServe status badge, `.status-cyan` label and dot — Open. 6.82:1 on its `-bg`. */
+  --serve-status-attention-bg: oklch(98% 0.016 73.684); /* SymphoServe status badge, `.status-orange` background — Bill requested / Payment pending. */
+  --serve-status-attention-border: oklch(90.1% 0.076 70.697); /* SymphoServe status badge, `.status-orange` border — Bill requested / Payment pending. */
+  --serve-status-attention-text: oklch(47% 0.157 37.304); /* SymphoServe status badge, `.status-orange` label and dot — Bill requested / Payment pending. 6.93:1 on its `-bg`. */
+  --serve-status-failed-bg: oklch(97.1% 0.013 17.38); /* SymphoServe status badge, `.status-red` background — Rejected / Cancelled / Void / Print failed. */
+  --serve-status-failed-border: oklch(88.5% 0.062 18.334); /* SymphoServe status badge, `.status-red` border — Rejected / Cancelled / Void / Print failed. */
+  --serve-status-failed-text: oklch(50.5% 0.213 27.518); /* SymphoServe status badge, `.status-red` label and dot — Rejected / Cancelled / Void / Print failed. 5.88:1 on its `-bg`. */
+  --serve-kds-root: #07111d; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Board root background. `serve-kds-text` 17.30:1. */
+  --serve-kds-header: #101c2c; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Header and footer bars (95% opacity in the header). */
+  --serve-kds-sidebar: #0d1a29; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Left workload sidebar. */
+  --serve-kds-board: #081321; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Main card-grid area. `serve-kds-muted` 7.28:1. */
+  --serve-kds-field: #111f31; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Search and filter fields in the sidebar (border slate-600). */
+  --serve-kds-text: oklch(96.8% 0.007 247.896); /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Primary text on KDS surfaces (Tailwind slate-100). */
+  --serve-kds-muted: #94a3b8; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Secondary labels and scrollbars on KDS surfaces. */
+  --serve-kds-card: #f8fafc; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Ticket (KOT) card body. */
+  --serve-kds-card-ink: #111827; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Text on every status header fill (14.33:1 new, 12.24:1 preparing, 7.79:1 ready, 4.71:1 late). */
+  --serve-kds-new: #e5e7eb; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Ticket header fill: New. */
+  --serve-kds-preparing: #ffd21f; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Ticket header fill: Preparing / Partial. */
+  --serve-kds-ready: #22c55e; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Ticket header fill and matched-card border: Ready. */
+  --serve-kds-late: #ef4444; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Ticket header fill: Late (urgency overrides status). */
+  --serve-kds-action: #16a34a; /* SymphoServe kitchen display (dark, KDS only — never on admin pages). Served / done buttons on tickets, with white label. */
+  --serve-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* SymphoServe `outline` button. */
+  --serve-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); /* SymphoServe stat cards and panels, only when needed. */
+  --serve-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); /* SymphoServe menus, popovers and notification panels. */
+  --serve-web-shadow: 0 18px 45px rgba(13, 45, 32, 0.1); /* SymphoServe website hero visuals and feature media. */
+  --serve-kds-shadow: 0 12px 34px rgba(0, 0, 0, 0.28); /* KDS ticket cards on the dark board. */
+}
+:root {
+  --space-1: 4px; /* Icon-to-label gaps, hairline offsets. */
+  --space-2: 8px; /* Label-to-control gap; tight stacks; motion travel minimum. */
+  --space-3: 12px; /* Control-to-help-text gap; compact list rows. */
+  --space-4: 16px; /* Field inner padding; gap between related controls; motion travel maximum. */
+  --space-6: 24px; /* Button inner padding; card padding; gap between form rows. */
+  --space-8: 32px; /* Gap between groups within a section; tablet gutter. */
+  --space-12: 48px; /* Gap between heading block and content; desktop gutter. */
+  --space-16: 64px; /* Minimum spacing between major marketing sections. */
+  --radius-sm: 6px; /* Buttons and cards. */
+  --radius-md: 8px; /* Fields (inputs, selects, text areas). */
+  --radius-lg: 12px; /* Dialogs and drawers. */
+  --serve-radius-sm: 3.84px; /* SymphoServe product `rounded-sm` (0.6 × 0.4rem): small chips. */
+  --serve-radius-md: 5.12px; /* SymphoServe product `rounded-md` (0.8 × 0.4rem): buttons, status badges, stat cards. */
+  --serve-radius-lg: 6.4px; /* SymphoServe product `rounded-lg` (= `--radius` 0.4rem): nav items, operational buttons, search fields. */
+  --serve-radius-xl: 8.96px; /* SymphoServe product `rounded-xl` (1.4 × 0.4rem): popovers and menus. */
+  --serve-kds-radius: 8px; /* KDS ticket cards (0.5rem). */
+  --container-max: 1344px; /* Maximum width of the marketing container. */
+  --reading-max: 736px; /* Maximum width of long-form reading; paragraphs about 55–70 characters. */
+  --gutter-phone: 20px; /* Page gutter on phones. */
+  --gutter-phone-narrow: 16px; /* Page gutter below 360px viewport width. */
+  --gutter-tablet: 32px; /* Page gutter on tablets. */
+  --gutter-desktop: 48px; /* Page gutter on desktop (32px up to 48px). */
+  --section-space-min: 64px; /* Smallest vertical space between major marketing sections. */
+  --section-space-max: 128px; /* Largest vertical space between major marketing sections. */
+  --control-height: 48px; /* Base height of buttons and single-line fields. Keep dimensions stable across states. */
+  --logo-width-min: 172px; /* Smallest width of the full lockup (logo + tagline). Header target is 192–240px. */
+  --serve-button-height: 36px; /* SymphoServe default product button (`h-9`). */
+  --serve-button-height-lg: 40px; /* SymphoServe `lg` button and top-bar controls (`h-10`). */
+  --serve-touch-min: 44px; /* Minimum height of mobile, KDS and high-frequency operational actions and nav items (`min-h-11`). */
+  --serve-sidebar-width: 272px; /* SymphoServe admin sidebar width. */
+  --serve-topbar-height: 64px; /* SymphoServe sticky admin top bar (`h-16`). */
+  --serve-app-content-max: 1540px; /* SymphoServe product main content max width (1500–1540px). */
+  --serve-web-shell: 1180px; /* SymphoServe website `shell` container: min(100% − 48px, 1180px). */
+  --serve-web-section-space: 110px; /* SymphoServe website section padding on desktop (80–110px). */
+  --serve-kds-card-min: 270px; /* KDS card grid: repeat(auto-fit, minmax(270px, 1fr)); 4 columns at 1440px+. */
+  --serve-kds-card-height: 285px; /* KDS ticket card fixed height (60px header, items, 42px footer). */
+  --duration-feedback: 160ms; /* Colour, focus and press response. */
+  --duration-disclosure: 260ms; /* Drawers, overlays and expanders. */
+  --duration-entrance-min: 400ms; /* Occasional editorial content introduction (lower bound). */
+  --duration-entrance-max: 560ms; /* Occasional editorial content introduction (upper bound). */
+  --serve-duration-fast: 150ms; /* SymphoServe product hover and press. */
+  --serve-duration-slow: 220ms; /* SymphoServe menu entry, progress and state transitions (sidebar slide uses 200ms). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* The single brand easing curve for every transition. */
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-serve-product: "Inter Variable", "Inter", sans-serif;
+  --font-serve-web-sans: "Google Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --text-display: 500 80px/1.08 var(--font-display); /* Marketing hero only. Range 44–80px: 44 on phones, 80 at 1440. Short lines; never in dashboards or for long personal names. */
+  --text-h1: 500 64px/1.1 var(--font-display); /* Page headline. Range 40–64px. */
+  --text-h2: 500 48px/1.12 var(--font-display); /* Section headline. Range 32–48px. */
+  --text-h3: 500 32px/1.2 var(--font-display); /* Sub-section and card heading. Range 26–32px. */
+  --text-product-title: 600 32px/1.25 var(--font-sans); /* Product page title in Inter. Range 28–32px. */
+  --text-lead: 400 18px/1.6 var(--font-sans); /* Introductory paragraph under a headline; body copy at the top of the 16–18px range. */
+  --text-ui: 500 16px/1.4 var(--font-sans); /* Button labels, field labels, navigation. Inter 400–600; 500 by default. */
+  --text-caption: 400 14px/1.5 var(--font-sans); /* Help text, captions and table metadata in `text-supporting`. */
+  --text-eyebrow: 500 12px/1.4 var(--font-sans); /* Uppercase section label in `olive-dark` (on ink: `olive-soft`). The only tracked style; everything else keeps ordinary tracking. */
+  --text-serve-page-title: 600 24px/32px var(--font-serve-product); /* Product page title (`text-2xl` semibold; the guide allows up to 28px). `serve-app-foreground`. */
+  --text-serve-section-title: 600 18px/28px var(--font-serve-product); /* Panel and section titles, 16–20px semibold. */
+  --text-serve-stat-value: 600 24px/32px var(--font-serve-product); /* Stat card values. Always tabular figures (`font-variant-numeric: tabular-nums`). */
+  --text-serve-body: 400 14px/20px var(--font-serve-product); /* Default product body, table cells and input text (`text-sm`). */
+  --text-serve-button: 500 14px/20px var(--font-serve-product); /* Button labels (`text-sm font-medium`); operational buttons use 600. */
+  --text-serve-label: 600 12px/16px var(--font-serve-product); /* Status badges, metadata and page-header eyebrows (uppercase, ordinary tracking). Labels range 11–13px. */
+  --text-serve-nav-section: 600 10.4px/16px var(--font-serve-product); /* Sidebar section labels, uppercase, emerald-100 at 65% on `serve-app-sidebar`. */
+  --text-serve-web-hero: 500 76px/1.05 var(--font-display); /* Website hero heading, Playfair Display, clamp(44px, 6vw, 76px). */
+  --text-serve-web-section: 500 58px/1.08 var(--font-display); /* Website section heading, 36–58px. */
+  --text-serve-web-body: 400 18px/1.65 var(--font-serve-web-sans); /* Website body copy, 16–20px, relaxed line height. `serve-web-ink` on `serve-web-cream`. */
+  --text-serve-web-eyebrow: 700 11px/1.4 var(--font-serve-web-sans); /* Website eyebrow, uppercase, `serve-web-forest-700` (on forest: #A9CE9A). Use sparingly. */
+}
+.display {
+  font-family: var(--font-display);
+  font-size: 80px;
+  line-height: 1.08;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.h1 {
+  font-family: var(--font-display);
+  font-size: 64px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.h2 {
+  font-family: var(--font-display);
+  font-size: 48px;
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.h3 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.product-title {
+  font-family: var(--font-sans);
+  font-size: 32px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.lead {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.ui {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.caption {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+.serve-page-title {
+  font-family: var(--font-serve-product);
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.serve-section-title {
+  font-family: var(--font-serve-product);
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.serve-stat-value {
+  font-family: var(--font-serve-product);
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.serve-body {
+  font-family: var(--font-serve-product);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.serve-button {
+  font-family: var(--font-serve-product);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.serve-label {
+  font-family: var(--font-serve-product);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.serve-nav-section {
+  font-family: var(--font-serve-product);
+  font-size: 10.4px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+}
+.serve-web-hero {
+  font-family: var(--font-display);
+  font-size: 76px;
+  line-height: 1.05;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.serve-web-section {
+  font-family: var(--font-display);
+  font-size: 58px;
+  line-height: 1.08;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.serve-web-body {
+  font-family: var(--font-serve-web-sans);
+  font-size: 18px;
+  line-height: 1.65;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.serve-web-eyebrow {
+  font-family: var(--font-serve-web-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}

@@ -1,0 +1,260 @@
+/*
+ * Midtown Business Conclave — event layer on top of design/tokens.css.
+ * The parent system supplies paper, ink, type, spacing, motion and states;
+ * the event brings gold (from the poster) in place of olive.
+ */
+:root {
+	--gold: #e3b04b; /* Accent on ink and primary fill on ink (ink label 8.9:1). Decorative on light grounds. */
+	--gold-bright: #f5cf77; /* Highlights and sheen on ink only. */
+	--gold-deep: #c9952f; /* Hover / pressed fill of gold buttons. */
+	--gold-ink: #8a5f10; /* Small gold text, markers and icons on paper/white (≈7:1). */
+	--gold-tint: #fbf3e1; /* Selected ground on light surfaces, with charcoal text and gold-ink marker. */
+	--gold-line: rgb(227 176 75 / 0.32); /* Decorative hairlines on ink. */
+	--on-ink: #ffffff;
+	--on-ink-soft: #d8ccae; /* Secondary text and eyebrows on ink (≈11:1). */
+	--ink-raised: #1f221d; /* Raised panel on ink. */
+
+	--focus-ring: var(--gold-ink);
+	--focus-ring-inverse: var(--gold);
+
+	--header-height: 72px;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--paper);
+	color: var(--text-body);
+	font: 400 16px/1.6 var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+img,
+svg {
+	display: block;
+	max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+	margin: 0;
+}
+
+h1,
+h2,
+h3 {
+	font-family: var(--font-display);
+	font-weight: 500;
+	color: var(--charcoal);
+	letter-spacing: 0;
+	text-wrap: balance;
+}
+
+::selection {
+	background: var(--gold);
+	color: var(--ink);
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+.on-ink :focus-visible {
+	outline-color: var(--focus-ring-inverse);
+}
+
+.container {
+	width: 100%;
+	max-width: var(--container-max);
+	margin-inline: auto;
+	padding-inline: var(--gutter-phone);
+}
+
+@media (max-width: 359px) {
+	.container {
+		padding-inline: var(--gutter-phone-narrow);
+	}
+}
+
+@media (min-width: 720px) {
+	.container {
+		padding-inline: var(--gutter-tablet);
+	}
+}
+
+@media (min-width: 1200px) {
+	.container {
+		padding-inline: var(--gutter-desktop);
+	}
+}
+
+.eyebrow {
+	display: inline-block;
+	font: var(--text-eyebrow);
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--gold-ink);
+}
+
+.on-ink .eyebrow {
+	color: var(--on-ink-soft);
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Buttons ---------------------------------------------------------------- */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2);
+	min-height: var(--control-height);
+	padding: 0 var(--space-6);
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	font: var(--text-ui);
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background-color var(--duration-feedback) var(--ease-out),
+		border-color var(--duration-feedback) var(--ease-out),
+		color var(--duration-feedback) var(--ease-out);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.btn svg {
+	flex: none;
+}
+
+/* Primary on light grounds: ink fill, white label, gold icon. */
+.btn-primary {
+	background: var(--ink);
+	color: var(--on-ink);
+}
+
+.btn-primary svg {
+	color: var(--gold);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: #2b2e28;
+}
+
+.btn-primary:active:not(:disabled) {
+	background: #000;
+}
+
+/* Primary on ink: gold fill, ink label. */
+.btn-gold {
+	background: var(--gold);
+	color: var(--ink);
+}
+
+.btn-gold:hover:not(:disabled) {
+	background: var(--gold-bright);
+}
+
+.btn-gold:active:not(:disabled) {
+	background: var(--gold-deep);
+}
+
+.btn-secondary {
+	background: var(--white);
+	border-color: var(--control-border);
+	color: var(--charcoal);
+}
+
+.btn-secondary:hover:not(:disabled) {
+	background: var(--mist);
+	border-color: var(--charcoal);
+}
+
+.btn-ghost {
+	background: transparent;
+	color: var(--charcoal);
+	padding-inline: var(--space-3);
+}
+
+.btn-ghost:hover:not(:disabled) {
+	background: var(--mist);
+}
+
+/* Scroll reveal ---------------------------------------------------------- */
+
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(14px);
+	transition:
+		opacity var(--duration-entrance-max) var(--ease-out),
+		transform var(--duration-entrance-max) var(--ease-out);
+	transition-delay: var(--reveal-delay, 0ms);
+}
+
+[data-reveal].is-revealed {
+	opacity: 1;
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* Without JS the reveal never runs, so keep content visible. */
+html:not(.js) [data-reveal] {
+	opacity: 1;
+	transform: none;
+}
