@@ -3,7 +3,7 @@ import { EMAIL_FROM, RESEND_API_KEY } from '$app/env/private';
 import { EVENT } from '#lib/event.ts';
 import { eventLabels, type EventLabels } from '#lib/event-settings.ts';
 import { formatRupees } from '#lib/payment.ts';
-import { getEventSettings, type Registration } from './store.ts';
+import { getEventSettings, type EmailStatus, type Registration } from './store.ts';
 
 export const isEmailConfigured = Boolean(RESEND_API_KEY && EMAIL_FROM);
 
@@ -24,7 +24,41 @@ function toBase64(bytes: Uint8Array) {
 const escape = (s: string) =>
 	s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-async function send(to: string, subject: string, html: string, text: string, attachments: Attachment[] = []) {
+/* ---------- delivery status ---------- */
+
+const DELIVERED_EVENTS = new Set(['delivered', 'opened', 'clicked']);
+const FAILED_EVENTS = new Set(['bounced', 'complained', 'failed', 'suppressed', 'canceled']);
+
+export function emailStatusFor(event: string): EmailStatus {
+	if (DELIVERED_EVENTS.has(event)) return 'delivered';
+	if (FAILED_EVENTS.has(event)) return 'failed';
+	return 'sent'; // queued, scheduled, sent, delivery_delayed
+}
+
+/**
+ * Development without Resend: emails are printed, and their ids say how the
+ * "delivery" ends, so the dashboard can be exercised. An address containing
+ * "bounce" fails; everything else is delivered.
+ */
+const DEV_PREFIX = 'dev-';
+
+/** Asks Resend what last happened to an email. Needs a Full access API key. */
+export async function fetchEmailEvent(id: string): Promise<string> {
+	if (id.startsWith(DEV_PREFIX)) return id.startsWith(`${DEV_PREFIX}bounce-`) ? 'bounced' : 'delivered';
+	if (!isEmailConfigured) throw new EmailError('Email is not configured. Set RESEND_API_KEY and EMAIL_FROM.');
+	const res = await fetch(`https://api.resend.com/emails/${encodeURIComponent(id)}`, {
+		headers: { authorization: `Bearer ${RESEND_API_KEY}` }
+	});
+	if (res.status === 401 || res.status === 403) {
+		throw new EmailError('The Resend API key cannot read email status. Create a key with Full access.');
+	}
+	if (!res.ok) throw new EmailError(`Resend could not report on the email (${res.status}).`);
+	const data = (await res.json()) as { last_event?: unknown };
+	return typeof data.last_event === 'string' ? data.last_event : 'sent';
+}
+
+/** Sends one email and returns Resend's id for it. */
+async function send(to: string, subject: string, html: string, text: string, attachments: Attachment[] = []): Promise<string> {
 	if (!isEmailConfigured) {
 		if (dev) {
 			console.info(
@@ -32,7 +66,7 @@ async function send(to: string, subject: string, html: string, text: string, att
 					attachments.map((a) => `${a.filename} (${(a.content.length / 1048576).toFixed(2)} MB)`).join(', ') || 'none'
 				}\n${text.replace(/^/gm, '  | ')}`
 			);
-			return;
+			return `${DEV_PREFIX}${/bounce/i.test(to) ? 'bounce-' : ''}${crypto.randomUUID()}`;
 		}
 		throw new EmailError('Email is not configured. Set RESEND_API_KEY and EMAIL_FROM.');
 	}
@@ -49,6 +83,9 @@ async function send(to: string, subject: string, html: string, text: string, att
 		})
 	});
 	if (!res.ok) throw new EmailError(`Resend refused the email (${res.status}): ${await res.text()}`);
+	const data = (await res.json().catch(() => ({}))) as { id?: unknown };
+	if (typeof data.id !== 'string') throw new EmailError('Resend accepted the email but returned no id.');
+	return data.id;
 }
 
 /** The schedule as set on the dashboard, formatted for the footer of every email. */
@@ -75,7 +112,8 @@ function slug(s: string) {
 	return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'delegate';
 }
 
-export async function sendTicketEmail(reg: Registration, poster: Uint8Array | null) {
+/** Emails the ticket and returns Resend's id, for checking delivery later. */
+export async function sendTicketEmail(reg: Registration, poster: Uint8Array | null): Promise<string> {
 	const when = await schedule();
 	const first = reg.fullName.split(/\s+/)[0];
 	const details = `
@@ -99,7 +137,7 @@ Delegate: ${reg.fullName}, ${reg.designation}, ${reg.companyName}
 Paid: ${formatRupees(reg.amountRupees)}${reg.upiTxnId ? ` (UPI ref ${reg.upiTxnId})` : ''}
 
 ${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
-	await send(
+	return send(
 		reg.email,
 		`Your ticket · ${EVENT.name} 2026 · ${reg.code}`,
 		html,

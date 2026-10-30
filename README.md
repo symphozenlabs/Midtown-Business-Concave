@@ -25,6 +25,12 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
   marking many at once. Each row expands smoothly to show the rest of the registration, the poster and the
   reject form. The send button sends up to 25 tickets per click (Resend allows about two emails a second);
   click again if more are waiting.
+- **Ticket delivery.** Every ticket email keeps Resend's email id. **Check delivery** (also run quietly when
+  the dashboard opens) asks Resend's `GET /emails/:id` what happened, and the *Ticket email* column shows
+  *Not sent*, *Sent*, *Delivered* or *Failed* (bounced, marked as spam, suppressed…). The chips above the
+  table filter by that state, and **Resend n failed emails** sends the ticket again to everyone whose email
+  did not arrive. Reading email status needs a Resend API key with **Full access**; a *Sending access* key
+  can send but not check. Run [db/schema.sql](db/schema.sql) again to add the delivery columns.
 - `/admin/configuration` sets the event fee and UPI ID (**Generate QR** saves both and regenerates the QR and
   payment link the registration form uses), and the event date and time (shown in the hero, countdown and
   ticket emails). The page shows the current QR and the `upi://pay` link that mobile users tap, and can read

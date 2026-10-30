@@ -43,7 +43,25 @@ export interface Registration extends RegistrationInput {
 	reviewedBy: string | null;
 	rejectionReason: string | null;
 	ticketEmailedAt: string | null;
+	/** Resend's id for the last ticket email, used to ask whether it arrived. */
+	ticketEmailId: string | null;
+	/** Reduced from Resend's last event; null until a ticket has been sent. */
+	ticketEmailStatus: EmailStatus | null;
+	/** Resend's own word for what last happened: delivered, bounced, delivery_delayed… */
+	ticketEmailEvent: string | null;
+	ticketEmailCheckedAt: string | null;
 	createdAt: string;
+}
+
+/** Where a ticket email stands. "Not sent" is a paid row with no ticket email yet. */
+export type EmailStatus = 'sent' | 'delivered' | 'failed';
+export type EmailFilter = 'all' | 'not_sent' | EmailStatus;
+export const EMAIL_FILTERS: EmailFilter[] = ['all', 'failed', 'not_sent', 'sent', 'delivered'];
+
+/** Email state of a paid registration, for filters and counts. */
+export function emailStateOf(r: Pick<Registration, 'ticketEmailedAt' | 'ticketEmailStatus'>): Exclude<EmailFilter, 'all'> {
+	if (!r.ticketEmailedAt) return 'not_sent';
+	return r.ticketEmailStatus ?? 'sent';
 }
 
 export type PaymentResult =
@@ -55,6 +73,8 @@ export interface Stats {
 	collectedRupees: number;
 	/** Paid, but the ticket email has not gone out yet. */
 	ticketsToSend: number;
+	/** Ticket emails of paid registrations, by delivery state. */
+	email: Record<Exclude<EmailFilter, 'all'>, number>;
 }
 
 export class DuplicateEmailError extends Error {}
@@ -101,6 +121,10 @@ function fromRow(r: Record<string, any>): Registration {
 		reviewedBy: r.reviewed_by,
 		rejectionReason: r.rejection_reason,
 		ticketEmailedAt: iso(r.ticket_emailed_at),
+		ticketEmailId: r.ticket_email_id ?? null,
+		ticketEmailStatus: r.ticket_email_status ?? null,
+		ticketEmailEvent: r.ticket_email_event ?? null,
+		ticketEmailCheckedAt: iso(r.ticket_email_checked_at),
 		createdAt: iso(r.created_at)!
 	};
 }
@@ -188,6 +212,10 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			reviewedBy: null,
 			rejectionReason: null,
 			ticketEmailedAt: null,
+			ticketEmailId: null,
+			ticketEmailStatus: null,
+			ticketEmailEvent: null,
+			ticketEmailCheckedAt: null,
 			createdAt: now()
 		};
 		mem.rows.set(row.id, row);
@@ -283,12 +311,18 @@ export async function submitPayment(code: string, email: string, utr: string): P
 	}
 }
 
-export async function listRegistrations(filter: { status: Status | 'all'; q: string }): Promise<Registration[]> {
+export async function listRegistrations(filter: {
+	status: Status | 'all';
+	q: string;
+	email?: EmailFilter;
+}): Promise<Registration[]> {
 	const q = filter.q.trim();
+	const email = filter.email ?? 'all';
 	if (useMemory) {
 		const needle = q.toLowerCase();
 		return [...mem.rows.values()]
 			.filter((r) => filter.status === 'all' || r.status === filter.status)
+			.filter((r) => email === 'all' || (r.status === 'paid' && emailStateOf(r) === email))
 			.filter(
 				(r) =>
 					!needle ||
@@ -306,6 +340,9 @@ export async function listRegistrations(filter: { status: Status | 'all'; q: str
 	const rows = await sql()`
 		select * from registrations
 		where (${filter.status}::text = 'all' or status = ${filter.status})
+			and (${email}::text = 'all' or (status = 'paid' and (
+				case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end
+			) = ${email}))
 			and (${q}::text = '' or full_name ilike ${like} or email ilike ${like} or code ilike ${like}
 				or company_name ilike ${like} or phone ilike ${like} or coalesce(upi_txn_id, '') ilike ${like})
 		order by
@@ -317,30 +354,75 @@ export async function listRegistrations(filter: { status: Status | 'all'; q: str
 
 export async function getStats(): Promise<Stats> {
 	const counts: Record<Status, number> = { pending_payment: 0, payment_submitted: 0, paid: 0, rejected: 0 };
+	const email: Stats['email'] = { not_sent: 0, sent: 0, delivered: 0, failed: 0 };
 	let collectedRupees = 0;
-	let ticketsToSend = 0;
 	if (useMemory) {
 		for (const r of mem.rows.values()) {
 			counts[r.status]++;
 			if (r.status === 'paid') {
 				collectedRupees += r.amountRupees;
-				if (!r.ticketEmailedAt) ticketsToSend++;
+				email[emailStateOf(r)]++;
 			}
 		}
-		return { counts, collectedRupees, ticketsToSend };
+		return { counts, collectedRupees, ticketsToSend: email.not_sent, email };
 	}
-	const rows = await sql()`
-		select status, count(*)::int as n, coalesce(sum(amount_rupees), 0)::float8 as total,
-			count(*) filter (where ticket_emailed_at is null)::int as unsent
-		from registrations group by status`;
+	const [rows, mail] = await Promise.all([
+		sql()`
+			select status, count(*)::int as n, coalesce(sum(amount_rupees), 0)::float8 as total
+			from registrations group by status`,
+		sql()`
+			select case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end as state,
+				count(*)::int as n
+			from registrations where status = 'paid' group by 1`
+	]);
 	for (const r of rows) {
 		counts[r.status as Status] = r.n;
-		if (r.status === 'paid') {
-			collectedRupees = r.total;
-			ticketsToSend = r.unsent;
-		}
+		if (r.status === 'paid') collectedRupees = r.total;
 	}
-	return { counts, collectedRupees, ticketsToSend };
+	for (const r of mail) if (r.state in email) email[r.state as keyof typeof email] = r.n;
+	return { counts, collectedRupees, ticketsToSend: email.not_sent, email };
+}
+
+/** Sent ticket emails still waiting for a final word from Resend, least recently checked first. */
+export async function listEmailsToCheck(limit: number): Promise<Registration[]> {
+	if (useMemory) {
+		return [...mem.rows.values()]
+			.filter((r) => r.status === 'paid' && r.ticketEmailId && emailStateOf(r) === 'sent')
+			.sort((a, b) => (a.ticketEmailCheckedAt ?? '').localeCompare(b.ticketEmailCheckedAt ?? ''))
+			.slice(0, limit);
+	}
+	const rows = await sql()`
+		select * from registrations
+		where status = 'paid' and ticket_email_id is not null and coalesce(ticket_email_status, 'sent') = 'sent'
+		order by ticket_email_checked_at asc nulls first
+		limit ${limit}`;
+	return rows.map(fromRow);
+}
+
+/** Paid registrations whose ticket email bounced or failed. */
+export async function listFailedTickets(limit: number): Promise<Registration[]> {
+	if (useMemory) {
+		return [...mem.rows.values()].filter((r) => r.status === 'paid' && r.ticketEmailStatus === 'failed').slice(0, limit);
+	}
+	const rows = await sql()`
+		select * from registrations
+		where status = 'paid' and ticket_email_status = 'failed'
+		order by ticket_emailed_at asc
+		limit ${limit}`;
+	return rows.map(fromRow);
+}
+
+/** Stores what Resend last reported for a registration's ticket email. */
+export async function recordEmailEvent(id: string, event: string, status: EmailStatus) {
+	if (useMemory) {
+		const row = mem.rows.get(id);
+		if (row) Object.assign(row, { ticketEmailEvent: event, ticketEmailStatus: status, ticketEmailCheckedAt: now() });
+		return;
+	}
+	await sql()`
+		update registrations set ticket_email_event = ${event}, ticket_email_status = ${status},
+			ticket_email_checked_at = now(), updated_at = now()
+		where id = ${id}`;
 }
 
 /** Marks several registrations as paid at once; returns the ones that changed. */
@@ -411,11 +493,23 @@ export async function markRejected(id: string, by: string, reason: string): Prom
 	return rows[0] ? fromRow(rows[0]) : null;
 }
 
-export async function markTicketEmailed(id: string) {
+/** A ticket email left: remember Resend's id and start tracking it as "sent". */
+export async function markTicketEmailed(id: string, emailId: string) {
 	if (useMemory) {
 		const row = mem.rows.get(id);
-		if (row) row.ticketEmailedAt = now();
+		if (row) {
+			Object.assign(row, {
+				ticketEmailedAt: now(),
+				ticketEmailId: emailId,
+				ticketEmailStatus: 'sent',
+				ticketEmailEvent: 'sent',
+				ticketEmailCheckedAt: null
+			});
+		}
 		return;
 	}
-	await sql()`update registrations set ticket_emailed_at = now(), updated_at = now() where id = ${id}`;
+	await sql()`
+		update registrations set ticket_emailed_at = now(), ticket_email_id = ${emailId},
+			ticket_email_status = 'sent', ticket_email_event = 'sent', ticket_email_checked_at = null, updated_at = now()
+		where id = ${id}`;
 }

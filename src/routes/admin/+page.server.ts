@@ -1,19 +1,31 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { SESSION_COOKIE } from '#lib/server/auth.ts';
 import { isDatabaseConfigured } from '#lib/server/db.ts';
-import { EmailError, isEmailConfigured, sendRejectionEmail, sendTicketEmail } from '#lib/server/email.ts';
+import {
+	EmailError,
+	emailStatusFor,
+	fetchEmailEvent,
+	isEmailConfigured,
+	sendRejectionEmail,
+	sendTicketEmail
+} from '#lib/server/email.ts';
 import { getObject, isR2Configured } from '#lib/server/r2.ts';
 import {
+	EMAIL_FILTERS,
 	STATUSES,
 	getRegistration,
 	getStats,
 	isStoreAvailable,
 	listRegistrations,
+	listEmailsToCheck,
+	listFailedTickets,
 	listUnsentTickets,
 	markManyPaid,
 	markPaid,
 	markRejected,
 	markTicketEmailed,
+	recordEmailEvent,
+	type EmailFilter,
 	type Registration,
 	type Status
 } from '#lib/server/store.ts';
@@ -25,6 +37,8 @@ import type { Actions, PageServerLoad } from './$types';
  */
 const SEND_BATCH = 25;
 const SEND_GAP_MS = 550;
+/** Delivery checks per click; they share the same Resend rate limit. */
+const CHECK_BATCH = 25;
 
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.admin) redirect(303, '/admin/login');
@@ -42,15 +56,35 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				? 'payment_submitted'
 				: 'all';
 	const q = (url.searchParams.get('q') ?? '').slice(0, 100);
+	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
+	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 
-	const registrations = await listRegistrations({ status, q });
-	return { configured, available: true as const, stats, filter: { status, q }, registrations };
+	const registrations = await listRegistrations({ status, q, email });
+	return { configured, available: true as const, stats, filter: { status, q, email }, registrations };
 };
 
 async function emailTicket(reg: Registration) {
 	const poster = reg.posterKey ? await getObject(reg.posterKey) : null;
-	await sendTicketEmail(reg, poster?.body ?? null);
-	await markTicketEmailed(reg.id);
+	const emailId = await sendTicketEmail(reg, poster?.body ?? null);
+	await markTicketEmailed(reg.id, emailId);
+}
+
+const pause = () => new Promise((r) => setTimeout(r, SEND_GAP_MS));
+
+/** Sends tickets one by one within Resend's rate limit; returns who failed. */
+async function sendAll(queue: Registration[]) {
+	let sent = 0;
+	const failed: string[] = [];
+	for (const [i, reg] of queue.entries()) {
+		if (i > 0) await pause();
+		try {
+			await emailTicket(reg);
+			sent++;
+		} catch (e) {
+			failed.push(`${reg.fullName} (${emailFailure(e)})`);
+		}
+	}
+	return { sent, failed };
 }
 
 function emailFailure(e: unknown) {
@@ -88,21 +122,50 @@ export const actions: Actions = {
 		const queue = await listUnsentTickets(SEND_BATCH);
 		if (!queue.length) return { success: 'Every paid delegate already has their ticket.' };
 
-		let sent = 0;
-		const failed: string[] = [];
-		for (const [i, reg] of queue.entries()) {
-			if (i > 0) await new Promise((r) => setTimeout(r, SEND_GAP_MS));
-			try {
-				await emailTicket(reg);
-				sent++;
-			} catch (e) {
-				failed.push(`${reg.fullName} (${emailFailure(e)})`);
-			}
-		}
-
+		const { sent, failed } = await sendAll(queue);
 		const { ticketsToSend: left } = await getStats();
 		const parts = [`Sent ${plural(sent, 'ticket')}.`];
 		if (left > 0) parts.push(`${plural(left, 'ticket')} still waiting: click Send again to continue.`);
+		if (failed.length) {
+			return fail(502, { message: `${parts.join(' ')} Failed: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '…' : ''}` });
+		}
+		return { success: parts.join(' ') };
+	},
+
+	/** Asks Resend whether sent tickets arrived, bounced or are still on their way. */
+	checkDelivery: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const queue = await listEmailsToCheck(CHECK_BATCH);
+		if (!queue.length) return { quiet: true, success: 'Every sent ticket has a final delivery status.' };
+
+		const tally = { delivered: 0, failed: 0, sent: 0 };
+		for (const [i, reg] of queue.entries()) {
+			if (i > 0) await pause();
+			try {
+				const event = await fetchEmailEvent(reg.ticketEmailId!);
+				const status = emailStatusFor(event);
+				await recordEmailEvent(reg.id, event, status);
+				tally[status]++;
+			} catch (e) {
+				// A key without Full access fails every lookup: stop and say so once.
+				return fail(502, { message: `Could not check delivery: ${emailFailure(e)}` });
+			}
+		}
+		const parts = [`Checked ${plural(queue.length, 'ticket email')}: ${tally.delivered} delivered`];
+		if (tally.failed) parts.push(`${tally.failed} failed`);
+		if (tally.sent) parts.push(`${tally.sent} still on the way`);
+		return { quiet: true, success: `${parts.join(', ')}.` };
+	},
+
+	/** Sends the ticket again to everyone whose last ticket email bounced or failed. */
+	resendFailed: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const queue = await listFailedTickets(SEND_BATCH);
+		if (!queue.length) return { success: 'No ticket emails have failed.' };
+		const { sent, failed } = await sendAll(queue);
+		const { email } = await getStats();
+		const parts = [`Resent ${plural(sent, 'ticket')}. Check delivery again in a minute.`];
+		if (email.failed > 0) parts.push(`${plural(email.failed, 'failed email')} left: click again to continue.`);
 		if (failed.length) {
 			return fail(502, { message: `${parts.join(' ')} Failed: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '…' : ''}` });
 		}

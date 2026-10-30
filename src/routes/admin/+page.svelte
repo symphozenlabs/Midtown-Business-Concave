@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -17,8 +19,11 @@
 		LoaderCircle,
 		Mail,
 		MailCheck,
+		MailWarning,
 		Mails,
+		MailX,
 		QrCode,
+		RefreshCw,
 		Search,
 		Send,
 		X
@@ -45,24 +50,57 @@
 		rejected: 'Rejected'
 	};
 
+	type EmailState = 'not_sent' | 'sent' | 'delivered' | 'failed';
+
+	const EMAIL_TABS: { value: EmailState | 'all'; label: string }[] = [
+		{ value: 'all', label: 'All' },
+		{ value: 'failed', label: 'Failed' },
+		{ value: 'not_sent', label: 'Not sent' },
+		{ value: 'sent', label: 'Sent' },
+		{ value: 'delivered', label: 'Delivered' }
+	];
+
+	const EMAIL_LABEL: Record<EmailState, string> = {
+		not_sent: 'Not sent',
+		sent: 'Sent',
+		delivered: 'Delivered',
+		failed: 'Failed'
+	};
+
+	/** Resend events, in words for the line under the email pill. */
+	const EVENT_LABEL: Record<string, string> = {
+		bounced: 'Bounced',
+		complained: 'Marked as spam',
+		failed: 'Could not be sent',
+		suppressed: 'Address suppressed',
+		canceled: 'Cancelled',
+		delivery_delayed: 'Delivery delayed'
+	};
+
+	const emailState = (r: { ticketEmailedAt: string | null; ticketEmailStatus: string | null }): EmailState =>
+		!r.ticketEmailedAt ? 'not_sent' : ((r.ticketEmailStatus as EmailState | null) ?? 'sent');
+
 	const open = new SvelteSet<string>();
 	const selected = new SvelteSet<string>();
 	let selecting = $state(false);
 	let rejecting = $state<string | null>(null);
-	// Which control is working: a row id, 'bulk' or 'send'.
+	// Which control is working: a row id, 'bulk', 'send', 'check' or 'resendFailed'.
 	let busy = $state<string | null>(null);
 	let copied = $state<string | null>(null);
 
 	const registrations = $derived(data.available ? data.registrations : []);
 	const total = $derived(data.available ? Object.values(data.stats.counts).reduce((a, b) => a + b, 0) : 0);
 	const toSend = $derived(data.available ? data.stats.ticketsToSend : 0);
+	const failedEmails = $derived(data.available ? data.stats.email.failed : 0);
+	const inFlight = $derived(data.available ? data.stats.email.sent : 0);
+	const paidTotal = $derived(data.available ? data.stats.counts.paid : 0);
 	const allOpen = $derived(registrations.length > 0 && registrations.every((r) => open.has(r.id)));
 
 	// Only unpaid registrations can be selected for "Mark as paid".
 	const selectable = $derived(registrations.filter((r) => r.status !== 'paid'));
 	const allSelected = $derived(selectable.length > 0 && selectable.every((r) => selected.has(r.id)));
 	const someSelected = $derived(selected.size > 0 && !allSelected);
-	const columns = $derived(selecting ? 8 : 7);
+	const columns = $derived(selecting ? 9 : 8);
 
 	// Drop selections that left the list (filtered away or now paid).
 	$effect(() => {
@@ -78,7 +116,9 @@
 
 	// Actions keep the current tab and search, so the list does not jump after a click.
 	const keep = $derived(
-		data.available ? `&status=${data.filter.status}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}` : ''
+		data.available
+			? `&status=${data.filter.status}${data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}`
+			: ''
 	);
 	const act = (name: string) => `?/${name}${keep}`;
 
@@ -121,6 +161,28 @@
 			/* clipboard unavailable */
 		}
 	}
+
+	const search = $derived(data.available && data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : '');
+	const emailHref = (value: EmailState | 'all') =>
+		value === 'all'
+			? `?status=${data.available ? data.filter.status : 'all'}${search}`
+			: `?status=paid&email=${value}${search}`;
+
+	// Opening the dashboard quietly asks Resend about emails still on their way.
+	onMount(() => {
+		if (!inFlight) return;
+		busy = 'check';
+		fetch(act('checkDelivery'), {
+			method: 'POST',
+			body: new FormData(),
+			headers: { 'x-sveltekit-action': 'true' }
+		})
+			.then(() => invalidateAll())
+			.catch(() => {})
+			.finally(() => {
+				if (busy === 'check') busy = null;
+			});
+	});
 
 	type Update = (o?: { reset?: boolean }) => Promise<void>;
 
@@ -215,6 +277,28 @@
 						aria-label="Search registrations"
 					/>
 				</form>
+				<form method="post" action={act('checkDelivery')} use:enhance={working('check')}>
+					<button
+						type="submit"
+						class="btn btn-ghost btn-sm"
+						disabled={busy === 'check' || paidTotal === 0}
+						title="Ask Resend which ticket emails were delivered and which bounced"
+					>
+						<RefreshCw size={15} class={busy === 'check' ? 'spin' : ''} aria-hidden="true" />
+						{busy === 'check' ? 'Checking delivery…' : 'Check delivery'}
+					</button>
+				</form>
+				{#if failedEmails > 0}
+					<form method="post" action={act('resendFailed')} use:enhance={working('resendFailed')}>
+						<button type="submit" class="btn btn-sm failed-btn" disabled={busy === 'resendFailed'}>
+							{#if busy === 'resendFailed'}
+								<LoaderCircle size={15} class="spin" aria-hidden="true" /> Resending…
+							{:else}
+								<MailWarning size={15} aria-hidden="true" /> Resend {plural(failedEmails, 'failed email')}
+							{/if}
+						</button>
+					</form>
+				{/if}
 				<form method="post" action={act('sendTickets')} use:enhance={working('send')}>
 					<button
 						type="submit"
@@ -273,6 +357,22 @@
 				{/if}
 			</div>
 		</div>
+
+		{#if paidTotal > 0}
+			<nav class="email-tabs" aria-label="Filter by ticket email">
+				<span class="email-tabs-label">Ticket email</span>
+				{#each EMAIL_TABS as tab (tab.value)}
+					<a
+						href={emailHref(tab.value)}
+						class="email-tab {tab.value}"
+						aria-current={data.filter.email === tab.value ? 'page' : undefined}
+					>
+						{tab.label}
+						<span class="count">{tab.value === 'all' ? paidTotal : data.stats.email[tab.value]}</span>
+					</a>
+				{/each}
+			</nav>
+		{/if}
 
 		{#if selecting}
 			<div class="bulk-bar" transition:slide={{ duration: 180, easing: cubicOut }}>
@@ -334,6 +434,7 @@
 							<th>UPI transaction ID</th>
 							<th class="col-amount num">Amount</th>
 							<th>Status</th>
+							<th>Ticket email</th>
 							<th class="col-actions"><span class="visually-hidden">Actions</span></th>
 						</tr>
 					</thead>
@@ -391,25 +492,50 @@
 								<td class="col-amount num">{formatRupees(r.amountRupees)}</td>
 								<td>
 									<span class="status {r.status}">{STATUS_LABEL[r.status as Status]}</span>
-									{#if r.status === 'paid' && !r.ticketEmailedAt}
-										<span class="queued" title="Ticket email not sent yet">Email queued</span>
+								</td>
+								<td class="mail">
+									{#if r.status === 'paid'}
+										{@const state = emailState(r)}
+										<span class="mail-pill {state}">
+											<span class="dot" aria-hidden="true"></span>
+											{EMAIL_LABEL[state]}
+										</span>
+										<span class="mail-detail">
+											{#if state === 'not_sent'}
+												Waiting to send
+											{:else if state === 'failed'}
+												{EVENT_LABEL[r.ticketEmailEvent ?? ''] ?? 'Not delivered'} · {fmt(r.ticketEmailedAt)}
+											{:else if r.ticketEmailEvent === 'delivery_delayed'}
+												Delivery delayed · {fmt(r.ticketEmailedAt)}
+											{:else}
+												{fmt(r.ticketEmailedAt)}
+											{/if}
+										</span>
+									{:else}
+										<span class="muted">—</span>
 									{/if}
 								</td>
 								<td class="col-actions">
 									<div class="row-actions">
 										{#if r.status === 'paid'}
+											{@const state = emailState(r)}
 											<form method="post" action={act('resend')} use:enhance={working(r.id)}>
 												<input type="hidden" name="id" value={r.id} />
 												<button
 													class="btn btn-ghost btn-sm"
+													class:danger-text={state === 'failed'}
 													disabled={busy === r.id}
-													title={r.ticketEmailedAt ? 'Email the ticket again' : 'Send this ticket now'}
+													title={state === 'not_sent'
+														? 'Send this ticket now'
+														: state === 'failed'
+															? 'The last email did not arrive: send the ticket again'
+															: 'Email the ticket again'}
 												>
-													{#if busy === r.id}<LoaderCircle size={15} class="spin" aria-hidden="true" />{:else}<Send
+													{#if busy === r.id}<LoaderCircle size={15} class="spin" aria-hidden="true" />{:else if state === 'failed'}<MailX
 															size={15}
 															aria-hidden="true"
-														/>{/if}
-													<span class="action-label">{r.ticketEmailedAt ? 'Resend' : 'Send now'}</span>
+														/>{:else}<Send size={15} aria-hidden="true" />{/if}
+													<span class="action-label">{state === 'not_sent' ? 'Send now' : 'Resend'}</span>
 												</button>
 											</form>
 										{:else}
@@ -478,7 +604,10 @@
 														<p class="note">
 															<BadgeCheck size={14} aria-hidden="true" />
 															Confirmed {fmt(r.reviewedAt)}{r.reviewedBy ? ` by ${r.reviewedBy}` : ''}
-															{#if r.ticketEmailedAt}· ticket emailed {fmt(r.ticketEmailedAt)}{:else}· ticket not emailed yet{/if}
+															{#if r.ticketEmailedAt}· ticket emailed {fmt(r.ticketEmailedAt)}{#if r.ticketEmailEvent}
+																({r.ticketEmailEvent.replace(/_/g, ' ')}{r.ticketEmailCheckedAt
+																	? `, checked ${fmt(r.ticketEmailCheckedAt)}`
+																	: ''}){/if}{:else}· ticket not emailed yet{/if}
 														</p>
 													{:else if r.status === 'rejected'}
 														<p class="note rejected">
@@ -999,11 +1128,113 @@
 		color: var(--danger);
 	}
 
-	.queued {
+	/* Ticket email ---------------------------------------------------- */
+
+	.mail {
+		white-space: nowrap;
+	}
+
+	.mail-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 1px 9px;
+		border: 1px solid transparent;
+		border-radius: 999px;
+		font: 600 11px/1.7 var(--font-sans);
+	}
+
+	.mail-pill .dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+
+	.mail-pill.not_sent {
+		border-color: var(--rule);
+		background: var(--mist);
+		color: var(--text-supporting);
+	}
+
+	.mail-pill.sent {
+		border-color: color-mix(in srgb, var(--gold-ink) 30%, transparent);
+		background: var(--gold-tint);
+		color: var(--gold-ink);
+	}
+
+	.mail-pill.delivered {
+		border-color: color-mix(in srgb, var(--success) 30%, transparent);
+		background: var(--success-tint);
+		color: var(--success);
+	}
+
+	.mail-pill.failed {
+		border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+		background: var(--danger-tint);
+		color: var(--danger);
+	}
+
+	.mail-detail {
 		display: block;
 		margin-top: 2px;
 		font-size: 11px;
 		color: var(--text-supporting);
+	}
+
+	.email-tabs {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.email-tabs-label {
+		margin-right: var(--space-2);
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text-supporting);
+	}
+
+	.email-tab {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 10px;
+		border: 1px solid var(--rule);
+		border-radius: 999px;
+		color: var(--text-body);
+		font-size: 12px;
+		text-decoration: none;
+	}
+
+	.email-tab:hover {
+		border-color: var(--control-border);
+	}
+
+	.email-tab[aria-current='page'] {
+		border-color: var(--charcoal);
+		background: var(--charcoal);
+		color: var(--white);
+	}
+
+	.email-tab[aria-current='page'] .count {
+		background: rgb(255 255 255 / 0.18);
+	}
+
+	.email-tab.failed:not([aria-current='page']) .count {
+		background: var(--danger-tint);
+		color: var(--danger);
+	}
+
+	.failed-btn {
+		border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+		background: var(--danger-tint);
+		color: var(--danger);
+	}
+
+	.failed-btn:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--danger-tint) 70%, var(--danger) 10%);
 	}
 
 	.row-actions {
