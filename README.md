@@ -56,7 +56,10 @@ emails in the terminal.
    for `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. Photos are stored as `registrations/2026/<uuid>.<ext>`.
 3. **Resend** — add and verify your sending domain, create an API key for `RESEND_API_KEY`, and set
    `EMAIL_FROM`, e.g. `Midtown Business Conclave <tickets@yourdomain.com>`.
-4. **Cloudflare Pages** — connect the repository with build command `npm run build` and output
+4. **Hosting** — either works; the build picks the adapter itself (see `vite.config.ts`).
+   - **Vercel**: import the repository with the SvelteKit framework preset and leave Output Directory empty.
+     Add every variable from `.env.example` under Settings → Environment Variables, then redeploy.
+   - **Cloudflare Pages** — connect the repository with build command `npm run build` and output
    directory `.svelte-kit/cloudflare`, then add every variable from `.env.example` as an encrypted
    environment variable (Settings → Environment variables). Use a long, unique `ADMIN_PASSWORD`.
 

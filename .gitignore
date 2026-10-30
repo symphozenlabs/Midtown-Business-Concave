@@ -11,3 +11,4 @@ node_modules
 
 # Raw source images (personal UPI QR photo etc.); the app uses static/poster instead
 /posters
+.vercel
