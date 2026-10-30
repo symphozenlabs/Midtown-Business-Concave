@@ -38,6 +38,24 @@ alter table registrations add column if not exists rejection_reason     text;
 alter table registrations add column if not exists ticket_emailed_at    timestamptz;
 alter table registrations add column if not exists updated_at           timestamptz not null default now();
 
+-- Ticket email delivery, as reported by Resend (GET /emails/:id, needs a Full access API key):
+--   ticket_email_id     Resend's id for the last ticket email
+--   ticket_email_event  Resend's last_event (sent, delivered, bounced, delivery_delayed, …)
+--   ticket_email_status sent | delivered | failed, reduced from that event
+alter table registrations add column if not exists ticket_email_id         text;
+alter table registrations add column if not exists ticket_email_event      text;
+alter table registrations add column if not exists ticket_email_status     text;
+alter table registrations add column if not exists ticket_email_checked_at timestamptz;
+
+do $$ begin
+  alter table registrations add constraint registrations_ticket_email_status_check
+    check (ticket_email_status is null or ticket_email_status in ('sent', 'delivered', 'failed'));
+exception when duplicate_object then null;
+end $$;
+
+create index if not exists registrations_ticket_email_idx
+  on registrations (ticket_email_status, ticket_email_checked_at) where status = 'paid';
+
 do $$ begin
   alter table registrations add constraint registrations_status_check
     check (status in ('pending_payment', 'payment_submitted', 'paid', 'rejected'));

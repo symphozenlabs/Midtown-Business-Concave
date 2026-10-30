@@ -39,6 +39,33 @@ export function upiLink(settings: PaymentSettings, amountRupees: number, code: s
 	return `upi://pay?${params.toString().replace(/\+/g, '%20')}`;
 }
 
+export interface ParsedUpiLink {
+	vpa: string;
+	payeeName: string | null;
+	amountRupees: number | null;
+	note: string | null;
+}
+
+/**
+ * Reads the payee out of a UPI payment link, as printed in a merchant's QR code:
+ * `upi://pay?pa=…&pn=…`, or an app-specific scheme such as `gpay://upi/pay?…`.
+ */
+export function parseUpiLink(text: string): ParsedUpiLink | null {
+	const trimmed = text.trim();
+	const q = trimmed.indexOf('?');
+	if (q < 0) return null;
+	const params = new URLSearchParams(trimmed.slice(q + 1).split('#')[0]);
+	const vpa = params.get('pa')?.trim() ?? '';
+	if (!isValidVpa(vpa)) return null;
+	const amount = Number(params.get('am'));
+	return {
+		vpa,
+		payeeName: params.get('pn')?.trim().replace(/\s+/g, ' ') || null,
+		amountRupees: Number.isFinite(amount) && amount > 0 ? amount : null,
+		note: params.get('tn')?.trim() || null
+	};
+}
+
 /** UPI transaction IDs (UTR / UPI Ref No.) are 12 digits. */
 export function normaliseUtr(raw: string): string | null {
 	const digits = raw.replace(/\s+/g, '');

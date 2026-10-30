@@ -1,13 +1,12 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { EVENT } from '#lib/event.ts';
+	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
 
 	let parts = $state<{ value: number; unit: string; short: string }[] | null>(null);
 	let label = $state('');
 
-	function update() {
-		const start = new Date(EVENT.startsAt).getTime();
-		const end = new Date(EVENT.endsAt).getTime();
+	function update(startsAt: string, endsAt: string) {
+		const start = new Date(startsAt).getTime();
+		const end = new Date(endsAt).getTime();
 		const now = Date.now();
 
 		if (now >= end) {
@@ -32,9 +31,12 @@
 		label = `${days} days, ${hours} hours and ${mins % 60} minutes to go`;
 	}
 
-	onMount(() => {
-		update();
-		const id = setInterval(update, 30_000);
+	// Browser only (the page is prerendered); re-runs when the live schedule arrives.
+	$effect(() => {
+		loadSiteConfig();
+		const { startsAt, endsAt } = siteConfig.event;
+		update(startsAt, endsAt);
+		const id = setInterval(() => update(startsAt, endsAt), 30_000);
 		return () => clearInterval(id);
 	});
 </script>

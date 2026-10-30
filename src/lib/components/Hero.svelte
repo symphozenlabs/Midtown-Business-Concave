@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { ArrowDown, CalendarDays, Clock, MapPin } from '@lucide/svelte';
 	import { EVENT } from '#lib/event.ts';
+	import { eventLabels } from '#lib/event-settings.ts';
+	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
 	import Countdown from './Countdown.svelte';
 	import HeroBackdrop from './HeroBackdrop.svelte';
 	import Skyline from './Skyline.svelte';
@@ -11,6 +13,7 @@
 
 	// Centre the backdrop's sunburst exactly on the logo, whatever the layout.
 	onMount(() => {
+		loadSiteConfig();
 		const align = () => {
 			const h = hero.getBoundingClientRect();
 			const l = logo.getBoundingClientRect();
@@ -24,11 +27,13 @@
 		return () => ro.disconnect();
 	});
 
-	const facts = [
-		{ icon: CalendarDays, label: 'Date', value: EVENT.compactDate, short: EVENT.compactDate, full: EVENT.dateLabel },
-		{ icon: Clock, label: 'Time', value: EVENT.compactTime, short: EVENT.compactTime, full: EVENT.timeLabel },
+	// Prerendered with the defaults; updates once the schedule set on the dashboard loads.
+	const when = $derived(eventLabels(siteConfig.event));
+	const facts = $derived([
+		{ icon: CalendarDays, label: 'Date', value: when.compactDate, short: when.compactDate, full: when.dateLabel },
+		{ icon: Clock, label: 'Time', value: when.compactTime, short: when.compactTime, full: when.timeLabel },
 		{ icon: MapPin, label: 'Venue', value: EVENT.venue, short: EVENT.compactVenue, full: EVENT.venue }
-	];
+	]);
 </script>
 
 <header class="hero on-ink" bind:this={hero}>
