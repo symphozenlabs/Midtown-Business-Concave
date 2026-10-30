@@ -1,3 +1,4 @@
+import { isValidEventSettings, type EventSettings } from './event-settings.ts';
 import type { RegistrationDraft } from './registration';
 
 export class SubmitError extends Error {
@@ -79,14 +80,23 @@ export async function submitPayment(pending: PendingRegistration, utr: string): 
 	failure(res, await res.json().catch(() => ({})));
 }
 
-/** Current ticket price, shown before registering. */
-export async function fetchTicketPrice(): Promise<number | null> {
+export interface SiteConfig {
+	priceRupees: number | null;
+	event: EventSettings | null;
+}
+
+/** Current ticket price and event schedule, as set on the dashboard. */
+export async function fetchSiteConfig(): Promise<SiteConfig> {
+	const none: SiteConfig = { priceRupees: null, event: null };
 	try {
 		const res = await fetch('/api/config');
-		if (!res.ok) return null;
+		if (!res.ok) return none;
 		const data = await res.json();
-		return typeof data.priceRupees === 'number' ? data.priceRupees : null;
+		return {
+			priceRupees: typeof data.priceRupees === 'number' ? data.priceRupees : null,
+			event: isValidEventSettings(data.event) ? { startsAt: data.event.startsAt, endsAt: data.event.endsAt } : null
+		};
 	} catch {
-		return null;
+		return none;
 	}
 }

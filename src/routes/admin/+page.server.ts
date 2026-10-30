@@ -1,24 +1,44 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { MAX_PRICE, MIN_PRICE, isValidVpa } from '#lib/payment.ts';
 import { SESSION_COOKIE } from '#lib/server/auth.ts';
 import { isDatabaseConfigured } from '#lib/server/db.ts';
-import { EmailError, isEmailConfigured, sendRejectionEmail, sendTicketEmail } from '#lib/server/email.ts';
+import {
+	EmailError,
+	emailStatusFor,
+	fetchEmailEvent,
+	isEmailConfigured,
+	sendRejectionEmail,
+	sendTicketEmail
+} from '#lib/server/email.ts';
 import { getObject, isR2Configured } from '#lib/server/r2.ts';
 import {
+	EMAIL_FILTERS,
 	STATUSES,
-	getPaymentSettings,
 	getRegistration,
 	getStats,
 	isStoreAvailable,
 	listRegistrations,
+	listEmailsToCheck,
+	listFailedTickets,
+	listUnsentTickets,
+	markManyPaid,
 	markPaid,
 	markRejected,
 	markTicketEmailed,
-	savePaymentSettings,
+	recordEmailEvent,
+	type EmailFilter,
 	type Registration,
 	type Status
 } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
+
+/**
+ * Tickets sent per click. Resend allows about 2 requests a second and a Worker has a
+ * subrequest budget, so a large queue goes out over a few clicks.
+ */
+const SEND_BATCH = 25;
+const SEND_GAP_MS = 550;
+/** Delivery checks per click; they share the same Resend rate limit. */
+const CHECK_BATCH = 25;
 
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.admin) redirect(303, '/admin/login');
@@ -36,15 +56,35 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				? 'payment_submitted'
 				: 'all';
 	const q = (url.searchParams.get('q') ?? '').slice(0, 100);
+	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
+	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 
-	const [registrations, settings] = await Promise.all([listRegistrations({ status, q }), getPaymentSettings()]);
-	return { configured, available: true as const, stats, filter: { status, q }, registrations, settings };
+	const registrations = await listRegistrations({ status, q, email });
+	return { configured, available: true as const, stats, filter: { status, q, email }, registrations };
 };
 
 async function emailTicket(reg: Registration) {
 	const poster = reg.posterKey ? await getObject(reg.posterKey) : null;
-	await sendTicketEmail(reg, poster?.body ?? null);
-	await markTicketEmailed(reg.id);
+	const emailId = await sendTicketEmail(reg, poster?.body ?? null);
+	await markTicketEmailed(reg.id, emailId);
+}
+
+const pause = () => new Promise((r) => setTimeout(r, SEND_GAP_MS));
+
+/** Sends tickets one by one within Resend's rate limit; returns who failed. */
+async function sendAll(queue: Registration[]) {
+	let sent = 0;
+	const failed: string[] = [];
+	for (const [i, reg] of queue.entries()) {
+		if (i > 0) await pause();
+		try {
+			await emailTicket(reg);
+			sent++;
+		} catch (e) {
+			failed.push(`${reg.fullName} (${emailFailure(e)})`);
+		}
+	}
+	return { sent, failed };
 }
 
 function emailFailure(e: unknown) {
@@ -52,18 +92,84 @@ function emailFailure(e: unknown) {
 	return e instanceof EmailError ? e.message : 'The email service did not respond.';
 }
 
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 export const actions: Actions = {
+	/** One click from the table. The ticket email waits in the send queue. */
 	markPaid: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
 		const id = String((await request.formData()).get('id') ?? '');
 		const reg = await markPaid(id, locals.admin.email);
 		if (!reg) return fail(409, { id, message: 'This registration was already marked as paid, or no longer exists.' });
-		try {
-			await emailTicket(reg);
-		} catch (e) {
-			return fail(502, { id, message: `Marked as paid, but the ticket email failed: ${emailFailure(e)} Use “Resend ticket” to try again.` });
+		return { id, success: `Marked ${reg.fullName} as paid. Their ticket is waiting in the email queue.` };
+	},
+
+	markPaidMany: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const ids = (await request.formData()).getAll('ids').map(String).slice(0, 500);
+		if (!ids.length) return fail(400, { message: 'Select at least one registration.' });
+		const changed = await markManyPaid(ids, locals.admin.email);
+		if (!changed.length) return fail(409, { message: 'The selected registrations were already paid.' });
+		return {
+			bulk: true,
+			success: `Marked ${plural(changed.length, 'registration')} as paid. Their tickets are waiting in the email queue.`
+		};
+	},
+
+	/** Emails every paid delegate who has not received their ticket yet. */
+	sendTickets: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const queue = await listUnsentTickets(SEND_BATCH);
+		if (!queue.length) return { success: 'Every paid delegate already has their ticket.' };
+
+		const { sent, failed } = await sendAll(queue);
+		const { ticketsToSend: left } = await getStats();
+		const parts = [`Sent ${plural(sent, 'ticket')}.`];
+		if (left > 0) parts.push(`${plural(left, 'ticket')} still waiting: click Send again to continue.`);
+		if (failed.length) {
+			return fail(502, { message: `${parts.join(' ')} Failed: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '…' : ''}` });
 		}
-		return { id, success: `Marked ${reg.fullName} as paid and emailed the ticket to ${reg.email}.` };
+		return { success: parts.join(' ') };
+	},
+
+	/** Asks Resend whether sent tickets arrived, bounced or are still on their way. */
+	checkDelivery: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const queue = await listEmailsToCheck(CHECK_BATCH);
+		if (!queue.length) return { quiet: true, success: 'Every sent ticket has a final delivery status.' };
+
+		const tally = { delivered: 0, failed: 0, sent: 0 };
+		for (const [i, reg] of queue.entries()) {
+			if (i > 0) await pause();
+			try {
+				const event = await fetchEmailEvent(reg.ticketEmailId!);
+				const status = emailStatusFor(event);
+				await recordEmailEvent(reg.id, event, status);
+				tally[status]++;
+			} catch (e) {
+				// A key without Full access fails every lookup: stop and say so once.
+				return fail(502, { message: `Could not check delivery: ${emailFailure(e)}` });
+			}
+		}
+		const parts = [`Checked ${plural(queue.length, 'ticket email')}: ${tally.delivered} delivered`];
+		if (tally.failed) parts.push(`${tally.failed} failed`);
+		if (tally.sent) parts.push(`${tally.sent} still on the way`);
+		return { quiet: true, success: `${parts.join(', ')}.` };
+	},
+
+	/** Sends the ticket again to everyone whose last ticket email bounced or failed. */
+	resendFailed: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const queue = await listFailedTickets(SEND_BATCH);
+		if (!queue.length) return { success: 'No ticket emails have failed.' };
+		const { sent, failed } = await sendAll(queue);
+		const { email } = await getStats();
+		const parts = [`Resent ${plural(sent, 'ticket')}. Check delivery again in a minute.`];
+		if (email.failed > 0) parts.push(`${plural(email.failed, 'failed email')} left: click again to continue.`);
+		if (failed.length) {
+			return fail(502, { message: `${parts.join(' ')} Failed: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '…' : ''}` });
+		}
+		return { success: parts.join(' ') };
 	},
 
 	reject: async ({ request, locals }) => {
@@ -91,26 +197,7 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(502, { id, message: `The ticket email failed: ${emailFailure(e)}` });
 		}
-		return { id, success: `Sent the ticket to ${reg.email} again.` };
-	},
-
-	savePayment: async ({ request, locals }) => {
-		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
-		const form = await request.formData();
-		const price = Number(form.get('priceRupees'));
-		const vpa = String(form.get('vpa') ?? '').trim();
-		const payeeName = String(form.get('payeeName') ?? '').trim().replace(/\s+/g, ' ');
-
-		const errors: Record<string, string> = {};
-		if (!Number.isFinite(price) || price < MIN_PRICE || price > MAX_PRICE || Math.round(price * 100) !== price * 100) {
-			errors.priceRupees = `Enter an amount between ₹${MIN_PRICE} and ₹${MAX_PRICE.toLocaleString('en-IN')}.`;
-		}
-		if (!isValidVpa(vpa)) errors.vpa = 'Enter a UPI ID like name@okbank.';
-		if (payeeName.length < 2 || payeeName.length > 60) errors.payeeName = 'Enter the name shown on the UPI account.';
-		if (Object.keys(errors).length) return fail(400, { settingsErrors: errors, message: 'Check the payment settings.' });
-
-		await savePaymentSettings({ priceRupees: price, vpa, payeeName }, locals.admin.email);
-		return { settingsSaved: true, success: 'Payment settings saved. New registrations use them straight away.' };
+		return { id, success: `Sent the ticket to ${reg.email}.` };
 	},
 
 	logout: async ({ cookies }) => {

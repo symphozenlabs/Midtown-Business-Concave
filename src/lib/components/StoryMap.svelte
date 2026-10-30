@@ -4,6 +4,8 @@
 	import { browser } from '$app/env';
 	import { ArrowDown, CalendarDays, Clock, Handshake, Lock, MapPin, Megaphone, Presentation, Store } from '@lucide/svelte';
 	import { EVENT, SALEM } from '#lib/event.ts';
+	import { EVENT_TIME_ZONE, eventLabels } from '#lib/event-settings.ts';
+	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
 	import { INTERESTS, type Interest } from '#lib/registration.ts';
 	import { BRANCHES } from '#lib/story.ts';
 	import { MAP_H, MAP_W, NEIGHBOURS, ROADS, ROUTES, TAMIL_NADU, project } from '#lib/geo/tamil-nadu.ts';
@@ -295,6 +297,7 @@
 	let stage: HTMLElement;
 
 	onMount(() => {
+		loadSiteConfig();
 		if (reduced) return;
 
 		let inView = false;
@@ -336,11 +339,16 @@
 		if (el) scrollToElement(el, -24);
 	}
 
-	const facts = [
-		{ icon: CalendarDays, value: EVENT.dateLabel },
-		{ icon: Clock, value: EVENT.timeLabel },
+	// The schedule set on the admin Configuration page (prerendered with the defaults).
+	const when = $derived(eventLabels(siteConfig.event));
+	const month = $derived(
+		new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: EVENT_TIME_ZONE }).format(new Date(siteConfig.event.startsAt))
+	);
+	const facts = $derived([
+		{ icon: CalendarDays, value: when.dateLabel },
+		{ icon: Clock, value: when.timeLabel },
 		{ icon: MapPin, value: EVENT.venue }
-	];
+	]);
 </script>
 
 {#snippet interestIcon(value: Interest)}
@@ -359,7 +367,7 @@
 					<span class="eyebrow">Across Tamil Nadu</span>
 					<h2 id="story-title">One state, many engines.</h2>
 					<p>
-						Tamil Nadu's entrepreneurs have built strong businesses in their own cities. This November, they come together
+						Tamil Nadu's entrepreneurs have built strong businesses in their own cities. This {month}, they come together
 						in one room.
 					</p>
 					<span class="hint" use:scrub={hintAnim} aria-hidden="true"><ArrowDown size={16} /> Scroll</span>
@@ -378,7 +386,7 @@
 				{/each}
 
 				<article class="panel" use:scrub={panel(CONVERGE[0], CONVERGE[1])}>
-					<span class="eyebrow" use:scrub={line(CONVERGE[0], CONVERGE[1], 0)}>{EVENT.shortDate}</span>
+					<span class="eyebrow" use:scrub={line(CONVERGE[0], CONVERGE[1], 0)}>{when.shortDate}</span>
 					<h3 use:scrub={line(CONVERGE[0], CONVERGE[1], 1)}>All roads lead to Salem.</h3>
 					<p use:scrub={line(CONVERGE[0], CONVERGE[1], 2)}>{EVENT.tagline}</p>
 				</article>
