@@ -8,6 +8,10 @@
 	import { BRANCHES } from '#lib/story.ts';
 	import { MAP_H, MAP_W, NEIGHBOURS, ROADS, ROUTES, TAMIL_NADU, project } from '#lib/geo/tamil-nadu.ts';
 	import { onScroll, scrollToElement } from '#lib/smooth-scroll.ts';
+	// Imported (not in static/) so each file gets a content-hashed URL: a new image
+	// can never be confused with a cached old one of a different size.
+	import satellite from '#lib/story/satellite.webp';
+	import satelliteSmall from '#lib/story/satellite-small.webp';
 
 	/*
 	 * A pinned chapter driven by scroll position. The stage sticks for the
@@ -54,7 +58,8 @@
 	});
 
 	// Everything outside the state, as one even-odd shape, to dim the surroundings.
-	const outside = `M0 0H${MAP_W}V${MAP_H}H0Z${TAMIL_NADU}`;
+	// It reaches far past the frame so the camera never finds its edge in the bleed.
+	const outside = `M-1000 -1000H${MAP_W + 1000}V${MAP_H + 1000}H-1000Z${TAMIL_NADU}`;
 
 	// Gold dust over the map: fixed pseudo-random positions so the server and client agree.
 	const dust = Array.from({ length: 22 }, (_, i) => {
@@ -414,7 +419,17 @@
 				<div class="map-layer" use:fitMapUnits>
 					<!-- Near plane: the ground and everything attached to it. -->
 					<div class="plane near" use:scrub={camera(1)}>
-						<img class="ground" src="/story/satellite.webp" alt="" width="2000" height="2160" decoding="async" />
+						<!-- The imagery bleeds 350 map units past the frame on every side, so the camera never finds its edge. -->
+						<img
+							class="ground"
+							src={satellite}
+							srcset="{satelliteSmall} 1700w, {satellite} 2720w"
+							sizes="(max-width: 1023px) 170vw, 100vw"
+							alt=""
+							width="2720"
+							height="2848"
+							decoding="async"
+						/>
 
 						<svg class="base" viewBox="0 0 {MAP_W} {MAP_H}">
 							<path d={outside} fill-rule="evenodd" class="outside" use:scrub={outsideDim} />
@@ -670,8 +685,8 @@
 		background: #060a1c;
 	}
 
-	/* Exactly the imagery's shape (markers are placed in % of it) and never smaller
-	   than the column, so the ground covers the frame edge to edge. */
+	/* The map frame (markers are placed in % of it). It is never smaller than the
+	   column in either direction, so the ground always reaches the column's edges. */
 	.map-layer {
 		position: relative;
 		flex: none;
@@ -686,11 +701,14 @@
 		transform-origin: 50% 50%;
 	}
 
+	/* 350 units of bleed: 35% of the frame's width, 32.4% of its height. */
 	.ground {
 		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
+		left: -35%;
+		top: -32.407%;
+		width: 170%;
+		max-width: none;
+		height: auto;
 		display: block;
 	}
 

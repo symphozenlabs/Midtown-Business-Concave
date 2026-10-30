@@ -339,14 +339,12 @@
 												</a>
 											{/if}
 											<dl class="facts">
-												<div><dt>Organisation</dt><dd>{r.organisation ?? '—'}</dd></div>
-												<div><dt>Industry</dt><dd>{r.industry}</dd></div>
-												<div><dt>Team size</dt><dd>{r.companySize}</dd></div>
+																								<div><dt>Industry</dt><dd>{r.industry}</dd></div>
+												<div><dt>About the business</dt><dd>{r.about ?? '—'}</dd></div>
 												<div><dt>Website</dt><dd>{r.website ?? '—'}</dd></div>
 												<div><dt>Travelling from</dt><dd>{r.city}</dd></div>
 												<div><dt>Interested in</dt><dd>{r.interests.map(interestLabel).join(', ')}</dd></div>
-												<div><dt>Looking for</dt><dd>{r.lookingFor ?? '—'}</dd></div>
-												<div><dt>Heard from</dt><dd>{r.heardFrom ?? '—'}</dd></div>
+																								<div><dt>Heard from</dt><dd>{r.heardFrom ?? '—'}</dd></div>
 												<div><dt>WhatsApp updates</dt><dd>{r.whatsappUpdates ? 'Yes' : 'No'}</dd></div>
 												{#if r.reviewedBy}<div><dt>Reviewed by</dt><dd>{r.reviewedBy}</dd></div>{/if}
 											</dl>

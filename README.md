@@ -61,10 +61,11 @@ The ticket price and the UPI details behind the payment QR are changed from the 
   Mercator. The gold routes are shortest paths over the real highway network; the one gap in that data,
   the Salem–Trichy NH 38, is added by hand through Rasipuram and Namakkal. Regenerate with the
   `build-geo.mjs` script described in the file header if the cities change.
-- `static/story/satellite.webp` is the ground under that map: NASA imagery (public domain) stitched to the
+- `src/lib/story/satellite.webp` (and a smaller copy for phones) is the ground under that map: NASA imagery (public domain) stitched to the
   same frame: the VIIRS Black Marble night-lights composite, Blue Marble Next Generation colour and the
   ASTER GDEM shaded relief (a product of METI and NASA), fetched as GIBS tiles. The chapter credits NASA
-  in small print under the map.
+  in small print under the map. The images are imported rather than kept in `static/`, so their URLs are
+  content-hashed and a regenerated image is never served from a stale cache.
 - [src/routes/api/payment/+server.ts](src/routes/api/payment/+server.ts) records the UPI transaction ID;
   each ID can be claimed by one registration only.
 - [src/routes/admin](src/routes/admin) is the organiser dashboard, signed in with `ADMIN_EMAIL` /

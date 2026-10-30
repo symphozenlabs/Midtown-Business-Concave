@@ -16,7 +16,6 @@
 		Store
 	} from '@lucide/svelte';
 	import {
-		COMPANY_SIZES,
 		HEARD_FROM,
 		INDUSTRIES,
 		INTERESTS,
@@ -289,7 +288,6 @@
 		dy = 0;
 	}
 
-	const sizeLabel = $derived(COMPANY_SIZES.find((s) => s.value === draft.companySize)?.label ?? '');
 	const interestLabels = $derived(
 		INTERESTS.filter((i) => draft.interests.includes(i.value)).map((i) => i.label).join(', ')
 	);
@@ -311,9 +309,8 @@
 			rows: [
 				['Company', draft.companyName.trim()],
 				['Designation', draft.designation.trim()],
-				['Organisation', draft.organisation.trim()],
 				['Industry', resolvedIndustry(draft)],
-				['Team size', sizeLabel],
+				['About the business', draft.about.trim()],
 				['Website', draft.website.trim()]
 			]
 		},
@@ -323,7 +320,6 @@
 			rows: [
 				['Travelling from', resolvedCity(draft)],
 				['Interested in', interestLabels],
-				['Looking for', draft.lookingFor.trim()],
 				['Heard about us', draft.heardFrom]
 			]
 		}
@@ -486,16 +482,6 @@
 												oninput={() => recheck('designation')}
 											/>
 										</div>
-										<TextField
-											id="field-organisation"
-											label="Organisation or association"
-											bind:value={draft.organisation}
-											maxlength={LIMITS.organisation}
-											placeholder="e.g. a business forum, chapter or trade body"
-											help="The forum, chapter or association you represent, if any."
-											error={errors.organisation}
-											onblur={() => check('organisation')}
-										/>
 										<ChoiceChips
 											id="field-industry"
 											legend="Industry"
@@ -517,14 +503,17 @@
 												oninput={() => recheck('industryOther')}
 											/>
 										{/if}
-										<ChoiceChips
-											id="field-companySize"
-											legend="Team size"
-											options={COMPANY_SIZES}
-											bind:value={draft.companySize}
-											required
-											error={errors.companySize}
-											onchange={() => recheck('companySize')}
+										<TextField
+											id="field-about"
+											label="Tell us about your business"
+											bind:value={draft.about}
+											multiline
+											maxlength={LIMITS.about}
+											showCount
+											placeholder="e.g. We make industrial pumps for textile mills across South India"
+											help="One or two lines on what you do. The organisers use this to introduce you to the right people."
+											error={errors.about}
+											onblur={() => check('about')}
 										/>
 										<TextField
 											id="field-website"
@@ -563,17 +552,6 @@
 											icon={interestIcon}
 											error={errors.interests}
 											onchange={() => recheck('interests')}
-										/>
-										<TextField
-											id="field-lookingFor"
-											label="Who would you like to meet?"
-											bind:value={draft.lookingFor}
-											multiline
-											maxlength={LIMITS.lookingFor}
-											showCount
-											placeholder="e.g. distributors in Madurai, a packaging supplier, investors in food processing"
-											error={errors.lookingFor}
-											onblur={() => check('lookingFor')}
 										/>
 										<ChoiceChips
 											id="field-heardFrom"

@@ -1,5 +1,4 @@
 export type Interest = 'networking' | 'private-meetings' | 'workshops' | 'b2b-stalls' | 'branding';
-export type CompanySize = 'solo' | '2-10' | '11-50' | '51-200' | '200+';
 
 export interface RegistrationDraft {
 	fullName: string;
@@ -7,15 +6,14 @@ export interface RegistrationDraft {
 	phone: string;
 	companyName: string;
 	designation: string;
-	organisation: string;
 	industry: string;
 	industryOther: string;
-	companySize: CompanySize | '';
+	/** What the company does, in a line: shown to organisers for introductions. */
+	about: string;
 	website: string;
 	city: string;
 	cityOther: string;
 	interests: Interest[];
-	lookingFor: string;
 	heardFrom: string;
 	consent: boolean;
 	whatsappUpdates: boolean;
@@ -28,15 +26,13 @@ export function emptyDraft(): RegistrationDraft {
 		phone: '',
 		companyName: '',
 		designation: '',
-		organisation: '',
 		industry: '',
 		industryOther: '',
-		companySize: '',
+		about: '',
 		website: '',
 		city: '',
 		cityOther: '',
 		interests: [],
-		lookingFor: '',
 		heardFrom: '',
 		consent: false,
 		whatsappUpdates: true
@@ -57,14 +53,6 @@ export const INDUSTRIES = [
 	'Logistics',
 	'Other'
 ] as const;
-
-export const COMPANY_SIZES: { value: CompanySize; label: string }[] = [
-	{ value: 'solo', label: 'Just me' },
-	{ value: '2-10', label: '2–10' },
-	{ value: '11-50', label: '11–50' },
-	{ value: '51-200', label: '51–200' },
-	{ value: '200+', label: '200+' }
-];
 
 export const INTERESTS: { value: Interest; label: string; description: string }[] = [
 	{
@@ -112,11 +100,10 @@ export const LIMITS = {
 	designation: 40,
 	companyName: 44,
 	industry: 36,
-	organisation: 120,
+	about: 200,
 	email: 120,
 	website: 200,
-	city: 60,
-	lookingFor: 300
+	city: 60
 } as const;
 
 export type FieldKey = keyof RegistrationDraft | 'photo';
@@ -142,14 +129,14 @@ export const STEPS: Step[] = [
 		label: 'Business',
 		title: 'Your business',
 		intro: 'This helps us introduce you to the right people on the day.',
-		fields: ['companyName', 'designation', 'organisation', 'industry', 'industryOther', 'companySize', 'website']
+		fields: ['companyName', 'designation', 'industry', 'industryOther', 'about', 'website']
 	},
 	{
 		id: 'day',
 		label: 'Your day',
 		title: 'Plan your day',
 		intro: 'Tell us where you are coming from and what you would like to make time for.',
-		fields: ['city', 'cityOther', 'interests', 'lookingFor', 'heardFrom', 'consent']
+		fields: ['city', 'cityOther', 'interests', 'heardFrom', 'consent']
 	},
 	{
 		id: 'review',
@@ -232,8 +219,6 @@ export function validateField(key: FieldKey, d: RegistrationDraft, hasPhoto: boo
 			if (v.length > LIMITS.designation) return `Keep this to ${LIMITS.designation} characters so it fits your poster.`;
 			return null;
 		}
-		case 'organisation':
-			return d.organisation.trim().length > LIMITS.organisation ? `Keep this under ${LIMITS.organisation} characters.` : null;
 		case 'industry':
 			return d.industry ? null : 'Choose your industry.';
 		case 'industryOther':
@@ -242,8 +227,8 @@ export function validateField(key: FieldKey, d: RegistrationDraft, hasPhoto: boo
 			return d.industryOther.trim().length > LIMITS.industry
 				? `Keep this to ${LIMITS.industry} characters so it fits your poster.`
 				: null;
-		case 'companySize':
-			return d.companySize ? null : 'Choose your team size.';
+		case 'about':
+			return d.about.trim().length > LIMITS.about ? `Keep this under ${LIMITS.about} characters.` : null;
 		case 'website': {
 			const v = d.website.trim();
 			if (!v) return null;
@@ -258,8 +243,6 @@ export function validateField(key: FieldKey, d: RegistrationDraft, hasPhoto: boo
 			return d.cityOther.trim().length > LIMITS.city ? `Keep this under ${LIMITS.city} characters.` : null;
 		case 'interests':
 			return d.interests.length ? null : 'Choose at least one.';
-		case 'lookingFor':
-			return d.lookingFor.trim().length > LIMITS.lookingFor ? `Keep this under ${LIMITS.lookingFor} characters.` : null;
 		case 'consent':
 			return d.consent ? null : 'Agree to this so the organisers can confirm your place.';
 		default:

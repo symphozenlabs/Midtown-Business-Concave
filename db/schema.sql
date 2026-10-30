@@ -10,19 +10,23 @@ create table if not exists registrations (
   photo_key        text not null,
   company_name     text not null check (char_length(company_name) between 2 and 44),
   designation      text not null check (char_length(designation) between 2 and 40),
-  organisation     text check (char_length(organisation) <= 120),
   industry         text not null check (char_length(industry) between 2 and 36),
-  company_size     text not null check (company_size in ('solo', '2-10', '11-50', '51-200', '200+')),
+  about            text check (char_length(about) <= 200),
   website          text check (char_length(website) <= 200),
   city             text not null check (char_length(city) between 2 and 60),
   interests        text[] not null check (cardinality(interests) between 1 and 5),
-  looking_for      text check (char_length(looking_for) <= 300),
   heard_from       text check (char_length(heard_from) <= 60),
   consent          boolean not null check (consent),
   whatsapp_updates boolean not null default false,
   poster_framing   jsonb,
   created_at       timestamptz not null default now()
 );
+
+-- Earlier versions had organisation, company_size and looking_for; the form no longer asks.
+alter table registrations drop column if exists organisation;
+alter table registrations drop column if exists company_size;
+alter table registrations drop column if exists looking_for;
+alter table registrations add column if not exists about text check (char_length(about) <= 200);
 
 -- Payment and ticket workflow:
 --   pending_payment → payment_submitted (delegate entered a UPI transaction ID)

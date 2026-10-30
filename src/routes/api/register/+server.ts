@@ -1,6 +1,5 @@
 import { error, json } from '@sveltejs/kit';
 import {
-	COMPANY_SIZES,
 	HEARD_FROM,
 	INTERESTS,
 	STEPS,
@@ -10,7 +9,6 @@ import {
 	resolvedCity,
 	resolvedIndustry,
 	validateStep,
-	type CompanySize,
 	type Interest,
 	type RegistrationDraft
 } from '#lib/registration.ts';
@@ -49,9 +47,7 @@ function text(form: FormData, key: string) {
 }
 
 function readDraft(form: FormData): RegistrationDraft {
-	const sizes = COMPANY_SIZES.map((s) => s.value as string);
 	const interests = INTERESTS.map((i) => i.value as string);
-	const companySize = text(form, 'companySize');
 	return {
 		...emptyDraft(),
 		fullName: text(form, 'fullName'),
@@ -59,15 +55,13 @@ function readDraft(form: FormData): RegistrationDraft {
 		phone: text(form, 'phone'),
 		companyName: text(form, 'companyName'),
 		designation: text(form, 'designation'),
-		organisation: text(form, 'organisation'),
 		industry: text(form, 'industry'),
 		industryOther: text(form, 'industryOther'),
-		companySize: sizes.includes(companySize) ? (companySize as CompanySize) : '',
+		about: text(form, 'about'),
 		website: text(form, 'website'),
 		city: text(form, 'city'),
 		cityOther: text(form, 'cityOther'),
 		interests: [...new Set(form.getAll('interests').map(String))].filter((i) => interests.includes(i)) as Interest[],
-		lookingFor: text(form, 'lookingFor'),
 		heardFrom: (HEARD_FROM as readonly string[]).includes(text(form, 'heardFrom')) ? text(form, 'heardFrom') : '',
 		consent: text(form, 'consent') === 'true',
 		whatsappUpdates: text(form, 'whatsappUpdates') === 'true'
@@ -156,13 +150,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		posterKey,
 		companyName: draft.companyName.trim(),
 		designation: draft.designation.trim(),
-		organisation: draft.organisation.trim() || null,
 		industry: resolvedIndustry(draft),
-		companySize: draft.companySize,
+		about: draft.about.trim() || null,
 		website: normaliseWebsite(draft.website) || null,
 		city: resolvedCity(draft),
 		interests: draft.interests,
-		lookingFor: draft.lookingFor.trim() || null,
 		heardFrom: draft.heardFrom || null,
 		whatsappUpdates: draft.whatsappUpdates,
 		posterFraming: readFraming(form),

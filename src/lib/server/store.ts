@@ -19,13 +19,11 @@ export interface RegistrationInput {
 	posterKey: string;
 	companyName: string;
 	designation: string;
-	organisation: string | null;
 	industry: string;
-	companySize: string;
+	about: string | null;
 	website: string | null;
 	city: string;
 	interests: string[];
-	lookingFor: string | null;
 	heardFrom: string | null;
 	whatsappUpdates: boolean;
 	posterFraming: PosterFraming;
@@ -80,13 +78,11 @@ function fromRow(r: Record<string, any>): Registration {
 		posterKey: r.poster_key,
 		companyName: r.company_name,
 		designation: r.designation,
-		organisation: r.organisation,
 		industry: r.industry,
-		companySize: r.company_size,
+		about: r.about,
 		website: r.website,
 		city: r.city,
 		interests: r.interests ?? [],
-		lookingFor: r.looking_for,
 		heardFrom: r.heard_from,
 		whatsappUpdates: r.whatsapp_updates,
 		posterFraming: r.poster_framing ?? { zoom: 1, dx: 0, dy: 0 },
@@ -171,13 +167,13 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			const rows = await sql()`
 				insert into registrations (
 					code, full_name, email, phone, photo_key, poster_key,
-					company_name, designation, organisation, industry, company_size, website,
-					city, interests, looking_for, heard_from, consent, whatsapp_updates, poster_framing,
+					company_name, designation, industry, about, website,
+					city, interests, heard_from, consent, whatsapp_updates, poster_framing,
 					status, amount_rupees
 				) values (
 					${newCode()}, ${input.fullName}, ${input.email}, ${input.phone}, ${input.photoKey}, ${input.posterKey},
-					${input.companyName}, ${input.designation}, ${input.organisation}, ${input.industry}, ${input.companySize},
-					${input.website}, ${input.city}, ${input.interests}, ${input.lookingFor}, ${input.heardFrom},
+					${input.companyName}, ${input.designation}, ${input.industry}, ${input.about},
+					${input.website}, ${input.city}, ${input.interests}, ${input.heardFrom},
 					true, ${input.whatsappUpdates}, ${JSON.stringify(input.posterFraming)}::jsonb,
 					'pending_payment', ${input.amountRupees}
 				)
@@ -214,9 +210,9 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 		update registrations set
 			full_name = ${input.fullName}, email = ${input.email}, phone = ${input.phone},
 			photo_key = ${input.photoKey}, poster_key = ${input.posterKey},
-			company_name = ${input.companyName}, designation = ${input.designation}, organisation = ${input.organisation},
-			industry = ${input.industry}, company_size = ${input.companySize}, website = ${input.website},
-			city = ${input.city}, interests = ${input.interests}, looking_for = ${input.lookingFor},
+			company_name = ${input.companyName}, designation = ${input.designation},
+			industry = ${input.industry}, about = ${input.about}, website = ${input.website},
+			city = ${input.city}, interests = ${input.interests},
 			heard_from = ${input.heardFrom}, whatsapp_updates = ${input.whatsappUpdates},
 			poster_framing = ${JSON.stringify(input.posterFraming)}::jsonb, amount_rupees = ${input.amountRupees},
 			status = 'pending_payment', upi_txn_id = null, payment_submitted_at = null,
