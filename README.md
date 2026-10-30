@@ -74,6 +74,19 @@ own printed date, so changing the date does not redraw posters.
   `MBC2026-IAmAttending-PosterMaker.html` "final" template. It renders pixel-identically to the original;
   keep coordinates in sync if the approved poster maker changes. Artwork lives in `static/poster/` and
   the exact poster fonts in `static/fonts/`.
+- [src/lib/components/StoryMap.svelte](src/lib/components/StoryMap.svelte) is the scroll-driven chapter
+  between the hero and the form: a pinned stage whose animations are paused Web Animations scrubbed by
+  scroll progress (transforms, opacity and stroke drawing only, so nothing reflows). The branch cities
+  come from [src/lib/story.ts](src/lib/story.ts).
+- [src/lib/geo/tamil-nadu.ts](src/lib/geo/tamil-nadu.ts) is generated from Natural Earth 1:10m data
+  (public domain): state and neighbour boundaries, rivers, urban footprints and roads, projected with Web
+  Mercator. The gold routes are shortest paths over the real highway network; the one gap in that data,
+  the Salem–Trichy NH 38, is added by hand through Rasipuram and Namakkal. Regenerate with the
+  `build-geo.mjs` script described in the file header if the cities change.
+- `static/story/satellite.webp` is the ground under that map: NASA imagery (public domain) stitched to the
+  same frame: the VIIRS Black Marble night-lights composite, Blue Marble Next Generation colour and the
+  ASTER GDEM shaded relief (a product of METI and NASA), fetched as GIBS tiles. The chapter credits NASA
+  in small print under the map.
 - [src/routes/api/payment/+server.ts](src/routes/api/payment/+server.ts) records the UPI transaction ID;
   each ID can be claimed by one registration only.
 - [src/routes/admin](src/routes/admin) is the organiser dashboard, signed in with `ADMIN_EMAIL` /
