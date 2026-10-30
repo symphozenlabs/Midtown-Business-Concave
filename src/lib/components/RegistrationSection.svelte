@@ -33,13 +33,8 @@
 	} from '#lib/registration.ts';
 	import { DEFAULT_PAYMENT, formatRupees } from '#lib/payment.ts';
 	import { renderPosterFile } from '#lib/poster/renderer.ts';
-	import {
-		SubmitError,
-		fetchTicketPrice,
-		submitPayment,
-		submitRegistration,
-		type PendingRegistration
-	} from '#lib/submit.ts';
+	import { SubmitError, submitPayment, submitRegistration, type PendingRegistration } from '#lib/submit.ts';
+	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
 	import { scrollToElement } from '#lib/smooth-scroll.ts';
 	import { reveal } from '#lib/actions/reveal.ts';
 	import TextField from './TextField.svelte';
@@ -110,8 +105,8 @@
 		narrow = query.matches;
 		query.addEventListener('change', (e) => (narrow = e.matches));
 		ready = true;
-		fetchTicketPrice().then((p) => {
-			if (p != null) price = p;
+		loadSiteConfig().then(() => {
+			price = siteConfig.priceRupees;
 		});
 		try {
 			const saved = localStorage.getItem(DRAFT_KEY);

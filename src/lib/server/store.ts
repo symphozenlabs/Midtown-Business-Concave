@@ -1,4 +1,5 @@
 import { dev } from '$app/env';
+import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/event-settings.ts';
 import { DEFAULT_PAYMENT, type PaymentSettings } from '#lib/payment.ts';
 import { isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 
@@ -52,6 +53,8 @@ export type PaymentResult =
 export interface Stats {
 	counts: Record<Status, number>;
 	collectedRupees: number;
+	/** Paid, but the ticket email has not gone out yet. */
+	ticketsToSend: number;
 }
 
 export class DuplicateEmailError extends Error {}
@@ -106,7 +109,8 @@ function fromRow(r: Record<string, any>): Registration {
 
 const mem = {
 	rows: new Map<string, Registration>(),
-	settings: { ...DEFAULT_PAYMENT } as PaymentSettings
+	payment: { ...DEFAULT_PAYMENT } as PaymentSettings,
+	event: { ...DEFAULT_EVENT } as EventSettings
 };
 
 const now = () => new Date().toISOString();
@@ -114,21 +118,45 @@ const byEmail = (email: string) => [...mem.rows.values()].find((r) => r.email.to
 
 /* ---------- settings ---------- */
 
+async function readSetting(key: string): Promise<unknown> {
+	const rows = await sql()`select value from settings where key = ${key}`;
+	return rows[0]?.value;
+}
+
+async function writeSetting(key: string, value: unknown, by: string) {
+	await sql()`
+		insert into settings (key, value, updated_at, updated_by)
+		values (${key}, ${JSON.stringify(value)}::jsonb, now(), ${by})
+		on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by`;
+}
+
 export async function getPaymentSettings(): Promise<PaymentSettings> {
-	if (useMemory) return { ...mem.settings };
-	const rows = await sql()`select value from settings where key = 'payment'`;
-	return { ...DEFAULT_PAYMENT, ...(rows[0]?.value ?? {}) };
+	if (useMemory) return { ...mem.payment };
+	const value = (await readSetting('payment')) as Partial<PaymentSettings> | undefined;
+	return { ...DEFAULT_PAYMENT, ...(value ?? {}) };
 }
 
 export async function savePaymentSettings(settings: PaymentSettings, by: string) {
 	if (useMemory) {
-		mem.settings = { ...settings };
+		mem.payment = { ...settings };
 		return;
 	}
-	await sql()`
-		insert into settings (key, value, updated_at, updated_by)
-		values ('payment', ${JSON.stringify(settings)}::jsonb, now(), ${by})
-		on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by`;
+	await writeSetting('payment', settings, by);
+}
+
+/** When the event happens; shown on the public page and in ticket emails. */
+export async function getEventSettings(): Promise<EventSettings> {
+	if (useMemory) return { ...mem.event };
+	const value = await readSetting('event');
+	return isValidEventSettings(value) ? { startsAt: value.startsAt, endsAt: value.endsAt } : { ...DEFAULT_EVENT };
+}
+
+export async function saveEventSettings(settings: EventSettings, by: string) {
+	if (useMemory) {
+		mem.event = { ...settings };
+		return;
+	}
+	await writeSetting('event', settings, by);
 }
 
 /* ---------- registrations ---------- */
@@ -290,21 +318,67 @@ export async function listRegistrations(filter: { status: Status | 'all'; q: str
 export async function getStats(): Promise<Stats> {
 	const counts: Record<Status, number> = { pending_payment: 0, payment_submitted: 0, paid: 0, rejected: 0 };
 	let collectedRupees = 0;
+	let ticketsToSend = 0;
 	if (useMemory) {
 		for (const r of mem.rows.values()) {
 			counts[r.status]++;
-			if (r.status === 'paid') collectedRupees += r.amountRupees;
+			if (r.status === 'paid') {
+				collectedRupees += r.amountRupees;
+				if (!r.ticketEmailedAt) ticketsToSend++;
+			}
 		}
-		return { counts, collectedRupees };
+		return { counts, collectedRupees, ticketsToSend };
 	}
 	const rows = await sql()`
-		select status, count(*)::int as n, coalesce(sum(amount_rupees), 0)::float8 as total
+		select status, count(*)::int as n, coalesce(sum(amount_rupees), 0)::float8 as total,
+			count(*) filter (where ticket_emailed_at is null)::int as unsent
 		from registrations group by status`;
 	for (const r of rows) {
 		counts[r.status as Status] = r.n;
-		if (r.status === 'paid') collectedRupees = r.total;
+		if (r.status === 'paid') {
+			collectedRupees = r.total;
+			ticketsToSend = r.unsent;
+		}
 	}
-	return { counts, collectedRupees };
+	return { counts, collectedRupees, ticketsToSend };
+}
+
+/** Marks several registrations as paid at once; returns the ones that changed. */
+export async function markManyPaid(ids: string[], by: string): Promise<Registration[]> {
+	const unique = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+	if (!unique.length) return [];
+	if (useMemory) {
+		const changed: Registration[] = [];
+		for (const id of unique) {
+			const row = mem.rows.get(id);
+			if (!row || row.status === 'paid') continue;
+			Object.assign(row, { status: 'paid', reviewedAt: now(), reviewedBy: by, rejectionReason: null });
+			changed.push(row);
+		}
+		return changed;
+	}
+	const rows = await sql()`
+		update registrations set status = 'paid', reviewed_at = now(), reviewed_by = ${by},
+			rejection_reason = null, updated_at = now()
+		where id = any(${unique}::uuid[]) and status <> 'paid'
+		returning *`;
+	return rows.map(fromRow);
+}
+
+/** Paid registrations whose ticket has not been emailed, oldest approval first. */
+export async function listUnsentTickets(limit: number): Promise<Registration[]> {
+	if (useMemory) {
+		return [...mem.rows.values()]
+			.filter((r) => r.status === 'paid' && !r.ticketEmailedAt)
+			.sort((a, b) => (a.reviewedAt ?? '').localeCompare(b.reviewedAt ?? ''))
+			.slice(0, limit);
+	}
+	const rows = await sql()`
+		select * from registrations
+		where status = 'paid' and ticket_emailed_at is null
+		order by reviewed_at asc nulls first
+		limit ${limit}`;
+	return rows.map(fromRow);
 }
 
 export async function markPaid(id: string, by: string): Promise<Registration | null> {

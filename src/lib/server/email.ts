@@ -1,8 +1,9 @@
 import { dev } from '$app/env';
 import { EMAIL_FROM, RESEND_API_KEY } from '$app/env/private';
 import { EVENT } from '#lib/event.ts';
+import { eventLabels, type EventLabels } from '#lib/event-settings.ts';
 import { formatRupees } from '#lib/payment.ts';
-import type { Registration } from './store.ts';
+import { getEventSettings, type Registration } from './store.ts';
 
 export const isEmailConfigured = Boolean(RESEND_API_KEY && EMAIL_FROM);
 
@@ -50,8 +51,13 @@ async function send(to: string, subject: string, html: string, text: string, att
 	if (!res.ok) throw new EmailError(`Resend refused the email (${res.status}): ${await res.text()}`);
 }
 
+/** The schedule as set on the dashboard, formatted for the footer of every email. */
+async function schedule(): Promise<EventLabels> {
+	return eventLabels(await getEventSettings());
+}
+
 /** Email layout: navy and gold like the poster, with inline styles for mail clients. */
-function layout(title: string, body: string) {
+function layout(title: string, body: string, when: EventLabels) {
 	return `<!doctype html><html><body style="margin:0;background:#0b1430;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#101a3a;border:1px solid #6b5426;border-radius:14px;">
@@ -61,7 +67,7 @@ function layout(title: string, body: string) {
 </td></tr>
 <tr><td style="padding:8px 28px 28px;color:#e9dfc9;font-size:15px;line-height:1.6;">${body}</td></tr>
 <tr><td style="padding:16px 28px;border-top:1px solid #2a3558;color:#a69c8a;font-size:12px;line-height:1.6;text-align:center;">
-${escape(EVENT.dateLabel)} · ${escape(EVENT.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(EVENT.presenter)} and Midtown Events
+${escape(when.dateLabel)} · ${escape(when.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(EVENT.presenter)} and Midtown Events
 </td></tr></table></td></tr></table></body></html>`;
 }
 
@@ -70,6 +76,7 @@ function slug(s: string) {
 }
 
 export async function sendTicketEmail(reg: Registration, poster: Uint8Array | null) {
+	const when = await schedule();
 	const first = reg.fullName.split(/\s+/)[0];
 	const details = `
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0b1430;border-radius:10px;">
@@ -80,7 +87,8 @@ export async function sendTicketEmail(reg: Registration, poster: Uint8Array | nu
 </td></tr></table>`;
 	const html = layout(
 		`Your seat is confirmed, ${escape(first)}.`,
-		`<p style="margin:0 0 12px;">We have received your payment. Your “I am attending” ticket is attached: share it on WhatsApp, Instagram or LinkedIn, and keep this email for the registration desk.</p>${details}<p style="margin:0;">See you in Salem on ${escape(EVENT.dateLabel)}.</p>`
+		`<p style="margin:0 0 12px;">We have received your payment. Your “I am attending” ticket is attached: share it on WhatsApp, Instagram or LinkedIn, and keep this email for the registration desk.</p>${details}<p style="margin:0;">See you in Salem on ${escape(when.dateLabel)}.</p>`,
+		when
 	);
 	const text = `Your seat is confirmed, ${first}.
 
@@ -90,7 +98,7 @@ Registration number: ${reg.code}
 Delegate: ${reg.fullName}, ${reg.designation}, ${reg.companyName}
 Paid: ${formatRupees(reg.amountRupees)}${reg.upiTxnId ? ` (UPI ref ${reg.upiTxnId})` : ''}
 
-${EVENT.dateLabel} · ${EVENT.timeLabel} · ${EVENT.venue}`;
+${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
 	await send(
 		reg.email,
 		`Your ticket · ${EVENT.name} 2026 · ${reg.code}`,
@@ -101,12 +109,14 @@ ${EVENT.dateLabel} · ${EVENT.timeLabel} · ${EVENT.venue}`;
 }
 
 export async function sendRejectionEmail(reg: Registration, reason: string) {
+	const when = await schedule();
 	const first = reg.fullName.split(/\s+/)[0];
 	const html = layout(
 		`We could not confirm your payment, ${escape(first)}.`,
 		`<p style="margin:0 0 12px;">We checked the UPI transaction ID you entered${reg.upiTxnId ? ` (<strong style="color:#ffffff;">${escape(reg.upiTxnId)}</strong>)` : ''} for registration <strong style="color:#f7d07d;">${escape(reg.code)}</strong> but could not match it to a payment of ${escape(formatRupees(reg.amountRupees))}.</p>
 ${reason ? `<p style="margin:0 0 12px;"><strong style="color:#ffffff;">Note from the organisers:</strong> ${escape(reason)}</p>` : ''}
-<p style="margin:0;">Please fill in the registration form again with the same email address, then pay or enter the correct transaction ID. Your registration number stays the same.</p>`
+<p style="margin:0;">Please fill in the registration form again with the same email address, then pay or enter the correct transaction ID. Your registration number stays the same.</p>`,
+		when
 	);
 	const text = `We could not confirm your payment, ${first}.
 

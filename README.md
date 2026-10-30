@@ -12,9 +12,23 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 2. **Continue to payment** registers them (status *awaiting payment*) and uploads their photo and the 4K poster.
 3. The payment step shows a UPI QR unique to them: payee, amount and their registration number in the note.
 4. They enter the 12-digit UPI transaction ID and tap **Complete** (status *needs review*).
-5. An organiser checks the bank or UPI app at `/admin` and clicks **Mark as paid**, which emails the ticket
-   with the poster attached; or **Reject**, which emails a short note. A rejected delegate can register again
-   with the same email and keeps their registration number.
+5. An organiser checks the bank or UPI app at `/admin` and clicks **Mark paid** (or ticks several rows and
+   marks them together). Marking paid does not email anyone: the ticket joins a queue, and the
+   **n emails waiting to be sent** button emails every queued ticket, with the poster attached, in one click.
+   **Reject** emails a short note straight away. A rejected delegate can register again with the same email
+   and keeps their registration number.
+
+## Organiser dashboard
+
+- `/admin` lists participants in a table (delegate, email, UPI transaction ID, amount, status) with summary
+  counts, status tabs and search. **Mark paid** works in one click from the row; **Select** adds checkboxes for
+  marking many at once. Each row expands smoothly to show the rest of the registration, the poster and the
+  reject form. The send button sends up to 25 tickets per click (Resend allows about two emails a second);
+  click again if more are waiting.
+- `/admin/configuration` sets the event fee and UPI ID (**Generate QR** saves both and regenerates the QR and
+  payment link the registration form uses), and the event date and time (shown in the hero, countdown and
+  ticket emails). The page shows the current QR and the `upi://pay` link that mobile users tap, and can read
+  the payee out of an uploaded QR image (a Google Pay or PhonePe screenshot, for example).
 
 ## Run locally
 
@@ -40,8 +54,10 @@ emails in the terminal.
    directory `.svelte-kit/cloudflare`, then add every variable from `.env.example` as an encrypted
    environment variable (Settings → Environment variables). Use a long, unique `ADMIN_PASSWORD`.
 
-The ticket price and the UPI details behind the payment QR are changed from the dashboard (defaults:
-₹500 to MOULISHWAR G, `gmouly1@oksbi`). Registrations keep the price they were shown.
+The ticket price, the event date and time, and the UPI details behind the payment QR are changed at
+`/admin/configuration` (defaults: ₹500 to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
+stored in the `settings` table. Registrations keep the price they were shown. The poster artwork carries its
+own printed date, so changing the date does not redraw posters.
 
 ## How it fits together
 
