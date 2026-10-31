@@ -8,6 +8,7 @@
 		CircleAlert,
 		Handshake,
 		History,
+		ListChecks,
 		LoaderCircle,
 		Lock,
 		Megaphone,
@@ -370,6 +371,8 @@
 	{:else}<Megaphone size={18} strokeWidth={1.75} />{/if}
 {/snippet}
 
+{#snippet allInterestsIcon()}<ListChecks size={18} strokeWidth={1.75} />{/snippet}
+
 <section class="register" id="register" aria-labelledby="register-title">
 	<div class="container grid">
 		<div class="main">
@@ -587,9 +590,10 @@
 										/>
 										<ChoiceChips
 											id="field-interests"
-											legend="What would you like to make time for?"
-											help="Choose any that apply."
+											legend="What are you interested in at the event?"
+											help="You can pick more than one."
 											options={INTERESTS}
+											all={{ label: 'All of the above', description: 'I am interested in everything.', icon: allInterestsIcon }}
 											bind:value={draft.interests}
 											multiple
 											required

@@ -20,6 +20,8 @@
 		error?: string | null;
 		variant?: 'chip' | 'card';
 		icon?: Snippet<[T]>;
+		/** Multiple only: a last option that ticks (or clears) every other one. */
+		all?: { label: string; description?: string; icon?: Snippet };
 		onchange?: () => void;
 	}
 
@@ -34,6 +36,7 @@
 		error = null,
 		variant = 'chip',
 		icon,
+		all,
 		onchange
 	}: Props = $props();
 
@@ -47,6 +50,13 @@
 		} else {
 			value = v;
 		}
+		onchange?.();
+	}
+
+	const allChecked = $derived(Array.isArray(value) && options.every((o) => value.includes(o.value)));
+
+	function toggleAll() {
+		value = allChecked ? [] : options.map((o) => o.value);
 		onchange?.();
 	}
 
@@ -89,6 +99,19 @@
 				{/if}
 			</label>
 		{/each}
+		{#if all && multiple}
+			<label class="option" class:checked={allChecked}>
+				<input type="checkbox" checked={allChecked} onchange={toggleAll} />
+				{#if all.icon}
+					<span class="icon" aria-hidden="true">{@render all.icon()}</span>
+				{/if}
+				<span class="text">
+					<span class="option-label">{all.label}</span>
+					{#if all.description}<span class="option-desc">{all.description}</span>{/if}
+				</span>
+				<span class="tick" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
+			</label>
+		{/if}
 	</div>
 
 	{#if error}

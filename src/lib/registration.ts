@@ -60,28 +60,28 @@ export const INDUSTRIES = [
 export const INTERESTS: { value: Interest; label: string; description: string }[] = [
 	{
 		value: 'networking',
-		label: 'Networking meet',
-		description: 'Meet founders and business owners from across Tamil Nadu.'
+		label: 'Networking',
+		description: 'Meet business owners from across Tamil Nadu.'
 	},
 	{
 		value: 'private-meetings',
-		label: 'Private meeting zone',
-		description: 'A quieter space for one-to-one business conversations.'
+		label: 'One-to-one meetings',
+		description: 'Talk business privately with someone you want to meet.'
 	},
 	{
 		value: 'workshops',
 		label: 'Workshops',
-		description: 'Practical sessions on running and growing a business.'
+		description: 'Learn simple ways to run and grow your business.'
 	},
 	{
 		value: 'b2b-stalls',
-		label: 'B2B stalls',
-		description: 'Explore the stalls, or ask us about showcasing your business.'
+		label: 'Business stalls',
+		description: 'Visit the stalls, or put up a stall for your own business.'
 	},
 	{
 		value: 'branding',
-		label: 'Branding',
-		description: 'Ask us about brand visibility and sponsorship at the conclave.'
+		label: 'Promote your brand',
+		description: 'Show your brand at the event or become a sponsor.'
 	}
 ];
 
@@ -139,7 +139,7 @@ export const STEPS: Step[] = [
 		id: 'day',
 		label: 'Your day',
 		title: 'Plan your day',
-		intro: 'Tell us where you are coming from and what you would like to make time for.',
+		intro: 'Tell us where you are coming from and what you are interested in.',
 		fields: ['city', 'cityOther', 'interests', 'heardFrom', 'consent']
 	},
 	{
