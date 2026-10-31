@@ -78,8 +78,8 @@
 		<section class="ops-card" aria-labelledby="connect-title">
 			<h2 id="connect-title" class="section-title">Connect with delegates</h2>
 			<p class="ops-sub">
-				Scan another delegate’s QR with this button or your phone camera. They see your request on their pass; contact
-				details are shared only when both of you accept.
+				Scan another delegate’s QR with this button or your phone camera to see their contact card. Anyone who scans your
+				QR sees yours (name, phone, email, company and designation), so share it with the people you want to meet.
 			</p>
 			{#if scanning}
 				<QrScanner {onscan} />

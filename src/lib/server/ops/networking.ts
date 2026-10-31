@@ -1,4 +1,4 @@
-import { sql } from '../db.ts';
+import { ensureColumn, sql } from '../db.ts';
 import { audit } from './event.ts';
 
 export type Side = 'pending' | 'accepted' | 'declined';
@@ -60,19 +60,35 @@ export async function publicProfile(registrationId: string): Promise<PublicProfi
 }
 
 /** What scanning the QR on the ID card shows: the details the delegate registered with (never phone or email). */
+/**
+ * The delegate behind a scanned QR. Showing the QR is how a delegate shares their
+ * contact card, so phone and email come with it (LinkedIn when they gave one).
+ */
 export interface PassHolder extends PublicProfile {
 	code: string;
 	interests: string[];
 	photoKey: string | null;
+	email: string;
+	phone: string;
+	linkedin: string | null;
 }
 
 export async function passHolder(registrationId: string): Promise<PassHolder | null> {
+	await ensureColumn('registrations', 'linkedin');
 	const rows = await sql()`
-		select id, code, full_name, designation, company_name, industry, city, about, website, interests, photo_key
+		select id, code, full_name, email, phone, designation, company_name, industry, city, about, website, linkedin, interests, photo_key
 		from registrations where id = ${registrationId} and status = 'paid'`;
 	const r = rows[0];
 	if (!r) return null;
-	return { ...profileFrom(r), code: r.code, interests: r.interests ?? [], photoKey: r.photo_key ?? null };
+	return {
+		...profileFrom(r),
+		code: r.code,
+		interests: r.interests ?? [],
+		photoKey: r.photo_key ?? null,
+		email: r.email,
+		phone: r.phone,
+		linkedin: r.linkedin ?? null
+	};
 }
 
 /** Rows store the pair once, smaller id first, so each side has a fixed column. */

@@ -144,7 +144,7 @@ function passHtml(pass: PassEmail, onCard: boolean) {
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0b1430;border-radius:10px;">
 <tr><td style="padding:16px 18px;color:#e9dfc9;font-size:14px;line-height:1.7;">
 <strong style="color:#ffffff;">Your event pass</strong><br>
-${where} is your one pass for the day: show it at the gate, the halls, the food counters and the certificate desk. Anyone who scans it sees the details you registered with, so delegates can connect with you; your phone number and email are shared only with people you accept.
+${where} is your one pass for the day: show it at the gate, the halls, the food counters and the certificate desk. Anyone who scans it sees your contact card: your name, phone number, email, company and designation, plus your LinkedIn and website if you gave them, and can save you to their contacts. Show it to the people you want to connect with.
 <div style="margin-top:14px;"><a href="${escape(pass.myPassUrl)}" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#e3b04b;color:#171916;font-weight:bold;text-decoration:none;">Open my pass</a></div>
 <div style="margin-top:10px;font-size:12px;color:#a69c8a;">Keep this link to yourself: it signs you in to your pass and connections.</div>
 </td></tr></table>`;

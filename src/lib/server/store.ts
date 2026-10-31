@@ -23,6 +23,7 @@ export interface RegistrationInput {
 	industry: string;
 	about: string | null;
 	website: string | null;
+	linkedin: string | null;
 	city: string;
 	interests: string[];
 	heardFrom: string | null;
@@ -106,6 +107,7 @@ function fromRow(r: Record<string, any>): Registration {
 		industry: r.industry,
 		about: r.about,
 		website: r.website,
+		linkedin: r.linkedin ?? null,
 		city: r.city,
 		interests: r.interests ?? [],
 		heardFrom: r.heard_from,
@@ -259,18 +261,19 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 		return row;
 	}
 
+	await ensureColumn('registrations', 'linkedin');
 	for (let attempt = 0; attempt < 4; attempt++) {
 		try {
 			const rows = await sql()`
 				insert into registrations (
 					code, full_name, email, phone, photo_key, poster_key,
-					company_name, designation, industry, about, website,
+					company_name, designation, industry, about, website, linkedin,
 					city, interests, heard_from, consent, whatsapp_updates, poster_framing,
 					status, amount_rupees
 				) values (
 					${newCode()}, ${input.fullName}, ${input.email}, ${input.phone}, ${input.photoKey}, ${input.posterKey},
 					${input.companyName}, ${input.designation}, ${input.industry}, ${input.about},
-					${input.website}, ${input.city}, ${input.interests}, ${input.heardFrom},
+					${input.website}, ${input.linkedin}, ${input.city}, ${input.interests}, ${input.heardFrom},
 					true, ${input.whatsappUpdates}, ${JSON.stringify(input.posterFraming)}::jsonb,
 					'pending_payment', ${input.amountRupees}
 				)
@@ -303,12 +306,13 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 		mem.rows.set(id, row);
 		return row;
 	}
+	await ensureColumn('registrations', 'linkedin');
 	const rows = await sql()`
 		update registrations set
 			full_name = ${input.fullName}, email = ${input.email}, phone = ${input.phone},
 			photo_key = ${input.photoKey}, poster_key = ${input.posterKey},
 			company_name = ${input.companyName}, designation = ${input.designation},
-			industry = ${input.industry}, about = ${input.about}, website = ${input.website},
+			industry = ${input.industry}, about = ${input.about}, website = ${input.website}, linkedin = ${input.linkedin},
 			city = ${input.city}, interests = ${input.interests},
 			heard_from = ${input.heardFrom}, whatsapp_updates = ${input.whatsappUpdates},
 			poster_framing = ${JSON.stringify(input.posterFraming)}::jsonb, amount_rupees = ${input.amountRupees},

@@ -341,7 +341,8 @@
 				['Designation', draft.designation.trim()],
 				['Industry', resolvedIndustry(draft)],
 				['About the business', draft.about.trim()],
-				['Website', draft.website.trim()]
+				['Website', draft.website.trim()],
+				['LinkedIn', draft.linkedin.trim()]
 			]
 		},
 		{
@@ -547,7 +548,7 @@
 										/>
 										<TextField
 											id="field-website"
-											label="Website or LinkedIn"
+											label="Website"
 											type="url"
 											bind:value={draft.website}
 											autocomplete="url"
@@ -557,6 +558,20 @@
 											error={errors.website}
 											onblur={() => check('website')}
 											oninput={() => recheck('website')}
+										/>
+										<TextField
+											id="field-linkedin"
+											label="LinkedIn profile"
+											type="url"
+											bind:value={draft.linkedin}
+											autocomplete="url"
+											inputmode="url"
+											placeholder="linkedin.com/in/yourname"
+											help="Shown to delegates who scan your pass, so they can connect with you."
+											maxlength={LIMITS.linkedin}
+											error={errors.linkedin}
+											onblur={() => check('linkedin')}
+											oninput={() => recheck('linkedin')}
 										/>
 									</div>
 								{:else if step === 2}

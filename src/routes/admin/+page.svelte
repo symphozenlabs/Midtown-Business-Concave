@@ -185,7 +185,6 @@
 					const blob = await renderBackFile({
 						name: job.name,
 						title: job.title,
-						company: job.company,
 						code: job.code,
 						qrText: job.qrText,
 						photoUrl: job.photoKey ? media(job.photoKey) : null
@@ -697,6 +696,9 @@
 																{#if r.website}<a href={r.website} target="_blank" rel="noopener">{r.website}</a>{:else}—{/if}
 															</dd>
 														</div>
+														{#if r.linkedin}
+															<div><dt>LinkedIn</dt><dd><a href={r.linkedin} target="_blank" rel="noopener">{r.linkedin}</a></dd></div>
+														{/if}
 														<div><dt>Travelling from</dt><dd>{r.city}</dd></div>
 														<div><dt>Interested in</dt><dd>{r.interests.map(interestLabel).join(', ')}</dd></div>
 														<div><dt>Heard from</dt><dd>{r.heardFrom ?? '—'}</dd></div>

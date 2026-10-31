@@ -8,7 +8,7 @@ export const prerender = false;
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.admin) error(404, 'Not found');
 	const key = params.key;
-	if (!/^registrations\/2026\/[0-9a-f-]{36}(-poster|-back-v\d+)?\.(jpg|png|webp)$/.test(key)) error(404, 'Not found');
+	if (!/^registrations\/2026\/[0-9a-f-]{36}(-poster|-back(-d\d+)?-v\d+)?\.(jpg|png|webp)$/.test(key)) error(404, 'Not found');
 	const object = await getObject(key);
 	if (!object) error(404, 'Not found');
 	return new Response(object.body as BodyInit, {

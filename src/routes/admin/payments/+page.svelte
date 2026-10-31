@@ -415,7 +415,7 @@
 								<span class="ops-heading-icon"><Store size={16} aria-hidden="true" /></span>
 								<div>
 									<h2 id="stalls-title">Stall types</h2>
-									<p class="ops-hint">One row per size and kind of stall, with its own price and number available.</p>
+									<p class="ops-hint">One card per size and kind of stall, with its own price and number available.</p>
 								</div>
 							</div>
 							<button type="button" class="btn btn-primary ops-btn-sm" onclick={() => openStall(null)}>
@@ -424,29 +424,30 @@
 						</div>
 						{@render notice('stalls')}
 						{#if stalls.length}
-							<div class="ops-table-wrap">
-								<table class="ops-table stack">
-									<thead>
-										<tr><th>Stall</th><th>Size</th><th class="num">Price</th><th class="num">Available</th><th>Paid to</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr>
-									</thead>
-									<tbody>
-										{#each stalls as s (s.id)}
-											<tr class:closed={!s.active}>
-												<td class="lead">
-													<strong>{s.name}</strong>
-													{#if s.description}<div class="ops-muted sub">{s.description}</div>{/if}
-												</td>
-												<td class="nowrap" data-label="Size">{sizeLabel(s)} <span class="ops-muted">· {areaLabel(s)}</span></td>
-												<td class="num nowrap" data-label="Price">{formatRupees(s.priceRupees)}</td>
-												<td class="num" data-label="Available">{s.quantity}</td>
-												<td class="ops-muted mono-sm" data-label="Paid to">{paidTo(s)}</td>
-												<td><span class="ops-pill {s.active ? 'active' : 'inactive'}">{s.active ? 'On sale' : 'Closed'}</span></td>
-												<td class="row-end end">{@render itemActions('stall', s, () => openStall(s))}</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
-							</div>
+							<ul class="plans">
+								{#each stalls as s (s.id)}
+									<li class="plan" class:closed={!s.active}>
+										<div class="plan-head">
+											<div>
+												<h3>{s.name}</h3>
+												<span class="ops-pill {s.active ? 'active' : 'inactive'}">{s.active ? 'On sale' : 'Closed'}</span>
+											</div>
+											<p class="plan-price">{formatRupees(s.priceRupees)}<small> / stall</small></p>
+										</div>
+										<div class="stall-body">
+											<dl class="stall-facts">
+												<div><dt>Size</dt><dd>{sizeLabel(s)} <span class="ops-muted">· {areaLabel(s)}</span></dd></div>
+												<div><dt>Available</dt><dd>{s.quantity}</dd></div>
+											</dl>
+											{#if s.description}<p class="ops-hint">{s.description}</p>{/if}
+										</div>
+										<div class="plan-foot">
+											<span class="ops-muted mono-sm">{paidTo(s)}</span>
+											{@render itemActions('stall', s, () => openStall(s))}
+										</div>
+									</li>
+								{/each}
+							</ul>
 						{:else}
 							<div class="ops-empty">
 								<p>No stalls yet. Add each size you sell, for example <b>Standard 3 m × 3 m</b> or <b>Premium corner 6 m × 3 m</b>.</p>
@@ -839,29 +840,15 @@
 		user-select: all;
 	}
 
-	/* Stalls table ------------------------------------------------------- */
-
-	.sub {
-		max-width: 320px;
-		font-size: 12px;
-	}
-
-	.nowrap {
-		white-space: nowrap;
-	}
+	/* Stall and membership cards ---------------------------------------- */
 
 	.mono-sm {
 		font: 12px/1.4 ui-monospace, 'Cascadia Mono', Consolas, monospace;
 		overflow-wrap: anywhere;
 	}
 
-	tr.closed td,
 	.plan.closed {
 		opacity: 0.65;
-	}
-
-	.row-end {
-		width: 1%;
 	}
 
 	.item-actions {
@@ -869,8 +856,6 @@
 		justify-content: flex-end;
 		gap: 2px;
 	}
-
-	/* Membership plans ---------------------------------------------------- */
 
 	.plans {
 		display: grid;
@@ -917,6 +902,30 @@
 		font-size: 13px;
 		font-weight: 400;
 		color: var(--text-supporting);
+	}
+
+	.stall-body {
+		display: grid;
+		align-content: start;
+		gap: var(--space-2);
+	}
+
+	.stall-facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-6);
+		margin: 0;
+		font-size: 13px;
+	}
+
+	.stall-facts dt {
+		font-size: 11px;
+		color: var(--text-supporting);
+	}
+
+	.stall-facts dd {
+		margin: 0;
+		font-weight: 600;
 	}
 
 	.benefits {
