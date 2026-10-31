@@ -6,6 +6,8 @@
  * the artwork; keep them in sync with the poster maker if it is revised.
  */
 
+import { DEFAULT_EVENT, eventLabels, type EventSettings } from '#lib/event-settings.ts';
+
 export interface PosterAssets {
 	sef: HTMLImageElement;
 	me: HTMLImageElement;
@@ -30,6 +32,8 @@ export interface PosterState {
 	zoom: number;
 	dx: number;
 	dy: number;
+	/** The schedule from Event setup; the strip shows it when it differs from the artwork's. */
+	event?: EventSettings | null;
 }
 
 type Ctx = CanvasRenderingContext2D;
@@ -80,21 +84,6 @@ function makeCanvas(w: number, h: number) {
 	c.width = w;
 	c.height = h;
 	return c;
-}
-
-// offscreen layer at output resolution, drawn in base (1080) coordinates
-function layer(w: number, h: number): [HTMLCanvasElement, Ctx] {
-	const cv = makeCanvas(Math.round(w * SC), Math.round(h * SC));
-	const c = cv.getContext('2d')!;
-	c.setTransform(SC, 0, 0, SC, 0, 0);
-	c.imageSmoothingQuality = 'high';
-	return [cv, c];
-}
-
-function free(cv: HTMLCanvasElement) {
-	// release memory promptly (iOS Safari)
-	cv.width = 0;
-	cv.height = 0;
 }
 
 function gold(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
@@ -239,6 +228,70 @@ function drawMBC(ctx: Ctx, L: Layout, A: PosterAssets) {
 	ctx.restore();
 }
 
+type Placement = { x: number; y: number; w: number; h: number };
+
+/** Where the photo sits before any drag limit, in base (1080) units. */
+function rawPlacement(L: Layout, st: PosterState, photo: HTMLImageElement): Placement & { s: number } {
+	const a = L.arch,
+		m = st.photoMeta;
+	if (m?.cutout) {
+		const s = ((a.w * 1.2) / m.bbox.w) * (st.zoom || 1);
+		return {
+			s,
+			w: photo.width * s,
+			h: photo.height * s,
+			x: a.x + a.w / 2 - (m.bbox.x + m.bbox.w / 2) * s + (st.dx || 0) * L.k,
+			y: a.y + a.h * 0.08 - m.bbox.y * s + (st.dy || 0) * L.k
+		};
+	}
+	const s = Math.max(a.w / photo.width, a.h / photo.height) * (st.zoom || 1);
+	const w = photo.width * s,
+		h = photo.height * s;
+	return { s, w, h, x: a.x + (a.w - w) / 2 + (st.dx || 0) * L.k, y: a.y + (st.dy || 0) * L.k };
+}
+
+/**
+ * Where the photo sits on the card after the delegate's zoom and drag, kept over
+ * the arch: a photo (or a cut-out's subject) larger than the arch always covers it,
+ * a smaller one stays inside it. Without this a drag could push the photo right out
+ * and the card went out with an empty arch.
+ */
+function photoPlacement(L: Layout, st: PosterState, photo: HTMLImageElement): Placement {
+	const a = L.arch;
+	const p = rawPlacement(L, st, photo);
+	const box = st.photoMeta?.cutout ? st.photoMeta.bbox : { x: 0, y: 0, w: photo.width, h: photo.height };
+	// The part that must stay put: the whole photo, or a cut-out's subject.
+	const sx = p.x + box.x * p.s,
+		sy = p.y + box.y * p.s,
+		sw = box.w * p.s,
+		sh = box.h * p.s;
+	const fit = (pos: number, size: number, start: number, span: number) =>
+		size >= span ? Math.min(start, Math.max(start + span - size, pos)) : Math.max(start, Math.min(start + span - size, pos));
+	return { w: p.w, h: p.h, x: p.x + (fit(sx, sw, a.x, a.w) - sx), y: p.y + (fit(sy, sh, a.y, a.h) - sy) };
+}
+
+/**
+ * The drag offsets after that limit, in the poster maker's units, so a drag stops
+ * at the edge instead of running on past it.
+ */
+export function limitFraming(st: PosterState): { dx: number; dy: number } {
+	if (!st.photo) return { dx: st.dx, dy: st.dy };
+	const raw = rawPlacement(FINAL, st, st.photo);
+	const kept = photoPlacement(FINAL, st, st.photo);
+	return {
+		dx: Math.round((st.dx || 0) + (kept.x - raw.x) / FINAL.k),
+		dy: Math.round((st.dy || 0) + (kept.y - raw.y) / FINAL.k)
+	};
+}
+
+/**
+ * Framing saved from a runaway drag sits exactly at the stored limits (±260, ±360);
+ * redrawing such a card starts from the centre instead.
+ */
+export function isRunawayFraming(f: { dx: number; dy: number }) {
+	return Math.abs(f.dx) >= 260 || Math.abs(f.dy) >= 360;
+}
+
 function drawFinalArch(ctx: Ctx, L: Layout, st: PosterState, A: PosterAssets) {
 	const a = L.arch;
 	ctx.save();
@@ -247,40 +300,23 @@ function drawFinalArch(ctx: Ctx, L: Layout, st: PosterState, A: PosterAssets) {
 	const cutout = !!(st.photo && st.photoMeta && st.photoMeta.cutout);
 	if (!st.photo || cutout) ctx.drawImage(A.archBackdrop, a.x, a.y, a.w, a.h + 6);
 	if (st.photo) {
-		const m = st.photoMeta;
-		const [pc, q] = layer(L.W, L.H);
-		let pl: { x: number; y: number; w: number; h: number };
-		if (cutout && m) {
-			const s = ((a.w * 1.2) / m.bbox.w) * (st.zoom || 1);
-			const w = st.photo.width * s,
-				h = st.photo.height * s;
-			pl = {
-				w,
-				h,
-				x: a.x + a.w / 2 - (m.bbox.x + m.bbox.w / 2) * s + (st.dx || 0) * L.k,
-				y: a.y + a.h * 0.08 - m.bbox.y * s + (st.dy || 0) * L.k
-			};
-		} else {
-			const s = Math.max(a.w / st.photo.width, a.h / st.photo.height) * (st.zoom || 1);
-			const w = st.photo.width * s,
-				h = st.photo.height * s;
-			pl = { w, h, x: a.x + (a.w - w) / 2 + (st.dx || 0) * L.k, y: a.y + (st.dy || 0) * L.k };
-		}
-		q.filter = 'brightness(1.05) contrast(1.04) saturate(1.05)';
-		q.drawImage(st.photo, pl.x, pl.y, pl.w, pl.h);
-		q.filter = 'none';
-		q.globalCompositeOperation = 'screen';
-		q.globalAlpha = 0.1;
-		q.drawImage(st.photo, pl.x, pl.y, pl.w, pl.h);
-		q.globalAlpha = 1;
-		q.globalCompositeOperation = 'source-over';
+		// Drawn straight onto the card. A second full-size 4K layer doubled the canvas
+		// memory, and iPhone Safari silently leaves a canvas blank past its limit: the
+		// card then went out with an empty arch.
+		const pl = photoPlacement(L, st, st.photo);
+		ctx.save();
 		if (cutout) {
 			ctx.shadowColor = 'rgba(0,0,0,0.45)';
 			ctx.shadowBlur = 20 * SC;
 		}
-		ctx.drawImage(pc, 0, 0, L.W, L.H);
-		ctx.shadowColor = 'transparent';
-		free(pc);
+		ctx.filter = 'brightness(1.05) contrast(1.04) saturate(1.05)';
+		ctx.drawImage(st.photo, pl.x, pl.y, pl.w, pl.h);
+		ctx.restore();
+		ctx.save();
+		ctx.globalCompositeOperation = 'screen';
+		ctx.globalAlpha = 0.1;
+		ctx.drawImage(st.photo, pl.x, pl.y, pl.w, pl.h);
+		ctx.restore();
 	} else {
 		drawPlaceholder(ctx, L);
 	}
@@ -370,6 +406,72 @@ function drawFinalPlate(ctx: Ctx, L: Layout, st: PosterState) {
 /* ---------- main ---------- */
 
 /** Draws the poster onto `canvas`; `width` is the output pixel width (1080 preview, 2160 for 4K). */
+/*
+ * The date and time in the artwork's bottom strip ("SAT, 28 NOV 2026", "10 AM – 6 PM")
+ * are part of the approved image. When the organisers set a different schedule in
+ * Event setup, those two values are painted over (rebuilding the navy panel behind
+ * them from the rows just above and below) and written again in the same style.
+ * The approved schedule leaves the artwork untouched.
+ */
+const SCHEDULE = {
+	// Base (1080) units, measured on bgFinal: the clear area around each value.
+	date: { x: 157.5, w: 215, text: 161.5 },
+	time: { x: 482.5, w: 212, text: 486.5 },
+	y: 1699,
+	h: 27,
+	baseline: 1720,
+	size: 23,
+	maxW: 205
+} as const;
+
+const ARTWORK_SCHEDULE = eventLabels(DEFAULT_EVENT);
+
+/** Rebuilds the panel behind a value by blending the clean rows above and below it. */
+function repaintPanel(ctx: Ctx, x: number, w: number) {
+	const X = Math.round(x * SC),
+		Y = Math.round(SCHEDULE.y * SC),
+		W = Math.round(w * SC),
+		H = Math.round(SCHEDULE.h * SC);
+	const top = ctx.getImageData(X, Y - 1, W, 1).data;
+	const bottom = ctx.getImageData(X, Y + H, W, 1).data;
+	const patch = ctx.createImageData(W, H);
+	for (let j = 0; j < H; j++) {
+		const t = (j + 1) / (H + 1);
+		for (let i = 0; i < W; i++) {
+			const k = i * 4,
+				o = (j * W + i) * 4;
+			patch.data[o] = top[k] + (bottom[k] - top[k]) * t;
+			patch.data[o + 1] = top[k + 1] + (bottom[k + 1] - top[k + 1]) * t;
+			patch.data[o + 2] = top[k + 2] + (bottom[k + 2] - top[k + 2]) * t;
+			patch.data[o + 3] = 255;
+		}
+	}
+	ctx.putImageData(patch, X, Y);
+}
+
+function drawScheduleValue(ctx: Ctx, text: string, x: number) {
+	ctx.save();
+	ctx.textAlign = 'left';
+	ctx.textBaseline = 'alphabetic';
+	fitFont(ctx, text, (s) => `600 ${s}px ${SANS}`, SCHEDULE.maxW, SCHEDULE.size, 14);
+	ctx.fillStyle = '#F4F1EA';
+	ctx.fillText(text, x, SCHEDULE.baseline);
+	ctx.restore();
+}
+
+function drawSchedule(ctx: Ctx, event: EventSettings | null) {
+	if (!event) return;
+	const now = eventLabels(event);
+	if (now.compactDate !== ARTWORK_SCHEDULE.compactDate) {
+		repaintPanel(ctx, SCHEDULE.date.x, SCHEDULE.date.w);
+		drawScheduleValue(ctx, now.compactDate.toUpperCase(), SCHEDULE.date.text);
+	}
+	if (now.compactTime !== ARTWORK_SCHEDULE.compactTime) {
+		repaintPanel(ctx, SCHEDULE.time.x, SCHEDULE.time.w);
+		drawScheduleValue(ctx, now.compactTime.toUpperCase(), SCHEDULE.time.text);
+	}
+}
+
 export function renderPoster(canvas: HTMLCanvasElement, st: PosterState, A: PosterAssets, width: number = FINAL.W) {
 	const L = FINAL;
 	SC = width / L.W;
@@ -384,6 +486,7 @@ export function renderPoster(canvas: HTMLCanvasElement, st: PosterState, A: Post
 	ctx.fillStyle = '#070B16';
 	ctx.fillRect(0, 0, L.W, L.H);
 	ctx.drawImage(A.bgFinal, 0, 0, L.W, L.H);
+	drawSchedule(ctx, st.event ?? null);
 	drawLogos(ctx, L, A);
 	drawFinalArch(ctx, L, st, A);
 	drawFinalPlate(ctx, L, st);
@@ -397,28 +500,23 @@ export function renderPoster(canvas: HTMLCanvasElement, st: PosterState, A: Post
  * The back of the delegate's ID card, made when the organisers confirm payment.
  * Same size, artwork, logos, fonts and gold as the front, so the two read as one
  * card; a navy panel over the middle carries the event QR (gate, halls, meals,
- * certificate, networking) and the delegate's details.
+ * certificate, networking) and the registration number. The name, photo and
+ * designation are on the front only.
  */
 export interface BackState {
-	name: string;
-	title: string;
 	code: string;
 	/** The pass QR, already drawn at any size; scaled into the white card. */
 	qr: CanvasImageSource;
-	photo: HTMLImageElement | null;
 }
 
 const BACK = {
 	panel: { x: 92, y: 236, w: 896, h: 1328, r: 40 },
 	mbc: { cx: 540, y: 276, w: 430 },
 	eyebrow: { y: 520, size: 26, track: 9, line: { len: 70, gap: 26 } },
-	qr: { cx: 540, y: 556, card: 488, pad: 34 },
-	photo: { cy: 1146, r: 66 },
-	name: { y: 1286, size: 58, maxW: 760 },
-	title: { y: 1332, size: 26, track: 6, maxW: 640 },
-	code: { cy: 1402, h: 52, size: 26, track: 6, pad: 46 },
-	scan: { y: 1478, size: 18, track: 5 },
-	note: { y: 1518, size: 20 }
+	qr: { cx: 540, y: 584, card: 600, pad: 40 },
+	code: { cy: 1302, h: 58, size: 30, track: 7, pad: 52 },
+	scan: { y: 1408, size: 18, track: 5 },
+	note: { y: 1454, size: 20 }
 } as const;
 
 function drawEyebrow(ctx: Ctx, text: string, cx: number, y: number, size: number, track: number, ln: { len: number; gap: number }) {
@@ -515,64 +613,12 @@ function drawBackQr(ctx: Ctx, qr: CanvasImageSource) {
 	ctx.imageSmoothingEnabled = true;
 }
 
-function drawBackPhoto(ctx: Ctx, photo: HTMLImageElement | null, name: string) {
-	const p = BACK.photo,
-		cx = 540;
-	ctx.save();
-	ctx.beginPath();
-	ctx.arc(cx, p.cy, p.r + 6, 0, Math.PI * 2);
-	ctx.fillStyle = gold(ctx, cx - p.r, p.cy - p.r, cx + p.r, p.cy + p.r);
-	ctx.fill();
-	ctx.beginPath();
-	ctx.arc(cx, p.cy, p.r, 0, Math.PI * 2);
-	ctx.fillStyle = '#121a30';
-	ctx.fill();
-	ctx.clip();
-	if (photo) {
-		// cover the circle, biased to the top where faces usually are
-		const s = Math.max((p.r * 2) / photo.width, (p.r * 2) / photo.height);
-		const w = photo.width * s,
-			h = photo.height * s;
-		ctx.drawImage(photo, cx - w / 2, p.cy - p.r - Math.max(0, (h - p.r * 2) * 0.18), w, h);
-	} else {
-		const initials = name
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(0, 2)
-			.map((w) => w[0]!.toUpperCase())
-			.join('');
-		ctx.fillStyle = gold(ctx, cx - p.r, 0, cx + p.r, 0);
-		ctx.font = `800 ${p.r * 0.8}px ${SANS}`;
-		ctx.textAlign = 'center';
-		ctx.textBaseline = 'middle';
-		ctx.fillText(initials || '•', cx, p.cy + 2);
-	}
-	ctx.restore();
-}
-
 function drawBackDetails(ctx: Ctx, st: BackState) {
 	const B = BACK,
 		cx = 540;
-	const name = st.name.trim() || 'Delegate';
-	const title = st.title.trim().toUpperCase();
 	ctx.save();
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'alphabetic';
-
-	fitFont(ctx, name, (s) => `800 ${s}px ${SANS}`, B.name.maxW, B.name.size, 24);
-	ctx.fillStyle = '#FFFFFF';
-	ctx.shadowColor = 'rgba(0,0,0,0.5)';
-	ctx.shadowBlur = 6 * SC;
-	ctx.shadowOffsetY = 2 * SC;
-	ctx.fillText(name, cx, B.name.y);
-	ctx.shadowColor = 'transparent';
-	ctx.shadowOffsetY = 0;
-
-	if (title) {
-		const ts = fitFont(ctx, title, (s) => `700 ${s}px ${SANS}`, B.title.maxW, B.title.size, 12, B.title.track);
-		ctx.fillStyle = gold(ctx, cx - 220, 0, cx + 220, 0);
-		drawSpaced(ctx, title, cx, B.title.y, (B.title.track * ts) / B.title.size, 'center');
-	}
 
 	// registration number in the front's category-pill style
 	const c = B.code;
@@ -634,27 +680,19 @@ export function renderBack(canvas: HTMLCanvasElement, st: BackState, A: PosterAs
 	ctx.restore();
 
 	drawBackQr(ctx, st.qr);
-	drawBackPhoto(ctx, st.photo, st.name);
 	drawBackDetails(ctx, st);
 	return canvas;
 }
 
 export interface BackFileInput {
-	name: string;
-	title: string;
 	code: string;
 	/** What the QR encodes: the delegate's pass link. */
 	qrText: string;
-	photoUrl: string | null;
 }
 
 /** Renders the ID card back as a 4K JPEG, the same size as the front. */
 export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WIDTH): Promise<Blob> {
-	const [assets, QRCode, photo] = await Promise.all([
-		loadPosterAssets(),
-		import('qrcode').then((m) => m.default ?? m),
-		input.photoUrl ? loadImage(input.photoUrl).catch(() => null) : Promise.resolve(null)
-	]);
+	const [assets, QRCode] = await Promise.all([loadPosterAssets(), import('qrcode').then((m) => m.default ?? m)]);
 	const qr = document.createElement('canvas');
 	await QRCode.toCanvas(qr, input.qrText, {
 		errorCorrectionLevel: 'M',
@@ -663,7 +701,7 @@ export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WI
 		color: { dark: '#0b1430', light: '#ffffff' }
 	});
 	const canvas = document.createElement('canvas');
-	renderBack(canvas, { name: input.name, title: input.title, code: input.code, qr, photo }, assets, width);
+	renderBack(canvas, { code: input.code, qr }, assets, width);
 	const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
 	canvas.width = 0;
 	canvas.height = 0;
@@ -742,32 +780,94 @@ export interface PosterFileInput {
 	zoom: number;
 	dx: number;
 	dy: number;
+	/** The schedule from Event setup, shown in the bottom strip. */
+	event?: EventSettings | null;
 }
 
-/** Renders the finished poster as a 4K JPEG, for upload with the registration. */
+/** The poster could not be drawn properly; the message is meant for the delegate. */
+export class PosterError extends Error {}
+
+/**
+ * Did the photo really land in the arch? Compares a thumbnail of the arch on the
+ * finished card with the photo drawn on its own in the same place. A browser that
+ * ran out of canvas memory leaves the arch showing only the background.
+ */
+function photoLooksDrawn(canvas: HTMLCanvasElement, st: PosterState, photo: HTMLImageElement) {
+	const L = FINAL,
+		a = L.arch;
+	const out = canvas.width / L.W;
+	const N = 32,
+		H = Math.round((N * a.h) / a.w),
+		f = N / a.w;
+	const small = () => {
+		const c = makeCanvas(N, H).getContext('2d', { willReadFrequently: true })!;
+		return c;
+	};
+	const got = small();
+	got.drawImage(canvas, a.x * out, a.y * out, a.w * out, a.h * out, 0, 0, N, H);
+	const want = small();
+	const pl = photoPlacement(L, st, photo);
+	want.drawImage(photo, (pl.x - a.x) * f, (pl.y - a.y) * f, pl.w * f, pl.h * f);
+	// Only compare inside the arch (its top is rounded), a little in from the edge.
+	const mask = small();
+	mask.setTransform(f, 0, 0, f, -a.x * f, -a.y * f);
+	archPath(mask, a, -6);
+	mask.fill();
+
+	const g = got.getImageData(0, 0, N, H).data,
+		w = want.getImageData(0, 0, N, H).data,
+		m = mask.getImageData(0, 0, N, H).data;
+	let diff = 0,
+		count = 0;
+	for (let i = 0; i < g.length; i += 4) {
+		if (m[i + 3] < 250 || w[i + 3] < 220) continue; // outside the arch, or a cut-out's clear area
+		diff += Math.abs(g[i] - w[i]) + Math.abs(g[i + 1] - w[i + 1]) + Math.abs(g[i + 2] - w[i + 2]);
+		count++;
+	}
+	if (count < 40) return true; // too little of the photo shows to judge
+	return diff / (count * 3) < 32;
+}
+
+/** Fallback output width when the 4K card cannot be drawn (low canvas memory, e.g. older iPhones). */
+const POSTER_FALLBACK_WIDTH = 1080;
+
+/**
+ * Renders the finished poster as a 4K JPEG, for upload with the registration.
+ * Checks the photo made it onto the card; if not, tries once more at a smaller
+ * size, and refuses rather than send a card with an empty arch.
+ */
 export async function renderPosterFile(input: PosterFileInput, width = POSTER_UHD_WIDTH): Promise<Blob> {
 	const assets = await loadPosterAssets();
 	const photo = input.photoUrl ? await loadImage(input.photoUrl) : null;
-	const canvas = document.createElement('canvas');
-	renderPoster(
-		canvas,
-		{
-			name: input.name,
-			title: input.title,
-			company: input.company,
-			category: input.category,
-			photo,
-			photoMeta: photo ? analysePhoto(photo) : null,
-			zoom: input.zoom,
-			dx: input.dx,
-			dy: input.dy
-		},
-		assets,
-		width
+	const state: PosterState = {
+		name: input.name,
+		title: input.title,
+		company: input.company,
+		category: input.category,
+		photo,
+		photoMeta: photo ? analysePhoto(photo) : null,
+		zoom: input.zoom,
+		dx: input.dx,
+		dy: input.dy,
+		event: input.event ?? null
+	};
+	for (const w of [...new Set([width, POSTER_FALLBACK_WIDTH])]) {
+		const canvas = document.createElement('canvas');
+		try {
+			renderPoster(canvas, state, assets, w);
+			if (photo && !photoLooksDrawn(canvas, state, photo)) {
+				console.warn(`[poster] photo missing from the ${w}px card; trying smaller`);
+				continue;
+			}
+			const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
+			if (blob) return blob;
+		} finally {
+			// release memory promptly (iOS Safari)
+			canvas.width = 0;
+			canvas.height = 0;
+		}
+	}
+	throw new PosterError(
+		'Your ID card could not be drawn with your photo on this device. Close other tabs and try again, or register from another browser or a computer.'
 	);
-	const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
-	canvas.width = 0;
-	canvas.height = 0;
-	if (!blob) throw new Error('Could not create the poster image');
-	return blob;
 }

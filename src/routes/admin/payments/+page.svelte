@@ -15,10 +15,21 @@
 		ScanLine,
 		Smartphone,
 		Store,
+		Shuffle,
 		Ticket,
+		TicketPercent,
 		Trash,
 		Wallet
 	} from '@lucide/svelte';
+	import {
+		discountFor,
+		isValidVoucherCode,
+		normaliseVoucherCode,
+		randomVoucherCode,
+		voucherLabel,
+		type Voucher,
+		type VoucherScope
+	} from '#lib/voucher.ts';
 	import {
 		STALL_SIZES,
 		VALIDITY_OPTIONS,
@@ -38,7 +49,7 @@
 
 	let { data, form } = $props();
 
-	type Scope = 'qr' | 'stalls' | 'memberships';
+	type Scope = 'qr' | 'stalls' | 'memberships' | 'vouchers';
 	interface Feedback {
 		scope?: Scope;
 		message?: string;
@@ -226,6 +237,55 @@
 		qrOpen = true;
 	}
 
+	/* ---------- vouchers ---------- */
+
+	const vouchers = $derived(data.available ? data.vouchers : []);
+	const usage = $derived(data.available ? data.usage : {});
+	const usedOf = (v: Voucher) => usage[v.code]?.used ?? 0;
+	const tabScope = $derived<VoucherScope>(data.tab === 'stalls' ? 'stall' : data.tab === 'memberships' ? 'membership' : 'pass');
+	const scopeVouchers = $derived(vouchers.filter((v) => v.scope === tabScope));
+	const SCOPE_NOUN: Record<VoucherScope, string> = { pass: 'delegate pass', stall: 'stall', membership: 'membership' };
+
+	let voucherEditor = $state<{ id: string | null; scope: VoucherScope } | null>(null);
+	let voucherOpen = $state(false);
+	let voucherSaving = $state(false);
+	let vDraft = $state({ code: '', kind: 'percent' as Voucher['kind'], value: '', quantity: '50', note: '' });
+
+	function openVoucher(v: Voucher | null) {
+		vDraft = {
+			// Empty for a new voucher: a pre-filled code got typed onto. "New" makes a random one.
+			code: v?.code ?? '',
+			kind: v?.kind ?? 'percent',
+			value: v ? String(v.value) : '',
+			quantity: String(v?.quantity ?? 50),
+			note: v?.note ?? ''
+		};
+		voucherEditor = { id: v?.id ?? null, scope: v?.scope ?? tabScope };
+		dismissed = form;
+		voucherOpen = true;
+	}
+
+	const vCode = $derived(normaliseVoucherCode(vDraft.code));
+	const vCodeTaken = $derived(!!voucherEditor && vouchers.some((v) => v.id !== voucherEditor!.id && v.code === vCode));
+	const vEditing = $derived(voucherEditor?.id ? vouchers.find((v) => v.id === voucherEditor!.id) : undefined);
+	const codeLocked = $derived(!!vEditing && usedOf(vEditing) > 0);
+	/** For the delegate pass the fee is known, so show what delegates will pay. */
+	const vPreview = $derived.by(() => {
+		const value = Number(vDraft.value);
+		if (voucherEditor?.scope !== 'pass' || !(value > 0)) return null;
+		const off = discountFor({ kind: vDraft.kind, value }, live.priceRupees);
+		return { off, pay: live.priceRupees - off };
+	});
+
+	const saveVoucherForm: SubmitFunction = () => {
+		voucherSaving = true;
+		return async ({ result, update }) => {
+			await update({ reset: false });
+			voucherSaving = false;
+			if (result.type === 'success') voucherOpen = false;
+		};
+	};
+
 	const paidTo = (item: { vpa: string | null }) => item.vpa ?? live.vpa;
 	const totalStalls = $derived(stalls.filter((s) => s.active).reduce((n, s) => n + s.quantity, 0));
 	const stallValue = $derived(stalls.filter((s) => s.active).reduce((n, s) => n + s.quantity * s.priceRupees, 0));
@@ -286,6 +346,106 @@
 			<button class="btn btn-ghost ops-btn-sm" type="submit" aria-label="Remove {item.name}" title="Remove"><Trash size={14} aria-hidden="true" /></button>
 		</form>
 	</div>
+{/snippet}
+
+{#snippet vouchersPanel()}
+	<section class="ops-panel" aria-labelledby="vouchers-title">
+		<div class="ops-panel-head">
+			<div class="ops-heading">
+				<span class="ops-heading-icon"><TicketPercent size={16} aria-hidden="true" /></span>
+				<div>
+					<h2 id="vouchers-title">Vouchers</h2>
+					<p class="ops-hint">
+						{#if tabScope === 'pass'}
+							Codes delegates enter on the payment step for a percentage or an amount off, each usable a set number of times.
+						{:else}
+							Discount codes for {SCOPE_NOUN[tabScope]}s, each usable a set number of times.
+						{/if}
+					</p>
+				</div>
+			</div>
+			<button type="button" class="btn btn-primary ops-btn-sm" onclick={() => openVoucher(null)}>
+				<Plus size={15} aria-hidden="true" /> Add voucher
+			</button>
+		</div>
+		{@render notice('vouchers')}
+		{#if scopeVouchers.length}
+			<div class="ops-table-wrap">
+				<table class="ops-table stack vouchers">
+					<thead>
+						<tr>
+							<th scope="col">Code</th>
+							<th scope="col">Discount</th>
+							<th scope="col">Used</th>
+							<th scope="col">Status</th>
+							<th scope="col"><span class="visually-hidden">Actions</span></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each scopeVouchers as v (v.id)}
+							{@const used = usedOf(v)}
+							{@const left = Math.max(0, v.quantity - used)}
+							<tr class:closed={!v.active}>
+								<td class="lead">
+									<button type="button" class="code-copy" onclick={() => copy(v.code)} title="Copy code">
+										<span class="mono-sm strong">{v.code}</span>
+										{#if copied === v.code}<Check size={13} aria-hidden="true" />{:else}<Copy size={13} aria-hidden="true" />{/if}
+										<span class="visually-hidden">Copy {v.code}</span>
+									</button>
+									{#if v.note}<small class="ops-muted note">{v.note}</small>{/if}
+								</td>
+								<td data-label="Discount">
+									<strong>{voucherLabel(v)}</strong>
+									{#if tabScope === 'pass'}
+										<small class="ops-muted">· pays {formatRupees(live.priceRupees - discountFor(v, live.priceRupees))}</small>
+									{/if}
+								</td>
+								<td data-label="Used">
+									<span class="use">
+										<span class="meter" aria-hidden="true"><span style="width: {Math.min(100, (used / v.quantity) * 100)}%"></span></span>
+										<span class="num">{used} / {v.quantity}</span>
+									</span>
+									{#if tabScope === 'pass' && used}<small class="ops-muted">{usage[v.code]?.paid ?? 0} paid</small>{/if}
+								</td>
+								<td data-label="Status">
+									{#if !v.active}
+										<span class="ops-pill inactive">Closed</span>
+									{:else if left === 0}
+										<span class="ops-pill warning">Used up</span>
+									{:else}
+										<span class="ops-pill active">{left} left</span>
+									{/if}
+								</td>
+								<td class="end">
+									<div class="ops-actions item-actions">
+										<button type="button" class="btn btn-ghost ops-btn-sm" onclick={() => openVoucher(v)} aria-label="Edit {v.code}" title="Edit">
+											<Pencil size={14} aria-hidden="true" />
+										</button>
+										<form method="post" action={act('toggleVoucher')} use:enhance={keep}>
+											<input type="hidden" name="id" value={v.id} />
+											<input type="hidden" name="active" value={String(!v.active)} />
+											<button class="btn btn-ghost ops-btn-sm" type="submit">{v.active ? 'Close' : 'Open'}</button>
+										</form>
+										<form method="post" action={act('removeVoucher')} use:enhance={keep}>
+											<input type="hidden" name="id" value={v.id} />
+											<button class="btn btn-ghost ops-btn-sm" type="submit" aria-label="Remove {v.code}" title="Remove"><Trash size={14} aria-hidden="true" /></button>
+										</form>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<div class="ops-empty">
+				<p>No vouchers yet. Add one such as <b>EARLYBIRD</b> for 20% off, or a fixed amount off for sponsors and partners.</p>
+			</div>
+		{/if}
+		{#if tabScope !== 'pass'}
+			<p class="ops-hint">These codes are kept ready for when {SCOPE_NOUN[tabScope]}s are sold online. Today only delegate-pass vouchers can be redeemed, on the registration payment step.</p>
+		{/if}
+	</section>
 {/snippet}
 
 <header class="ops-page-head">
@@ -405,6 +565,7 @@
 				</div>
 			</div>
 		</section>
+		{@render vouchersPanel()}
 	{:else}
 		<div class="ops-layout">
 			<div class="ops-column">
@@ -501,6 +662,7 @@
 						{/if}
 					</section>
 				{/if}
+				{@render vouchersPanel()}
 			</div>
 
 			<aside class="ops-column">
@@ -612,6 +774,110 @@
 				<button type="button" class="btn btn-ghost ops-btn-sm" onclick={() => (editorOpen = false)}>Cancel</button>
 				<button type="submit" class="btn btn-primary ops-btn-sm" disabled={saving || nameTaken}>
 					{#if saving}<LoaderCircle size={15} class="ops-spin" aria-hidden="true" /> Saving…{:else}<Check size={15} aria-hidden="true" /> {editor?.id ? 'Save changes' : 'Add'}{/if}
+				</button>
+			</div>
+		</form>
+	</OpsDialog>
+
+	<OpsDialog
+		bind:open={voucherOpen}
+		title={voucherEditor?.id ? `Edit voucher ${vEditing?.code ?? ''}` : 'Add a voucher'}
+		description="For the {SCOPE_NOUN[voucherEditor?.scope ?? 'pass']}. Codes are not case-sensitive."
+	>
+		<form method="post" action={act('saveVoucher')} class="ops-form" use:enhance={saveVoucherForm}>
+			{#if form !== dismissed && f?.scope === 'vouchers' && f?.dialog && f.message}
+				<div class="ops-banner error" role="alert"><CircleAlert size={16} aria-hidden="true" /><p>{f.message}</p></div>
+			{/if}
+			<input type="hidden" name="id" value={voucherEditor?.id ?? ''} />
+			<input type="hidden" name="scope" value={voucherEditor?.scope ?? 'pass'} />
+			<label class="ops-label">
+				Code
+				<span class="code-field">
+					<input
+						name="code"
+						bind:value={vDraft.code}
+						maxlength="20"
+						required
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="EARLYBIRD"
+						class="code-input"
+						readonly={codeLocked}
+						oninput={() => (vDraft.code = vDraft.code.toUpperCase())}
+					/>
+					<button type="button" class="btn btn-ghost ops-btn-sm" onclick={() => (vDraft.code = randomVoucherCode())} title="Make a random code" disabled={codeLocked}>
+						<Shuffle size={14} aria-hidden="true" /> New
+					</button>
+				</span>
+				{#if vCodeTaken}
+					<small class="ops-field-error">{vCode} already exists. Use a different code.</small>
+				{:else if vDraft.code && !isValidVoucherCode(vCode)}
+					<small class="ops-field-error">Use 3 to 20 letters, digits or dashes.</small>
+				{:else if dialogErrorFor('vouchers', 'code')}
+					<small class="ops-field-error">{dialogErrorFor('vouchers', 'code')}</small>
+				{/if}
+				{#if codeLocked}
+					<small class="ops-hint">Already used, so the code cannot change. Add a new voucher for a different code.</small>
+				{/if}
+			</label>
+
+			<div class="pair">
+				<label class="ops-label">
+					Type
+					<select name="kind" bind:value={vDraft.kind}>
+						<option value="percent">Percentage off</option>
+						<option value="amount">Amount off (₹)</option>
+					</select>
+				</label>
+				<label class="ops-label">
+					{vDraft.kind === 'percent' ? 'Percent off' : 'Amount off'}
+					<span class="prefixed">
+						{#if vDraft.kind === 'amount'}<span aria-hidden="true">₹</span>{/if}
+						<input
+							name="value"
+							type="number"
+							inputmode="decimal"
+							min="1"
+							max={vDraft.kind === 'percent' ? 100 : undefined}
+							step={vDraft.kind === 'percent' ? 1 : 0.01}
+							bind:value={vDraft.value}
+							required
+						/>
+						{#if vDraft.kind === 'percent'}<span aria-hidden="true">%</span>{/if}
+					</span>
+					{#if dialogErrorFor('vouchers', 'value')}<small class="ops-field-error">{dialogErrorFor('vouchers', 'value')}</small>{/if}
+				</label>
+			</div>
+
+			<label class="ops-label">
+				Number of uses <small>How many registrations can apply it</small>
+				<input name="quantity" type="number" inputmode="numeric" min="1" max="10000" step="1" bind:value={vDraft.quantity} required />
+				{#if dialogErrorFor('vouchers', 'quantity')}
+					<small class="ops-field-error">{dialogErrorFor('vouchers', 'quantity')}</small>
+				{:else if vEditing && Number(vDraft.quantity) < usedOf(vEditing)}
+					<small class="ops-hint">Already used {usedOf(vEditing)} times. Those keep their discount; nobody else can apply it.</small>
+				{/if}
+			</label>
+
+			<label class="ops-label">
+				Note <small>Optional, only you see it</small>
+				<input name="note" bind:value={vDraft.note} maxlength="120" autocomplete="off" placeholder="Given to sponsor partners" />
+			</label>
+
+			{#if vPreview}
+				<p class="preview">
+					{#if vPreview.pay === 0}
+						Covers the whole {formatRupees(live.priceRupees)} fee: delegates pay nothing and you confirm them on the dashboard.
+					{:else}
+						Delegates pay <strong>{formatRupees(vPreview.pay)}</strong> instead of {formatRupees(live.priceRupees)} ({formatRupees(vPreview.off)} off).
+					{/if}
+				</p>
+			{/if}
+
+			<div class="ops-dialog-actions">
+				<button type="button" class="btn btn-ghost ops-btn-sm" onclick={() => (voucherOpen = false)}>Cancel</button>
+				<button type="submit" class="btn btn-primary ops-btn-sm" disabled={voucherSaving || vCodeTaken}>
+					{#if voucherSaving}<LoaderCircle size={15} class="ops-spin" aria-hidden="true" /> Saving…{:else}<Check size={15} aria-hidden="true" /> {voucherEditor?.id ? 'Save changes' : 'Add voucher'}{/if}
 				</button>
 			</div>
 		</form>
@@ -1011,6 +1277,98 @@
 
 	code {
 		font-size: 12px;
+	}
+
+	/* Vouchers ------------------------------------------------------------ */
+
+	.vouchers td {
+		vertical-align: middle;
+	}
+
+	.vouchers tr.closed {
+		opacity: 0.6;
+	}
+
+	.vouchers td small {
+		display: block;
+		font-size: 12px;
+	}
+
+	.vouchers td.lead {
+		min-width: 150px;
+	}
+
+	.code-copy {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--charcoal);
+		cursor: pointer;
+	}
+
+	.code-copy :global(svg) {
+		color: var(--text-supporting);
+	}
+
+	.code-copy:hover :global(svg) {
+		color: var(--gold-ink);
+	}
+
+	.strong {
+		font-weight: 600;
+		letter-spacing: 0.04em;
+	}
+
+	.note {
+		overflow-wrap: anywhere;
+	}
+
+	.use {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		white-space: nowrap;
+	}
+
+	.meter {
+		display: inline-block;
+		width: 56px;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--rule);
+		overflow: hidden;
+	}
+
+	.meter span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--gold-ink);
+	}
+
+	.code-field {
+		display: flex;
+		gap: var(--space-2);
+		align-items: center;
+	}
+
+	.code-field .code-input {
+		flex: 1;
+		min-width: 0;
+		font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.preview {
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-sm);
+		background: var(--gold-tint);
+		font-size: 13px;
+		color: var(--charcoal);
 	}
 
 	@media (max-width: 1100px) {

@@ -49,13 +49,23 @@
 		return unlockScroll;
 	});
 
-	/** A click on the backdrop (the dialog element itself, outside the card) closes it. */
+	/*
+	 * A click on the backdrop (the dialog element itself, outside the card) closes it,
+	 * but only when the press also started there. Selecting text in a field and letting
+	 * go just outside the card reports the click on the backdrop too, and used to close
+	 * the popup and throw away what was typed.
+	 */
+	let pressedOnBackdrop = false;
+	function onpointerdown(event: PointerEvent) {
+		pressedOnBackdrop = event.target === dialog;
+	}
 	function onclick(event: MouseEvent) {
-		if (event.target === dialog) open = false;
+		if (event.target === dialog && pressedOnBackdrop) open = false;
+		pressedOnBackdrop = false;
 	}
 </script>
 
-<dialog bind:this={dialog} class="ops-dialog" class:wide data-lenis-prevent aria-labelledby="{id}-title" onclose={() => (open = false)} {onclick}>
+<dialog bind:this={dialog} class="ops-dialog" class:wide data-lenis-prevent aria-labelledby="{id}-title" onclose={() => (open = false)} {onpointerdown} {onclick}>
 	<div class="card">
 		<header>
 			<div>

@@ -18,11 +18,12 @@ import {
 	listSessions,
 	saveEventRules,
 	setMealActive,
+	shiftScheduleDays,
 	type MealEligibility
 } from '#lib/server/ops/event.ts';
 import { accessPath, isPassConfigured, markPassEmailed, passUrl, reissuePass } from '#lib/server/ops/passes.ts';
 import { qrPng } from '#lib/server/qr-png.ts';
-import { getEventSettings, getRegistration, isStoreAvailable, saveEventSettings } from '#lib/server/store.ts';
+import { getEventSettings, getRegistration, isStoreAvailable, saveEventSettings, setFrontsOutdated } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -61,8 +62,34 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const result = fromEventFormFields({ date: text(form, 'date'), start: text(form, 'start'), end: text(form, 'end') });
 		if (!result.ok) return fail(400, { scope: 'schedule', errors: result.errors, message: 'Check the date and time.' });
+		const before = await getEventSettings();
 		await saveEventSettings(result.settings, locals.admin.email);
-		return { scope: 'schedule', success: 'Event date and time saved. The site, countdown and emails use them now.' };
+
+		const changed = before.startsAt !== result.settings.startsAt || before.endsAt !== result.settings.endsAt;
+		if (!changed) return { scope: 'schedule', success: 'Event date and time saved. Nothing changed.' };
+
+		const parts = ['Event date and time saved. The site, countdown, emails and new ID cards use them now.'];
+		// Moved to another day: sessions and meals go with it, at the same clock times.
+		const dayOf = (iso: string) => toEventFormFields({ startsAt: iso, endsAt: iso }).date;
+		const days = Math.round((Date.parse(dayOf(result.settings.startsAt)) - Date.parse(dayOf(before.startsAt))) / 86_400_000);
+		if (days !== 0 && (await opsReady())) {
+			const event = await getDefaultEvent();
+			const moved = await shiftScheduleDays(event.id, days);
+			if (moved.sessions || moved.meals) {
+				const what = [
+					moved.sessions ? `${moved.sessions} session${moved.sessions === 1 ? '' : 's'}` : '',
+					moved.meals ? `${moved.meals} meal${moved.meals === 1 ? '' : 's'}` : ''
+				]
+					.filter(Boolean)
+					.join(' and ');
+				parts.push(`${what} moved ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ${days > 0 ? 'later' : 'earlier'}, at the same times.`);
+			}
+			await audit({ eventId: event.id, actorType: 'admin', actor: locals.admin.email, action: 'event.reschedule', details: { days } });
+		}
+		// ID card fronts already made show the old date and time until they are redrawn.
+		await setFrontsOutdated({ since: new Date().toISOString(), by: locals.admin.email }, locals.admin.email);
+		parts.push('Open the Dashboard to redraw the ID cards already issued.');
+		return { scope: 'schedule', success: parts.join(' ') };
 	},
 
 	rules: async ({ request, locals }) => {

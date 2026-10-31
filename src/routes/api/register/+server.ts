@@ -12,7 +12,9 @@ import {
 	type Interest,
 	type RegistrationDraft
 } from '#lib/registration.ts';
+import { discountFor } from '#lib/voucher.ts';
 import { deleteObject, isStorageAvailable, putObject } from '#lib/server/r2.ts';
+import { findVoucher } from '#lib/server/vouchers.ts';
 import {
 	DuplicateEmailError,
 	createRegistration,
@@ -104,6 +106,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (Object.keys(errors).length) return json({ message: 'Some details need attention.', errors }, { status: 400 });
 	}
 	if (!photo || 'error' in photo) {
+		// Logged so refused uploads can be traced; the browser normally resizes well under the limit.
+		console.warn('[register] photo refused', photo?.error ?? 'missing', draft.email);
 		return json(
 			{
 				message:
@@ -138,6 +142,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const settings = await getPaymentSettings();
+	// Coming back to edit their details keeps a voucher they already applied.
+	const held = existing?.voucherCode ? await findVoucher(existing.voucherCode) : null;
+	const discount = held?.scope === 'pass' ? discountFor(held, settings.priceRupees) : 0;
 	const id = crypto.randomUUID();
 	const photoKey = `registrations/2026/${id}.${photo.ext}`;
 	const posterKey = `registrations/2026/${id}-poster.jpg`;
@@ -160,7 +167,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		heardFrom: draft.heardFrom || null,
 		whatsappUpdates: draft.whatsappUpdates,
 		posterFraming: readFraming(form),
-		amountRupees: settings.priceRupees
+		amountRupees: settings.priceRupees - discount
 	};
 
 	try {
@@ -174,7 +181,10 @@ export const POST: RequestHandler = async ({ request }) => {
 				email: registration.email,
 				amountRupees: registration.amountRupees,
 				vpa: settings.vpa,
-				payeeName: settings.payeeName
+				payeeName: settings.payeeName,
+				priceRupees: settings.priceRupees,
+				voucherCode: registration.voucherCode,
+				discountRupees: registration.discountRupees
 			},
 			{ status: existing ? 200 : 201 }
 		);

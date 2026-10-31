@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Camera, CircleAlert, ImageUp, LoaderCircle, RefreshCw, Trash2 } from '@lucide/svelte';
-	import { PhotoError, preparePhoto } from '#lib/image.ts';
+	import { PHOTO_MESSAGES, PhotoError, preparePhoto } from '#lib/image.ts';
 
 	interface Props {
 		id: string;
@@ -30,7 +30,8 @@
 			url = URL.createObjectURL(prepared);
 			onchange?.();
 		} catch (e) {
-			localError = e instanceof PhotoError ? e.message : 'We could not read that image. Try a JPG or PNG.';
+			console.error('[photo] could not prepare', file.name, file.type, file.size, e);
+			localError = e instanceof PhotoError ? e.message : PHOTO_MESSAGES.unreadable;
 		} finally {
 			processing = false;
 			input.value = '';
@@ -98,7 +99,7 @@
 			{:else}
 				<p class="title">Drop a clear headshot here</p>
 				<p class="hint">
-					A well-lit, front-facing head-and-shoulders photo works best. JPG, PNG or WebP, up to 15 MB. A PNG with
+					A well-lit, front-facing head-and-shoulders photo works best. JPG, PNG, WebP or iPhone HEIC, up to 15 MB. A PNG with
 					a transparent background sits on the poster's studio backdrop.
 				</p>
 				<div class="actions">
@@ -119,7 +120,7 @@
 			bind:this={input}
 			class="visually-hidden"
 			type="file"
-			accept="image/jpeg,image/png,image/webp"
+			accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.jfif,.png,.webp,.heic,.heif"
 			tabindex="-1"
 			aria-hidden="true"
 			onchange={(e) => handle(e.currentTarget.files?.[0])}

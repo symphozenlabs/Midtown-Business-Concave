@@ -195,6 +195,27 @@ export async function addMeal(eventId: string, m: Omit<Meal, 'id' | 'active'>) {
 		values (${eventId}, ${m.name}, ${m.startsAt}, ${m.endsAt}, ${m.maxPerParticipant}, ${m.eligibility})`;
 }
 
+/**
+ * The event moved to another day: sessions and timed meals move with it, keeping
+ * their clock times, so the hall and meal desks open on the right day.
+ */
+export async function shiftScheduleDays(eventId: string, days: number): Promise<{ sessions: number; meals: number }> {
+	if (!Number.isInteger(days) || days === 0) return { sessions: 0, meals: 0 };
+	const [sessions, meals] = await Promise.all([
+		sql()`
+			update conference_sessions
+			set starts_at = starts_at + ${days} * interval '1 day', ends_at = ends_at + ${days} * interval '1 day'
+			where event_id = ${eventId}
+			returning id`,
+		sql()`
+			update meal_categories
+			set starts_at = starts_at + ${days} * interval '1 day', ends_at = ends_at + ${days} * interval '1 day'
+			where event_id = ${eventId} and (starts_at is not null or ends_at is not null)
+			returning id`
+	]);
+	return { sessions: sessions.length, meals: meals.length };
+}
+
 export async function setMealActive(eventId: string, id: string, active: boolean) {
 	await sql()`update meal_categories set active = ${active} where event_id = ${eventId} and id = ${id}`;
 }

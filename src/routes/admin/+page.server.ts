@@ -10,12 +10,16 @@ import {
 	sendRejectionEmail,
 	sendTicketEmail
 } from '#lib/server/email.ts';
-import { getObject, isR2Configured } from '#lib/server/r2.ts';
+import { deleteObject, getObject, isR2Configured } from '#lib/server/r2.ts';
 import { cardBacksToMake, markPassEmailed, passEmailFor, passesToSend } from '#lib/server/ops/passes.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
+	deleteRegistration,
+	getEventSettings,
+	getFrontsOutdated,
 	getRegistration,
+	setFrontsOutdated,
 	getStats,
 	isStoreAvailable,
 	listRegistrations,
@@ -77,10 +81,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 
-	const [registrations, passes, cardBacks] = await Promise.all([
+	const [registrations, passes, cardBacks, event, frontsOutdated] = await Promise.all([
 		listRegistrations({ status, q, email }),
 		passesToSend(1),
-		cardBackJobs(url.origin)
+		cardBackJobs(url.origin),
+		getEventSettings(),
+		getFrontsOutdated()
 	]);
 	return {
 		configured,
@@ -89,7 +95,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		passesToSend: passes.total,
 		filter: { status, q, email },
 		registrations,
-		cardBacks
+		cardBacks,
+		event,
+		frontsOutdated
 	};
 };
 
@@ -235,6 +243,30 @@ export const actions: Actions = {
 			return fail(502, { id, message: `Rejected, but the email to the delegate failed: ${emailFailure(e)}` });
 		}
 		return { id, success: `Rejected the payment from ${reg.fullName} and let them know by email.` };
+	},
+
+	/** Every ID card front was redrawn with the current schedule: hide the reminder. */
+	frontsRedrawn: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		await setFrontsOutdated(null, locals.admin.email);
+		return { success: 'Every ID card front now shows the current event date and time.' };
+	},
+
+	/** Deletes a registration and its photo, poster and ID card back. Cannot be undone. */
+	delete: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const reg = await deleteRegistration(id);
+		if (!reg) return fail(404, { message: 'This registration no longer exists.' });
+		console.info(`[admin] ${locals.admin.email} deleted registration ${reg.code} (${reg.email})`);
+		const keys = [reg.photoKey, reg.posterKey, reg.ticketBackKey].filter((k): k is string => !!k);
+		const left = await Promise.allSettled(keys.map((k) => deleteObject(k)));
+		const kept = left.filter((r) => r.status === 'rejected').length;
+		return {
+			deleted: true,
+			success: `Deleted ${reg.fullName} (${reg.code}).${kept ? ` ${plural(kept, 'stored image')} could not be removed from storage.` : ''}`
+		};
 	},
 
 	/** Emails the QR pass to delegates whose ticket went out before passes existed. */

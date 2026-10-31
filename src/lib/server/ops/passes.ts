@@ -119,7 +119,8 @@ export function parseScanned(text: string): { token: string } | { code: string }
  * Bump BACK_DESIGN when the back's layout changes: every existing back then has a
  * stale key, so the admin dashboard redraws and replaces them all.
  */
-const BACK_DESIGN = 2;
+// 3: name, photo and designation taken off the back (they are on the front).
+const BACK_DESIGN = 3;
 export const cardBackKey = (registrationId: string, version: number) =>
 	`registrations/2026/${registrationId}-back-d${BACK_DESIGN}-v${version}.jpg`;
 

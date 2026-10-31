@@ -10,7 +10,14 @@ import {
 	saveStall,
 	setActive
 } from '#lib/server/catalog.ts';
-import { getPaymentSettings, isStoreAvailable, savePaymentSettings } from '#lib/server/store.ts';
+import {
+	getPaymentSettings,
+	isStoreAvailable,
+	savePaymentSettings,
+	syncVoucherHolders,
+	voucherUsage
+} from '#lib/server/store.ts';
+import { listVouchers, readVoucher, removeVoucher, saveVoucher, setVoucherActive } from '#lib/server/vouchers.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Stand-in for the registration number; each delegate's link carries their own. */
@@ -27,9 +34,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const requested = url.searchParams.get('tab');
 	const tab: PaymentsTab = TABS.find((t) => t === requested) ?? 'pass';
 	if (!isStoreAvailable) return { available: false as const, tab };
-	const [payment, stalls, memberships] = await Promise.all([getPaymentSettings(), listStalls(), listMemberships()]);
-	return { available: true as const, tab, payment, link: linkFor(payment), stalls, memberships };
+	const [payment, stalls, memberships, vouchers, usage] = await Promise.all([
+		getPaymentSettings(),
+		listStalls(),
+		listMemberships(),
+		listVouchers(),
+		voucherUsage()
+	]);
+	return { available: true as const, tab, payment, link: linkFor(payment), stalls, memberships, vouchers, usage };
 };
+
+const voucherMoved = (n: number) => (n === 0 ? '' : ` ${n} unpaid registration${n === 1 ? '' : 's'} repriced.`);
 
 const text = (form: FormData, key: string) => String(form.get(key) ?? '').trim();
 const kindOf = (form: FormData) => (text(form, 'kind') === 'membership' ? 'membership' : 'stall');
@@ -94,6 +109,46 @@ export const actions: Actions = {
 		const active = text(form, 'active') === 'true';
 		await setActive(kind, text(form, 'id'), active, locals.admin.email);
 		return { scope: scopeOf(kind), success: active ? 'Open for sale again.' : 'Closed: it no longer appears for sale.' };
+	},
+
+	/** Adds a voucher, or updates it when the form carries its id. */
+	saveVoucher: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { scope: 'vouchers', message: 'Sign in again.' });
+		const form = await request.formData();
+		const existing = await listVouchers();
+		const { voucher, errors } = readVoucher(form, existing);
+		const prior = existing.find((v) => v.id === voucher.id);
+		// Registrations record the code itself, so a used code cannot be renamed.
+		if (prior && prior.code !== voucher.code && (await voucherUsage())[prior.code]?.used) {
+			errors.code = `${prior.code} has already been used, so its code cannot change.`;
+		}
+		if (Object.keys(errors).length) return fail(400, { scope: 'vouchers', dialog: true, errors, message: 'Check the highlighted fields.' });
+		const before = await saveVoucher(voucher, locals.admin.email);
+		// Unpaid delegates holding this code pay the new discount (or lose it if it moved off the delegate pass).
+		const moved = before?.scope === 'pass' ? await syncVoucherHolders() : 0;
+		return { scope: 'vouchers', success: `${before ? 'Saved' : 'Added'} voucher ${voucher.code}.${voucherMoved(moved)}` };
+	},
+
+	toggleVoucher: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { scope: 'vouchers', message: 'Sign in again.' });
+		const form = await request.formData();
+		const active = text(form, 'active') === 'true';
+		await setVoucherActive(text(form, 'id'), active, locals.admin.email);
+		return {
+			scope: 'vouchers',
+			success: active ? 'Voucher open: it can be used again.' : 'Voucher closed: new uses are refused. Anyone who already applied it keeps it.'
+		};
+	},
+
+	removeVoucher: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { scope: 'vouchers', message: 'Sign in again.' });
+		const gone = await removeVoucher(text(await request.formData(), 'id'), locals.admin.email);
+		if (!gone) return { scope: 'vouchers', success: 'Voucher removed.' };
+		const moved = gone.scope === 'pass' ? await syncVoucherHolders() : 0;
+		return {
+			scope: 'vouchers',
+			success: `Removed voucher ${gone.code}.${moved ? ` ${moved} unpaid registration${moved === 1 ? '' : 's'} moved back to the full fee.` : ''}`
+		};
 	},
 
 	remove: async ({ request, locals }) => {

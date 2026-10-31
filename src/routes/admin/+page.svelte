@@ -7,6 +7,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		BadgeCheck,
+		CalendarClock,
 		CheckCheck,
 		ChevronDown,
 		ChevronsDownUp,
@@ -26,8 +27,10 @@
 		RefreshCw,
 		Search,
 		Send,
+		Trash2,
 		X
 	} from '@lucide/svelte';
+	import { eventLabels, type EventSettings } from '#lib/event-settings.ts';
 	import { INTERESTS } from '#lib/registration.ts';
 	import { formatRupees } from '#lib/payment.ts';
 
@@ -84,6 +87,8 @@
 	const selected = new SvelteSet<string>();
 	let selecting = $state(false);
 	let rejecting = $state<string | null>(null);
+	// The row whose delete is waiting for confirmation.
+	let deleting = $state<string | null>(null);
 	// Which control is working: a row id, 'bulk', 'send', 'passes', 'check' or 'resendFailed'.
 	let busy = $state<string | null>(null);
 	let copied = $state<string | null>(null);
@@ -113,6 +118,88 @@
 	const interestLabel = (v: string) => INTERESTS.find((i) => i.value === v)?.label ?? v;
 	const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 	const media = (key: string | null) => (key ? `/admin/media/${key}` : '');
+
+	/*
+	 * Regenerate an ID card front: this browser redraws the poster from the stored
+	 * photo and the framing the delegate chose, and replaces the stored one. For a card
+	 * whose photo was dragged out of the arch before the drag was limited.
+	 */
+	let frontState = $state<Record<string, string>>({});
+	// Bumped after a redraw so the thumbnail is fetched again instead of from the cache.
+	let frontVersion = $state<Record<string, number>>({});
+
+	type FrontJob = Pick<
+		(typeof registrations)[number],
+		'id' | 'code' | 'fullName' | 'designation' | 'companyName' | 'industry' | 'photoKey' | 'posterFraming'
+	>;
+
+	/** Draws one delegate's front with the saved schedule and replaces the stored one. */
+	async function drawFront(r: FrontJob, event: EventSettings | null) {
+		const { isRunawayFraming, renderPosterFile } = await import('#lib/poster/renderer.ts');
+		const saved = r.posterFraming ?? { zoom: 1, dx: 0, dy: 0 };
+		// A photo dragged out of the arch was saved at the limits: start from the centre instead.
+		const framing = isRunawayFraming(saved) ? { zoom: saved.zoom, dx: 0, dy: 0 } : saved;
+		const blob = await renderPosterFile({
+			name: r.fullName,
+			title: r.designation,
+			company: r.companyName,
+			category: r.industry,
+			photoUrl: media(r.photoKey),
+			zoom: framing.zoom,
+			dx: framing.dx,
+			dy: framing.dy,
+			event
+		});
+		const res = await fetch(`/admin/card-front/${r.id}`, { method: 'POST', body: blob, headers: { 'content-type': 'image/jpeg' } });
+		if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? `Upload failed (${res.status})`);
+		frontVersion[r.id] = Date.now();
+	}
+
+	async function regenerateFront(r: FrontJob) {
+		if (!r.photoKey) {
+			frontState[r.id] = 'No photo stored for this delegate.';
+			return;
+		}
+		frontState[r.id] = 'busy';
+		try {
+			await drawFront(r, data.available ? data.event : null);
+			frontState[r.id] = 'done';
+		} catch (e) {
+			console.error('[admin] could not regenerate the ID card front', r.code, e);
+			frontState[r.id] = e instanceof Error && e.message ? e.message : 'Could not redraw the front.';
+		}
+	}
+
+	/* After the event date or time changed: redraw every delegate's front, one at a time. */
+	let redrawAll = $state<{ done: number; total: number; failed: string[]; running: boolean } | null>(null);
+
+	async function redrawAllFronts() {
+		if (redrawAll?.running) return;
+		redrawAll = { done: 0, total: 0, failed: [], running: true };
+		try {
+			const res = await fetch('/admin/card-front');
+			if (!res.ok) throw new Error(`Could not list the ID cards (${res.status})`);
+			const { event, jobs } = (await res.json()) as { event: EventSettings; jobs: FrontJob[] };
+			redrawAll.total = jobs.length;
+			for (const job of jobs) {
+				try {
+					await drawFront(job, event);
+				} catch (e) {
+					console.error('[admin] could not redraw the ID card front', job.code, e);
+					redrawAll.failed.push(job.code);
+				}
+				redrawAll.done++;
+			}
+			if (!redrawAll.failed.length) {
+				await fetch(act('frontsRedrawn'), { method: 'POST', body: new FormData(), headers: { 'x-sveltekit-action': 'true' } });
+			}
+			await invalidateAll();
+		} catch (e) {
+			redrawAll.failed.push(e instanceof Error ? e.message : 'Could not redraw the ID cards.');
+		} finally {
+			redrawAll.running = false;
+		}
+	}
 
 	// Actions keep the current tab and search, so the list does not jump after a click.
 	const keep = $derived(
@@ -182,13 +269,7 @@
 			const { renderBackFile } = await import('#lib/poster/renderer.ts');
 			for (const job of jobs) {
 				try {
-					const blob = await renderBackFile({
-						name: job.name,
-						title: job.title,
-						code: job.code,
-						qrText: job.qrText,
-						photoUrl: job.photoKey ? media(job.photoKey) : null
-					});
+					const blob = await renderBackFile({ code: job.code, qrText: job.qrText });
 					const res = await fetch(`/admin/card-back/${job.id}`, { method: 'POST', body: blob, headers: { 'content-type': 'image/jpeg' } });
 					if (!res.ok) throw new Error(`${res.status}`);
 					backs!.done++;
@@ -229,6 +310,7 @@
 				await update({ reset: false });
 				busy = null;
 				rejecting = null;
+				deleting = null;
 				after?.(result.type === 'success');
 			};
 		};
@@ -271,6 +353,36 @@
 	<div class="banner ok" role="status">
 		<BadgeCheck size={16} aria-hidden="true" />
 		<p>{form.success}</p>
+	</div>
+{/if}
+
+{#if data.available && (data.frontsOutdated || redrawAll)}
+	{@const when = eventLabels(data.event)}
+	<div class="banner reschedule" role="status">
+		<CalendarClock size={18} aria-hidden="true" />
+		<div class="reschedule-body">
+			{#if redrawAll?.running}
+				<p><strong>Redrawing ID cards… {redrawAll.done} of {redrawAll.total || '…'}</strong> Keep this page open until it finishes.</p>
+				<span class="reschedule-bar" aria-hidden="true"><span style="width: {redrawAll.total ? (redrawAll.done / redrawAll.total) * 100 : 0}%"></span></span>
+			{:else if redrawAll && !redrawAll.failed.length}
+				<p><strong>Done: {redrawAll.total} ID card{redrawAll.total === 1 ? '' : 's'} redrawn</strong> with {when.compactDate}, {when.compactTime}.</p>
+			{:else if redrawAll?.failed.length}
+				<p>
+					<strong>{redrawAll.failed.length} could not be redrawn:</strong>
+					{redrawAll.failed.slice(0, 6).join(', ')}{redrawAll.failed.length > 6 ? '…' : ''}. Try again.
+				</p>
+			{:else}
+				<p>
+					<strong>The event date or time changed.</strong> ID cards already issued still show the old date and time. New
+					ones show <strong>{when.compactDate}, {when.compactTime}</strong>.
+				</p>
+			{/if}
+		</div>
+		{#if !redrawAll?.running && (!redrawAll || redrawAll.failed.length)}
+			<button type="button" class="btn btn-primary btn-sm" onclick={redrawAllFronts}>
+				<RefreshCw size={15} aria-hidden="true" /> Redraw all ID cards
+			</button>
+		{/if}
 	</div>
 {/if}
 
@@ -542,11 +654,18 @@
 											<span class="visually-hidden">Copy</span>
 										</button>
 										{#if copied === r.id}<span class="copied">Copied</span>{/if}
+									{:else if r.voucherCode && r.amountRupees === 0}
+										<span class="muted">Free (voucher)</span>
 									{:else}
 										<span class="muted">Not entered</span>
 									{/if}
 								</td>
-								<td class="col-amount num">{formatRupees(r.amountRupees)}</td>
+								<td class="col-amount num">
+									{formatRupees(r.amountRupees)}
+									{#if r.voucherCode}
+										<small class="voucher-tag" title="{formatRupees(r.discountRupees)} off with voucher {r.voucherCode}">{r.voucherCode}</small>
+									{/if}
+								</td>
 								<td>
 									<span class="status {r.status}">{STATUS_LABEL[r.status as Status]}</span>
 								</td>
@@ -628,10 +747,31 @@
 												{#if r.posterKey || r.ticketBackKey}
 													<div class="card-sides">
 														{#if r.posterKey}
-															<a href={media(r.posterKey)} target="_blank" rel="noopener" class="poster">
-																<img src={media(r.posterKey)} alt="ID card front for {r.fullName}" loading="lazy" width="2160" height="3840" />
-																<span>Front</span>
-															</a>
+															{@const front = `${media(r.posterKey)}${frontVersion[r.id] ? `?v=${frontVersion[r.id]}` : ''}`}
+															<div class="front-side">
+																<a href={front} target="_blank" rel="noopener" class="poster">
+																	<img src={front} alt="ID card front for {r.fullName}" loading="lazy" width="2160" height="3840" />
+																	<span>Front</span>
+																</a>
+																<button
+																	type="button"
+																	class="btn btn-ghost btn-sm regen"
+																	onclick={() => regenerateFront(r)}
+																	disabled={frontState[r.id] === 'busy'}
+																	title="Draw the front again from the stored photo, e.g. if the photo is missing"
+																>
+																	{#if frontState[r.id] === 'busy'}
+																		<LoaderCircle size={13} class="spin" aria-hidden="true" /> Drawing…
+																	{:else}
+																		<RefreshCw size={13} aria-hidden="true" /> Regenerate
+																	{/if}
+																</button>
+																{#if frontState[r.id] === 'done'}
+																	<small class="regen-note ok" role="status">Front redrawn</small>
+																{:else if frontState[r.id] && frontState[r.id] !== 'busy'}
+																	<small class="regen-note bad" role="alert">{frontState[r.id]}</small>
+																{/if}
+															</div>
 														{/if}
 														{#if r.status === 'paid'}
 															{#if r.ticketBackKey}
@@ -707,7 +847,32 @@
 														{#if r.paymentSubmittedAt}
 															<div><dt>UPI ID submitted</dt><dd>{fmt(r.paymentSubmittedAt)}</dd></div>
 														{/if}
+														{#if r.voucherCode}
+															<div><dt>Voucher</dt><dd>{r.voucherCode} · {formatRupees(r.discountRupees)} off</dd></div>
+														{/if}
 													</dl>
+
+													<div class="delete-zone">
+														{#if deleting === r.id}
+															<form method="post" action={act('delete')} use:enhance={working(r.id)} class="delete-confirm">
+																<input type="hidden" name="id" value={r.id} />
+																<p>
+																	<strong>Delete {r.fullName}?</strong> Their details, photo, ID card and desk records
+																	are removed for good{r.status === 'paid' ? ', and their QR pass stops working' : ''}. This cannot be undone.
+																</p>
+																<div class="delete-actions">
+																	<button type="button" class="btn btn-ghost btn-sm" onclick={() => (deleting = null)} disabled={busy === r.id}>Cancel</button>
+																	<button class="btn btn-danger btn-sm" disabled={busy === r.id}>
+																		{#if busy === r.id}<LoaderCircle size={15} class="spin" aria-hidden="true" /> Deleting…{:else}<Trash2 size={15} aria-hidden="true" /> Delete permanently{/if}
+																	</button>
+																</div>
+															</form>
+														{:else}
+															<button type="button" class="btn btn-ghost btn-sm delete-open" onclick={() => (deleting = r.id)}>
+																<Trash2 size={15} aria-hidden="true" /> Delete registration
+															</button>
+														{/if}
+													</div>
 												</div>
 											</div>
 										</div>
@@ -754,6 +919,45 @@
 	.banner.ok {
 		background: var(--success-tint);
 		color: var(--success);
+	}
+
+	/* After a schedule change: hard to miss, with the action right there. */
+	.banner.reschedule {
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--gold-ink);
+		background: var(--gold-tint);
+		color: var(--gold-ink);
+		font-size: 14px;
+	}
+
+	.reschedule-body {
+		display: grid;
+		flex: 1;
+		gap: var(--space-2);
+		min-width: 0;
+	}
+
+	.reschedule-bar {
+		display: block;
+		height: 6px;
+		border-radius: 999px;
+		background: rgb(138 95 16 / 0.18);
+		overflow: hidden;
+	}
+
+	.reschedule-bar span {
+		display: block;
+		height: 100%;
+		background: var(--gold-ink);
+		transition: width 200ms ease-out;
+	}
+
+	@media (max-width: 640px) {
+		.banner.reschedule {
+			flex-wrap: wrap;
+		}
 	}
 
 	.stats {
@@ -1141,6 +1345,13 @@
 		font-size: 12px;
 	}
 
+	.voucher-tag {
+		display: block;
+		color: var(--gold-ink);
+		font: 600 11px/1.3 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+		letter-spacing: 0.04em;
+	}
+
 	.mono {
 		font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
 		letter-spacing: 0.02em;
@@ -1461,6 +1672,71 @@
 
 	.danger-text {
 		color: var(--danger);
+	}
+
+	.front-side {
+		display: grid;
+		justify-items: center;
+		gap: 2px;
+		max-width: 140px;
+	}
+
+	.regen {
+		min-height: 28px;
+		padding-inline: var(--space-2);
+		font-size: 12px;
+	}
+
+	.regen-note {
+		font-size: 11px;
+		text-align: center;
+	}
+
+	.regen-note.ok {
+		color: var(--success);
+	}
+
+	.regen-note.bad {
+		color: var(--danger);
+	}
+
+	.delete-zone {
+		display: flex;
+		justify-content: flex-end;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--rule);
+	}
+
+	.delete-open {
+		color: var(--danger);
+	}
+
+	.delete-open:hover:not(:disabled) {
+		background: var(--danger-tint);
+	}
+
+	.delete-confirm {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		width: 100%;
+		padding: var(--space-3);
+		border-radius: var(--radius-sm);
+		background: var(--danger-tint);
+	}
+
+	.delete-confirm p {
+		flex: 1 1 280px;
+		margin: 0;
+		font-size: 13px;
+		color: var(--charcoal);
+	}
+
+	.delete-actions {
+		display: flex;
+		gap: var(--space-2);
 	}
 
 	code {
