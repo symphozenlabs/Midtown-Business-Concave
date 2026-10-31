@@ -41,6 +41,8 @@ alter table registrations add column if not exists reviewed_by          text;
 alter table registrations add column if not exists rejection_reason     text;
 alter table registrations add column if not exists ticket_emailed_at    timestamptz;
 alter table registrations add column if not exists updated_at           timestamptz not null default now();
+-- Back of the ID card (QR and details), made when the organisers confirm payment.
+alter table registrations add column if not exists ticket_back_key      text;
 
 -- Ticket email delivery, as reported by Resend (GET /emails/:id, needs a Full access API key):
 --   ticket_email_id     Resend's id for the last ticket email
@@ -184,6 +186,8 @@ create table if not exists event_handlers (
   updated_at           timestamptz not null default now()
 );
 create unique index if not exists event_handlers_username_key on event_handlers (lower(username));
+-- The current password, encrypted (AES-GCM, key from PASS_SECRET), so organisers can look it up.
+alter table event_handlers add column if not exists password_vault text;
 create unique index if not exists event_handlers_email_key on event_handlers (lower(email)) where email is not null;
 
 -- What a handler may do, per event. The context columns narrow a desk: a gate, a

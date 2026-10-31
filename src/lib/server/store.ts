@@ -1,7 +1,7 @@
 import { dev } from '$app/env';
 import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/event-settings.ts';
 import { DEFAULT_PAYMENT, type PaymentSettings } from '#lib/payment.ts';
-import { isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
+import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 
 export type Status = 'pending_payment' | 'payment_submitted' | 'paid' | 'rejected';
 export const STATUSES: Status[] = ['payment_submitted', 'pending_payment', 'paid', 'rejected'];
@@ -48,6 +48,8 @@ export interface Registration extends RegistrationInput {
 	/** Resend's own word for what last happened: delivered, bounced, delivery_delayed… */
 	ticketEmailEvent: string | null;
 	ticketEmailCheckedAt: string | null;
+	/** Storage key of the ID card back (QR and details); made once the payment is confirmed. */
+	ticketBackKey: string | null;
 	createdAt: string;
 }
 
@@ -121,6 +123,7 @@ function fromRow(r: Record<string, any>): Registration {
 		ticketEmailStatus: r.ticket_email_status ?? null,
 		ticketEmailEvent: r.ticket_email_event ?? null,
 		ticketEmailCheckedAt: iso(r.ticket_email_checked_at),
+		ticketBackKey: r.ticket_back_key ?? null,
 		createdAt: iso(r.created_at)!
 	};
 }
@@ -249,6 +252,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			ticketEmailStatus: null,
 			ticketEmailEvent: null,
 			ticketEmailCheckedAt: null,
+			ticketBackKey: null,
 			createdAt: now()
 		};
 		mem.rows.set(row.id, row);
@@ -524,6 +528,17 @@ export async function markRejected(id: string, by: string, reason: string): Prom
 		where id = ${id} and status <> 'paid'
 		returning *`;
 	return rows[0] ? fromRow(rows[0]) : null;
+}
+
+/** Records (or, with null, forgets) the ID card back, e.g. after the QR is reissued. */
+export async function setTicketBack(id: string, key: string | null) {
+	if (useMemory) {
+		const row = mem.rows.get(id);
+		if (row) row.ticketBackKey = key;
+		return;
+	}
+	await ensureColumn('registrations', 'ticket_back_key');
+	await sql()`update registrations set ticket_back_key = ${key}, updated_at = now() where id = ${id}`;
 }
 
 /** A ticket email left: remember Resend's id and start tracking it as "sent". */

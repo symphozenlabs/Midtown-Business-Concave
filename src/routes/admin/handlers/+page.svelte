@@ -19,6 +19,7 @@
 	import AssignmentFields from '#lib/components/ops/AssignmentFields.svelte';
 	import CategoryIcon from '#lib/components/ops/CategoryIcon.svelte';
 	import OpsDialog from '#lib/components/ops/OpsDialog.svelte';
+	import SecretText from '#lib/components/ops/SecretText.svelte';
 	import { CATEGORIES, categoryInfo, type Category } from '#lib/ops/categories.ts';
 
 	let { data, form } = $props();
@@ -146,7 +147,7 @@
 			<button
 				type="button"
 				class="btn btn-secondary ops-btn-sm"
-				onclick={() => copyCredentials(`Username: ${form!.created!.username}\nTemporary password: ${form!.created!.password}\nSign in: ${location.origin}/handler/login`)}
+				onclick={() => copyCredentials(`Username: ${form!.created!.username}\nTemporary password: ${form!.created!.password}\nSign in: ${location.origin}/login`)}
 			>
 				<Copy size={14} aria-hidden="true" />
 				{copied ? 'Copied' : 'Copy sign-in details'}
@@ -196,9 +197,10 @@
 					<thead>
 						<tr>
 							<th>Handler</th>
-							<th>Categories</th>
+							<th>Username</th>
+							<th>Password</th>
+							<th>Desks</th>
 							<th>Status</th>
-							<th>Last sign-in</th>
 							<th class="num">Scans ✓ / dup / ✗</th>
 							<th><span class="visually-hidden">Manage</span></th>
 						</tr>
@@ -210,7 +212,15 @@
 							<tr>
 								<td class="lead">
 									<a href="/admin/handlers/{h.id}">{h.fullName}</a>
-									<div class="ops-muted ops-mono">{h.username}</div>
+									<div class="ops-muted signed">Last sign-in {fmt(h.lastLoginAt)}</div>
+								</td>
+								<td data-label="Username"><SecretText value={h.username} label="username" masked={false} /></td>
+								<td data-label="Password">
+									{#if data.passwords[h.id]}
+										<SecretText value={data.passwords[h.id]!} label="password for {h.username}" />
+									{:else}
+										<span class="ops-muted" title="Set before passwords were kept. Reset it to store one.">Not stored</span>
+									{/if}
 								</td>
 								<td>
 									<div class="cats">
@@ -222,7 +232,6 @@
 									</div>
 								</td>
 								<td><span class="ops-pill {st === 'new' ? 'warning' : st}">{STATUS_LABEL[st]}</span></td>
-								<td class="ops-muted" data-label="Last sign-in">{fmt(h.lastLoginAt)}</td>
 								<td class="num" data-label="Scans ✓ / dup / ✗">{t.success} / {t.duplicate} / {t.rejected}</td>
 								<td class="end"><a class="btn btn-ghost ops-btn-sm" href="/admin/handlers/{h.id}">Manage <ChevronRight size={14} aria-hidden="true" /></a></td>
 							</tr>
@@ -268,8 +277,8 @@
 					<li>They see only the desks you assigned.</li>
 				</ol>
 				<div class="signin-link">
-					<code>{origin}/handler/login</code>
-					<button type="button" class="btn btn-secondary ops-btn-sm" onclick={() => copyCredentials(`${origin}/handler/login`)}>
+					<code>{origin}/login</code>
+					<button type="button" class="btn btn-secondary ops-btn-sm" onclick={() => copyCredentials(`${origin}/login`)}>
 						<Copy size={14} aria-hidden="true" /> {copied ? 'Copied' : 'Copy link'}
 					</button>
 				</div>
@@ -358,6 +367,11 @@
 
 	.err {
 		color: var(--danger) !important;
+	}
+
+	.signed {
+		font-size: 12px;
+		white-space: nowrap;
 	}
 
 	.cats {

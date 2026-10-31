@@ -1,3 +1,26 @@
+<script lang="ts" module>
+	// Shared by every popup, so one closing does not unlock the page under another.
+	let locks = 0;
+	let saved = { overflow: '', paddingRight: '' };
+
+	function lockScroll() {
+		if (locks++ > 0) return;
+		const root = document.documentElement;
+		// Keep the layout from shifting when the scrollbar disappears.
+		const bar = window.innerWidth - root.clientWidth;
+		saved = { overflow: root.style.overflow, paddingRight: root.style.paddingRight };
+		root.style.overflow = 'hidden';
+		if (bar > 0) root.style.paddingRight = `${bar}px`;
+	}
+
+	function unlockScroll() {
+		if (--locks > 0) return;
+		locks = 0;
+		document.documentElement.style.overflow = saved.overflow;
+		document.documentElement.style.paddingRight = saved.paddingRight;
+	}
+</script>
+
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { X } from '@lucide/svelte';
@@ -19,13 +42,20 @@
 		else if (!open && dialog.open) dialog.close();
 	});
 
+	// While a popup is open the wheel and touch scroll the popup, never the page behind it.
+	$effect(() => {
+		if (!open) return;
+		lockScroll();
+		return unlockScroll;
+	});
+
 	/** A click on the backdrop (the dialog element itself, outside the card) closes it. */
 	function onclick(event: MouseEvent) {
 		if (event.target === dialog) open = false;
 	}
 </script>
 
-<dialog bind:this={dialog} class="ops-dialog" class:wide aria-labelledby="{id}-title" onclose={() => (open = false)} {onclick}>
+<dialog bind:this={dialog} class="ops-dialog" class:wide data-lenis-prevent aria-labelledby="{id}-title" onclose={() => (open = false)} {onclick}>
 	<div class="card">
 		<header>
 			<div>

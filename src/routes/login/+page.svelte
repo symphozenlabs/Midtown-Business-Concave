@@ -4,15 +4,15 @@
 	import { CircleAlert, LoaderCircle, LockKeyhole } from '@lucide/svelte';
 	import TextField from '#lib/components/TextField.svelte';
 
-	let { data, form } = $props();
+	let { form } = $props();
 
-	let email = $state(untrack(() => form?.email ?? ''));
+	let identifier = $state(untrack(() => form?.identifier ?? ''));
 	let password = $state('');
 	let pending = $state(false);
 </script>
 
 <svelte:head>
-	<title>Sign in · Admin · Midtown Business Conclave</title>
+	<title>Sign in · Midtown Business Conclave</title>
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
@@ -20,17 +20,10 @@
 	<section class="card" aria-labelledby="login-title">
 		<img src="/poster/mbc.webp" alt="Midtown Business Conclave" width="1655" height="747" class="logo" />
 		<div class="head">
-			<span class="eyebrow">Organiser dashboard</span>
+			<span class="eyebrow">Organisers and event handlers</span>
 			<h1 id="login-title">Sign in</h1>
-			<p>Review UPI payments, confirm tickets and manage the ticket price.</p>
+			<p>Organisers sign in with their email. Event handlers use the username and password the organiser gave them.</p>
 		</div>
-
-		{#if !data.configured}
-			<div class="alert" role="alert">
-				<CircleAlert size={18} aria-hidden="true" />
-				<p>Admin sign-in is not set up yet. Add <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code> to the environment.</p>
-			</div>
-		{/if}
 
 		<form
 			method="post"
@@ -43,7 +36,7 @@
 				};
 			}}
 		>
-			<TextField id="email" label="Email" type="email" bind:value={email} required autocomplete="username" />
+			<TextField id="identifier" label="Username or email" bind:value={identifier} required autocomplete="username" />
 			<TextField id="password" label="Password" type="password" bind:value={password} required autocomplete="current-password" />
 
 			{#if form?.message}
@@ -53,7 +46,7 @@
 				</div>
 			{/if}
 
-			<button type="submit" class="btn btn-primary" disabled={pending || !data.configured}>
+			<button type="submit" class="btn btn-primary" disabled={pending}>
 				{#if pending}
 					<LoaderCircle size={18} class="spin" aria-hidden="true" /> Signing in…
 				{:else}
@@ -137,10 +130,6 @@
 	.alert p {
 		font: var(--text-caption);
 		color: var(--charcoal);
-	}
-
-	code {
-		font-size: 13px;
 	}
 
 	:global(.spin) {

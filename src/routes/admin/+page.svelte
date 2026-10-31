@@ -168,6 +168,43 @@
 			? `?status=${data.available ? data.filter.status : 'all'}${search}`
 			: `?status=paid&email=${value}${search}`;
 
+	/*
+	 * ID card backs: once a payment is confirmed, this browser draws the back (QR and
+	 * details, same artwork as the front) and uploads it, before tickets go out.
+	 */
+	let backs = $state<{ done: number; total: number; failed: number } | null>(null);
+	const backsPending = $derived(data.available ? data.cardBacks.length : 0);
+	$effect(() => {
+		if (!data.available || !data.cardBacks.length || backs) return;
+		const jobs = data.cardBacks;
+		backs = { done: 0, total: jobs.length, failed: 0 };
+		(async () => {
+			const { renderBackFile } = await import('#lib/poster/renderer.ts');
+			for (const job of jobs) {
+				try {
+					const blob = await renderBackFile({
+						name: job.name,
+						title: job.title,
+						company: job.company,
+						code: job.code,
+						qrText: job.qrText,
+						photoUrl: job.photoKey ? media(job.photoKey) : null
+					});
+					const res = await fetch(`/admin/card-back/${job.id}`, { method: 'POST', body: blob, headers: { 'content-type': 'image/jpeg' } });
+					if (!res.ok) throw new Error(`${res.status}`);
+					backs!.done++;
+				} catch (e) {
+					console.error('[admin] ID card back failed', job.code, e);
+					backs!.failed++;
+				}
+			}
+			const failed = backs!.failed;
+			await invalidateAll();
+			// Stop retrying in a loop when something keeps failing; a reload tries again.
+			backs = failed ? { done: 0, total: 0, failed } : null;
+		})();
+	});
+
 	// Opening the dashboard quietly asks Resend about emails still on their way.
 	onMount(() => {
 		if (!inFlight) return;
@@ -304,10 +341,12 @@
 						type="submit"
 						class="btn btn-sm send-btn"
 						class:has-queue={toSend > 0}
-						disabled={toSend === 0 || busy === 'send'}
-						title={toSend ? 'Email the ticket to every delegate marked as paid' : 'Every paid delegate has their ticket'}
+						disabled={toSend === 0 || busy === 'send' || (backs !== null && backs.total > 0)}
+						title={toSend ? 'Email the ID card (front and back) to every delegate marked as paid' : 'Every paid delegate has their ticket'}
 					>
-						{#if busy === 'send'}
+						{#if backs && backs.total > 0}
+							<LoaderCircle size={15} class="spin" aria-hidden="true" /> Preparing ID cards {backs.done + backs.failed + 1} of {backs.total}…
+						{:else if busy === 'send'}
 							<LoaderCircle size={15} class="spin" aria-hidden="true" /> Sending {plural(toSend, 'email')}…
 						{:else if toSend > 0}
 							<Mails size={15} aria-hidden="true" />
@@ -587,16 +626,25 @@
 									<td colspan={columns}>
 										<div class="details-slide" transition:slide={{ duration: 220, easing: cubicOut }}>
 											<div class="details-body">
-												{#if r.posterKey}
-													<a href={media(r.posterKey)} target="_blank" rel="noopener" class="poster">
-														<img
-															src={media(r.posterKey)}
-															alt="Poster for {r.fullName}"
-															loading="lazy"
-															width="2160"
-															height="3840"
-														/>
-													</a>
+												{#if r.posterKey || r.ticketBackKey}
+													<div class="card-sides">
+														{#if r.posterKey}
+															<a href={media(r.posterKey)} target="_blank" rel="noopener" class="poster">
+																<img src={media(r.posterKey)} alt="ID card front for {r.fullName}" loading="lazy" width="2160" height="3840" />
+																<span>Front</span>
+															</a>
+														{/if}
+														{#if r.status === 'paid'}
+															{#if r.ticketBackKey}
+																<a href={media(r.ticketBackKey)} target="_blank" rel="noopener" class="poster">
+																	<img src={media(r.ticketBackKey)} alt="ID card back (QR) for {r.fullName}" loading="lazy" width="2160" height="3840" />
+																	<span>Back</span>
+																</a>
+															{:else}
+																<span class="poster pending-back">Back<br />being prepared</span>
+															{/if}
+														{/if}
+													</div>
 												{/if}
 
 												<div class="details-main">
@@ -1293,11 +1341,37 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
+	/* Front and back of the ID card side by side. */
+	.card-sides {
+		display: flex;
+		gap: var(--space-2);
+		align-items: flex-start;
+	}
+
+	.poster {
+		display: grid;
+		gap: 4px;
+		justify-items: center;
+		font-size: 11px;
+		color: var(--text-supporting);
+		text-decoration: none;
+	}
+
 	.poster img {
 		width: 110px;
 		height: auto;
 		border-radius: 6px;
 		box-shadow: 0 0 0 1px var(--rule);
+	}
+
+	.pending-back {
+		display: grid;
+		place-items: center;
+		width: 110px;
+		aspect-ratio: 9 / 16;
+		border: 1px dashed var(--rule);
+		border-radius: 6px;
+		text-align: center;
 	}
 
 	.details-main {

@@ -1,6 +1,8 @@
+import { dev } from '$app/env';
+import { PASS_SECRET } from '$app/env/private';
 import type { Category } from '#lib/ops/categories.ts';
-import { sql, uniqueViolation } from '../db.ts';
-import { DUMMY_HASH, hashPassword, randomToken, sha256Hex, temporaryPassword, verifyPassword } from '../crypto.ts';
+import { ensureColumn, sql, uniqueViolation } from '../db.ts';
+import { DUMMY_HASH, hashPassword, randomToken, seal, sha256Hex, temporaryPassword, unseal, verifyPassword } from '../crypto.ts';
 import { audit } from './event.ts';
 
 export type HandlerStatus = 'active' | 'inactive' | 'archived';
@@ -115,6 +117,40 @@ function handlerFrom(r: Record<string, any>): Handler {
 	};
 }
 
+/* ---------- password look-up for organisers ---------- */
+
+/*
+ * Organisers asked to see each handler's current password. Besides the one-way
+ * hash used for sign-in, the password is kept encrypted (AES-GCM, key from
+ * PASS_SECRET) and only decrypted on the organiser's pages.
+ */
+const vaultSecret = PASS_SECRET ?? (dev ? 'mbc-development-pass-secret' : undefined);
+export const isPasswordLookupAvailable = Boolean(vaultSecret);
+const VAULT = 'handler-password';
+
+async function rememberPassword(handlerId: string, password: string) {
+	if (!vaultSecret) return;
+	try {
+		await ensureColumn('event_handlers', 'password_vault');
+		await sql()`update event_handlers set password_vault = ${await seal(password, vaultSecret, VAULT)} where id = ${handlerId}`;
+	} catch (e) {
+		// Sign-in does not depend on this copy, so a failure here must not block the change.
+		console.error('[handlers] could not store the password for organisers', e);
+	}
+}
+
+/** Current passwords by handler id; null where none is stored (set before this existed). */
+export async function handlerPasswords(ids?: string[]): Promise<Record<string, string | null>> {
+	if (!vaultSecret) return {};
+	await ensureColumn('event_handlers', 'password_vault');
+	const rows = ids
+		? await sql()`select id, password_vault from event_handlers where id = any(${ids}::uuid[])`
+		: await sql()`select id, password_vault from event_handlers`;
+	const out: Record<string, string | null> = {};
+	for (const r of rows) out[r.id] = r.password_vault ? await unseal(r.password_vault, vaultSecret, VAULT) : null;
+	return out;
+}
+
 /* ---------- admin: accounts ---------- */
 
 export async function listHandlers(includeArchived = false): Promise<Handler[]> {
@@ -182,6 +218,7 @@ export async function createHandler(
 		targetId: id,
 		details: { username: input.username, categories: assignments.map((a) => a.category) }
 	});
+	await rememberPassword(id, password);
 	return { handler: (await getHandler(id))!, temporaryPassword: password };
 }
 
@@ -243,6 +280,7 @@ export async function resetPassword(handlerId: string, by: string): Promise<stri
 			locked_until = null, updated_at = now()
 		where id = ${handlerId}`;
 	await revokeSessions(handlerId, '');
+	await rememberPassword(handlerId, password);
 	await audit({ actorType: 'admin', actor: by, action: 'handler.reset_password', targetType: 'handler', targetId: handlerId });
 	return password;
 }
@@ -339,6 +377,7 @@ export async function changePassword(session: HandlerSession, current: string, n
 			password_changed_at = now(), updated_at = now()
 		where id = ${session.id}`;
 	await revokeSessions(session.id, '', session.sessionId);
+	await rememberPassword(session.id, next);
 	await audit({ actorType: 'handler', actor: session.id, action: 'handler.change_password', targetType: 'handler', targetId: session.id });
 	return true;
 }
@@ -383,6 +422,7 @@ export async function completePasswordReset(token: string, password: string): Pr
 			locked_until = null, password_changed_at = now(), updated_at = now()
 		where id = ${id}`;
 	await revokeSessions(id, '');
+	await rememberPassword(id, password);
 	await audit({ actorType: 'handler', actor: id, action: 'handler.reset_password_self', targetType: 'handler', targetId: id });
 	return true;
 }

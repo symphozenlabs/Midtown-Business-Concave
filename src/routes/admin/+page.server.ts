@@ -11,7 +11,7 @@ import {
 	sendTicketEmail
 } from '#lib/server/email.ts';
 import { getObject, isR2Configured } from '#lib/server/r2.ts';
-import { markPassEmailed, passEmailFor, passesToSend } from '#lib/server/ops/passes.ts';
+import { cardBacksToMake, markPassEmailed, passEmailFor, passesToSend } from '#lib/server/ops/passes.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
@@ -42,6 +42,22 @@ const SEND_GAP_MS = 550;
 /** Delivery checks per click; they share the same Resend rate limit. */
 const CHECK_BATCH = 25;
 
+/** ID card backs the organiser's browser should draw now, with what each needs. Never blocks the page. */
+async function cardBackJobs(origin: string) {
+	try {
+		const paid = await listRegistrations({ status: 'paid', q: '' });
+		const jobs = await cardBacksToMake(paid, origin);
+		const byId = new Map(paid.map((r) => [r.id, r]));
+		return jobs.map((j) => {
+			const r = byId.get(j.id)!;
+			return { ...j, name: r.fullName, title: r.designation, company: r.companyName, code: r.code, photoKey: r.photoKey };
+		});
+	} catch (e) {
+		console.error('[admin] could not list ID card backs to make', e);
+		return [];
+	}
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.admin) redirect(303, '/login');
 	const configured = { database: isDatabaseConfigured, storage: isR2Configured, email: isEmailConfigured };
@@ -61,14 +77,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 
-	const [registrations, passes] = await Promise.all([listRegistrations({ status, q, email }), passesToSend(1)]);
+	const [registrations, passes, cardBacks] = await Promise.all([
+		listRegistrations({ status, q, email }),
+		passesToSend(1),
+		cardBackJobs(url.origin)
+	]);
 	return {
 		configured,
 		available: true as const,
 		stats,
 		passesToSend: passes.total,
 		filter: { status, q, email },
-		registrations
+		registrations,
+		cardBacks
 	};
 };
 
@@ -82,10 +103,18 @@ async function passFor(reg: Registration, origin: string) {
 	}
 }
 
+/** Front (the poster) and back (QR and details) of the ID card, as stored. */
+async function cardImages(reg: Registration) {
+	const [front, back] = await Promise.all([
+		reg.posterKey ? getObject(reg.posterKey) : null,
+		reg.ticketBackKey ? getObject(reg.ticketBackKey) : null
+	]);
+	return { front: front?.body ?? null, back: back?.body ?? null };
+}
+
 async function emailTicket(reg: Registration, origin: string) {
-	const poster = reg.posterKey ? await getObject(reg.posterKey) : null;
-	const pass = await passFor(reg, origin);
-	const emailId = await sendTicketEmail(reg, poster?.body ?? null, pass);
+	const [card, pass] = await Promise.all([cardImages(reg), passFor(reg, origin)]);
+	const emailId = await sendTicketEmail(reg, card.front, pass, card.back);
 	await markTicketEmailed(reg.id, emailId);
 	if (pass) await markPassEmailed(reg.id);
 }
@@ -222,7 +251,7 @@ export const actions: Actions = {
 			try {
 				const pass = await passEmailFor(reg, url.origin);
 				if (!pass) return fail(503, { message: 'Event passes need DATABASE_URL and PASS_SECRET.' });
-				await sendPassEmail(reg, pass);
+				await sendPassEmail(reg, pass, (await cardImages(reg)).back);
 				await markPassEmailed(reg.id);
 				sent++;
 			} catch (e) {

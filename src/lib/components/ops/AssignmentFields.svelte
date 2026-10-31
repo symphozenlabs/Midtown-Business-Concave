@@ -30,6 +30,9 @@
 	const hall = find('hall');
 	const time = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 
+	// Desks with their own settings (which gate, hall, meal…) open across the full width.
+	const HAS_CONTEXT = new Set<Category>(['gate', 'hall', 'food', 'certificate']);
+
 	function toggle(c: Category) {
 		if (picked.has(c)) picked.delete(c);
 		else picked.add(c);
@@ -40,7 +43,7 @@
 	<legend>Assigned categories</legend>
 	{#each CATEGORIES as c (c.code)}
 		{@const on = picked.has(c.code)}
-		<div class="row" class:on>
+		<div class="row" class:on class:wide={on && HAS_CONTEXT.has(c.code)}>
 			<label class="pick">
 				<input type="checkbox" name="categories" value={c.code} checked={on} onchange={() => toggle(c.code)} />
 				<span class="icon"><CategoryIcon category={c.code} size={18} /></span>
@@ -107,8 +110,10 @@
 </fieldset>
 
 <style>
+	/* Compact: two columns of desks; a chosen desk with settings spans both. */
 	.assign {
 		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
 		gap: var(--space-2);
 		margin: 0;
 		padding: 0;
@@ -124,11 +129,16 @@
 
 	.row {
 		display: grid;
-		gap: var(--space-3);
-		padding: var(--space-3);
+		gap: var(--space-2);
+		align-content: start;
+		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--rule);
 		border-radius: var(--radius-sm);
 		background: var(--white);
+	}
+
+	.row.wide {
+		grid-column: 1 / -1;
 	}
 
 	.row.on {
@@ -154,8 +164,8 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		width: 34px;
-		height: 34px;
+		width: 28px;
+		height: 28px;
 		border-radius: var(--radius-sm);
 		background: var(--ink);
 		color: var(--gold);
@@ -171,7 +181,8 @@
 	}
 
 	.pick small {
-		font-size: 12px;
+		font-size: 11px;
+		line-height: 1.35;
 		color: var(--text-supporting);
 	}
 

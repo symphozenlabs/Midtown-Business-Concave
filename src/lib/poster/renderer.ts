@@ -391,6 +391,297 @@ export function renderPoster(canvas: HTMLCanvasElement, st: PosterState, A: Post
 	return canvas;
 }
 
+/* ---------- ID card back ---------- */
+
+/*
+ * The back of the delegate's ID card, made when the organisers confirm payment.
+ * Same size, artwork, logos, fonts and gold as the front, so the two read as one
+ * card; a navy panel over the middle carries the event QR (gate, halls, meals,
+ * certificate, networking) and the delegate's details.
+ */
+export interface BackState {
+	name: string;
+	title: string;
+	company: string;
+	code: string;
+	/** The pass QR, already drawn at any size; scaled into the white card. */
+	qr: CanvasImageSource;
+	photo: HTMLImageElement | null;
+}
+
+const BACK = {
+	panel: { x: 92, y: 236, w: 896, h: 1328, r: 40 },
+	mbc: { cx: 540, y: 276, w: 430 },
+	eyebrow: { y: 520, size: 26, track: 9, line: { len: 70, gap: 26 } },
+	qr: { cx: 540, y: 556, card: 488, pad: 34 },
+	photo: { cy: 1134, r: 62 },
+	name: { y: 1258, size: 56, maxW: 760 },
+	title: { y: 1300, size: 24, track: 6, maxW: 640 },
+	company: { y: 1352, size: 44, maxW: 760 },
+	code: { cy: 1410, h: 50, size: 26, track: 6, pad: 46 },
+	scan: { y: 1482, size: 18, track: 5 },
+	note: { y: 1522, size: 20 }
+} as const;
+
+function drawEyebrow(ctx: Ctx, text: string, cx: number, y: number, size: number, track: number, ln: { len: number; gap: number }) {
+	ctx.font = `700 ${size}px ${SANS}`;
+	ctx.fillStyle = gold(ctx, cx - 240, 0, cx + 240, 0);
+	const w = drawSpaced(ctx, text, cx, y, track, 'center');
+	const ly = y - size * 0.36;
+	const left = ctx.createLinearGradient(cx - w / 2 - ln.gap - ln.len, 0, cx - w / 2 - ln.gap, 0);
+	left.addColorStop(0, 'rgba(236,190,110,0.1)');
+	left.addColorStop(1, 'rgba(236,190,110,0.95)');
+	ctx.fillStyle = left;
+	ctx.fillRect(cx - w / 2 - ln.gap - ln.len, ly, ln.len, 2);
+	const right = ctx.createLinearGradient(cx + w / 2 + ln.gap, 0, cx + w / 2 + ln.gap + ln.len, 0);
+	right.addColorStop(0, 'rgba(236,190,110,0.95)');
+	right.addColorStop(1, 'rgba(236,190,110,0.1)');
+	ctx.fillStyle = right;
+	ctx.fillRect(cx + w / 2 + ln.gap, ly, ln.len, 2);
+}
+
+function drawBackPanel(ctx: Ctx) {
+	const p = BACK.panel;
+	ctx.save();
+	ctx.shadowColor = 'rgba(0,0,0,0.55)';
+	ctx.shadowBlur = 40 * SC;
+	ctx.shadowOffsetY = 12 * SC;
+	roundRect(ctx, p.x, p.y, p.w, p.h, p.r);
+	const fill = ctx.createLinearGradient(0, p.y, 0, p.y + p.h);
+	fill.addColorStop(0, '#0d1834');
+	fill.addColorStop(0.55, '#08101f');
+	fill.addColorStop(1, '#050913');
+	ctx.fillStyle = fill;
+	ctx.fill();
+	ctx.restore();
+
+	// a warm glow behind the QR, like the light in the front's arch
+	ctx.save();
+	roundRect(ctx, p.x, p.y, p.w, p.h, p.r);
+	ctx.clip();
+	const glow = ctx.createRadialGradient(540, 800, 40, 540, 800, 520);
+	glow.addColorStop(0, 'rgba(227,176,75,0.22)');
+	glow.addColorStop(1, 'rgba(227,176,75,0)');
+	ctx.fillStyle = glow;
+	ctx.fillRect(p.x, p.y, p.w, p.h);
+	ctx.restore();
+
+	roundRect(ctx, p.x, p.y, p.w, p.h, p.r);
+	ctx.lineWidth = 3;
+	ctx.strokeStyle = gold(ctx, p.x, p.y, p.x + p.w, p.y + p.h);
+	ctx.stroke();
+	roundRect(ctx, p.x + 12, p.y + 12, p.w - 24, p.h - 24, p.r - 10);
+	ctx.lineWidth = 1;
+	ctx.strokeStyle = 'rgba(236,190,110,0.28)';
+	ctx.stroke();
+}
+
+function drawBackQr(ctx: Ctx, qr: CanvasImageSource) {
+	const q = BACK.qr;
+	const x = q.cx - q.card / 2,
+		y = q.y;
+	ctx.save();
+	ctx.shadowColor = 'rgba(0,0,0,0.45)';
+	ctx.shadowBlur = 24 * SC;
+	ctx.shadowOffsetY = 8 * SC;
+	roundRect(ctx, x, y, q.card, q.card, 28);
+	ctx.fillStyle = '#FFFFFF';
+	ctx.fill();
+	ctx.restore();
+
+	// gold corner brackets just outside the card
+	const o = 16,
+		len = 74;
+	ctx.save();
+	ctx.lineWidth = 6;
+	ctx.lineCap = 'round';
+	ctx.strokeStyle = gold(ctx, x, y, x + q.card, y + q.card);
+	const corners: [number, number, number, number][] = [
+		[x - o, y - o, 1, 1],
+		[x + q.card + o, y - o, -1, 1],
+		[x - o, y + q.card + o, 1, -1],
+		[x + q.card + o, y + q.card + o, -1, -1]
+	];
+	for (const [cx, cy, sx, sy] of corners) {
+		ctx.beginPath();
+		ctx.moveTo(cx + sx * len, cy);
+		ctx.lineTo(cx + sx * 18, cy);
+		ctx.quadraticCurveTo(cx, cy, cx, cy + sy * 18);
+		ctx.lineTo(cx, cy + sy * len);
+		ctx.stroke();
+	}
+	ctx.restore();
+
+	ctx.imageSmoothingEnabled = false;
+	ctx.drawImage(qr, x + q.pad, y + q.pad, q.card - q.pad * 2, q.card - q.pad * 2);
+	ctx.imageSmoothingEnabled = true;
+}
+
+function drawBackPhoto(ctx: Ctx, photo: HTMLImageElement | null, name: string) {
+	const p = BACK.photo,
+		cx = 540;
+	ctx.save();
+	ctx.beginPath();
+	ctx.arc(cx, p.cy, p.r + 6, 0, Math.PI * 2);
+	ctx.fillStyle = gold(ctx, cx - p.r, p.cy - p.r, cx + p.r, p.cy + p.r);
+	ctx.fill();
+	ctx.beginPath();
+	ctx.arc(cx, p.cy, p.r, 0, Math.PI * 2);
+	ctx.fillStyle = '#121a30';
+	ctx.fill();
+	ctx.clip();
+	if (photo) {
+		// cover the circle, biased to the top where faces usually are
+		const s = Math.max((p.r * 2) / photo.width, (p.r * 2) / photo.height);
+		const w = photo.width * s,
+			h = photo.height * s;
+		ctx.drawImage(photo, cx - w / 2, p.cy - p.r - Math.max(0, (h - p.r * 2) * 0.18), w, h);
+	} else {
+		const initials = name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((w) => w[0]!.toUpperCase())
+			.join('');
+		ctx.fillStyle = gold(ctx, cx - p.r, 0, cx + p.r, 0);
+		ctx.font = `800 ${p.r * 0.8}px ${SANS}`;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(initials || '•', cx, p.cy + 2);
+	}
+	ctx.restore();
+}
+
+function drawBackDetails(ctx: Ctx, st: BackState) {
+	const B = BACK,
+		cx = 540;
+	const name = st.name.trim() || 'Delegate';
+	const title = st.title.trim().toUpperCase();
+	const company = st.company.trim();
+	ctx.save();
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'alphabetic';
+
+	fitFont(ctx, name, (s) => `800 ${s}px ${SANS}`, B.name.maxW, B.name.size, 24);
+	ctx.fillStyle = '#FFFFFF';
+	ctx.shadowColor = 'rgba(0,0,0,0.5)';
+	ctx.shadowBlur = 6 * SC;
+	ctx.shadowOffsetY = 2 * SC;
+	ctx.fillText(name, cx, B.name.y);
+	ctx.shadowColor = 'transparent';
+	ctx.shadowOffsetY = 0;
+
+	if (title) {
+		const ts = fitFont(ctx, title, (s) => `700 ${s}px ${SANS}`, B.title.maxW, B.title.size, 12, B.title.track);
+		ctx.fillStyle = gold(ctx, cx - 220, 0, cx + 220, 0);
+		drawSpaced(ctx, title, cx, B.title.y, (B.title.track * ts) / B.title.size, 'center');
+	}
+
+	if (company) {
+		fitFont(ctx, company, (s) => `italic 700 ${s}px ${SERIF}`, B.company.maxW, B.company.size, 18);
+		ctx.fillStyle = '#FFFFFF';
+		ctx.fillText(company, cx, B.company.y);
+	}
+
+	// registration number in the front's category-pill style
+	const c = B.code;
+	ctx.font = `700 ${c.size}px ${SANS}`;
+	const cw = spacedWidth(ctx, st.code, c.track);
+	const w = cw + c.pad * 2,
+		x = cx - w / 2,
+		y = c.cy - c.h / 2;
+	roundRect(ctx, x, y, w, c.h, c.h / 2);
+	ctx.fillStyle = 'rgba(36,28,18,0.96)';
+	ctx.fill();
+	ctx.lineWidth = 1.8;
+	ctx.strokeStyle = gold(ctx, x, y, x + w, y + c.h);
+	ctx.stroke();
+	ctx.fillStyle = gold(ctx, x, y, x + w, y + c.h);
+	ctx.textBaseline = 'middle';
+	drawSpaced(ctx, st.code, cx, c.cy + 1, c.track, 'center');
+	ctx.textBaseline = 'alphabetic';
+
+	ctx.font = `600 ${B.scan.size}px ${SANS}`;
+	ctx.fillStyle = 'rgba(247,208,125,0.9)';
+	drawSpaced(ctx, 'SCAN AT GATE · HALLS · MEALS · CERTIFICATE · NETWORKING', cx, B.scan.y, B.scan.track, 'center');
+
+	ctx.font = `600 ${B.note.size}px ${SANS}`;
+	ctx.fillStyle = 'rgba(255,255,255,0.62)';
+	ctx.fillText('One personal QR for the whole day. Please do not share it.', cx, B.note.y);
+	ctx.restore();
+}
+
+/** Draws the ID card back onto `canvas`; `width` is the output pixel width (1080 preview, 2160 for 4K). */
+export function renderBack(canvas: HTMLCanvasElement, st: BackState, A: PosterAssets, width: number = FINAL.W) {
+	const L = FINAL;
+	SC = width / L.W;
+	canvas.width = Math.round(L.W * SC);
+	canvas.height = Math.round(L.H * SC);
+	const ctx = canvas.getContext('2d')!;
+	ctx.setTransform(SC, 0, 0, SC, 0, 0);
+	ctx.imageSmoothingEnabled = true;
+	ctx.imageSmoothingQuality = 'high';
+
+	ctx.fillStyle = '#070B16';
+	ctx.fillRect(0, 0, L.W, L.H);
+	ctx.drawImage(A.bgFinal, 0, 0, L.W, L.H);
+	drawLogos(ctx, L, A);
+	drawBackPanel(ctx);
+
+	const m = BACK.mbc;
+	ctx.save();
+	ctx.shadowColor = 'rgba(0,0,0,0.6)';
+	ctx.shadowBlur = 24 * SC;
+	ctx.shadowOffsetY = 8 * SC;
+	ctx.drawImage(A.mbc, m.cx - m.w / 2, m.y, m.w, (m.w * A.mbc.height) / A.mbc.width);
+	ctx.restore();
+
+	const e = BACK.eyebrow;
+	ctx.save();
+	ctx.textBaseline = 'alphabetic';
+	drawEyebrow(ctx, 'DELEGATE PASS', 540, e.y, e.size, e.track, e.line);
+	ctx.restore();
+
+	drawBackQr(ctx, st.qr);
+	drawBackPhoto(ctx, st.photo, st.name);
+	drawBackDetails(ctx, st);
+	return canvas;
+}
+
+export interface BackFileInput {
+	name: string;
+	title: string;
+	company: string;
+	code: string;
+	/** What the QR encodes: the delegate's pass link. */
+	qrText: string;
+	photoUrl: string | null;
+}
+
+/** Renders the ID card back as a 4K JPEG, the same size as the front. */
+export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WIDTH): Promise<Blob> {
+	const [assets, QRCode, photo] = await Promise.all([
+		loadPosterAssets(),
+		import('qrcode').then((m) => m.default ?? m),
+		input.photoUrl ? loadImage(input.photoUrl).catch(() => null) : Promise.resolve(null)
+	]);
+	const qr = document.createElement('canvas');
+	await QRCode.toCanvas(qr, input.qrText, {
+		errorCorrectionLevel: 'M',
+		margin: 0,
+		width: 1024,
+		color: { dark: '#0b1430', light: '#ffffff' }
+	});
+	const canvas = document.createElement('canvas');
+	renderBack(canvas, { name: input.name, title: input.title, company: input.company, code: input.code, qr, photo }, assets, width);
+	const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
+	canvas.width = 0;
+	canvas.height = 0;
+	qr.width = 0;
+	if (!blob) throw new Error('Could not create the ID card back');
+	return blob;
+}
+
 /** Does the image have a transparent background, and where is the subject? */
 export function analysePhoto(img: HTMLImageElement): PhotoMeta {
 	const S = 360,
