@@ -15,9 +15,32 @@ export interface PendingRegistration {
 	code: string;
 	fullName: string;
 	email: string;
+	/** What to pay now, after any voucher. */
 	amountRupees: number;
 	vpa: string;
 	payeeName: string;
+	/** The fee before the voucher. Optional: registrations saved by an older page lack these. */
+	priceRupees?: number;
+	voucherCode?: string | null;
+	discountRupees?: number;
+}
+
+/** The parts of a pending registration the server can change while the payment step is open. */
+export type PaymentDetails = Pick<
+	PendingRegistration,
+	'amountRupees' | 'vpa' | 'payeeName' | 'priceRupees' | 'voucherCode' | 'discountRupees'
+>;
+
+function readDetails(data: any): PaymentDetails | null {
+	if (typeof data?.amountRupees !== 'number' || typeof data.vpa !== 'string' || typeof data.payeeName !== 'string') return null;
+	return {
+		amountRupees: data.amountRupees,
+		vpa: data.vpa,
+		payeeName: data.payeeName,
+		priceRupees: typeof data.priceRupees === 'number' ? data.priceRupees : data.amountRupees,
+		voucherCode: typeof data.voucherCode === 'string' ? data.voucherCode : null,
+		discountRupees: typeof data.discountRupees === 'number' ? data.discountRupees : 0
+	};
 }
 
 export interface PosterFraming {
@@ -70,23 +93,37 @@ export async function submitRegistration(
 	failure(res, data);
 }
 
-/** Reports the UPI transaction ID so the organisers can verify the payment. */
-export async function submitPayment(pending: PendingRegistration, utr: string): Promise<void> {
+/**
+ * Reports the UPI transaction ID so the organisers can verify the payment.
+ * Null when a voucher covers the whole fee and there is nothing to pay.
+ */
+export async function submitPayment(pending: PendingRegistration, utr: string | null): Promise<void> {
 	const res = await post('/api/payment', {
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ code: pending.code, email: pending.email, utr })
+		body: JSON.stringify(utr ? { code: pending.code, email: pending.email, utr } : { code: pending.code, email: pending.email, free: true })
 	});
 	if (res.ok) return;
 	failure(res, await res.json().catch(() => ({})));
+}
+
+/** Applies a voucher code (or, with an empty code, removes it); returns the new amount to pay. */
+export async function applyVoucher(pending: PendingRegistration, voucher: string): Promise<PaymentDetails> {
+	const res = await post('/api/payment/voucher', {
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ code: pending.code, email: pending.email, voucher })
+	});
+	const data = await res.json().catch(() => ({}));
+	const details = res.ok ? readDetails(data) : null;
+	if (details) return details;
+	const message = typeof data?.message === 'string' ? data.message : 'The voucher could not be checked. Please try again.';
+	throw new SubmitError(message, res.status === 503 ? 'unavailable' : 'invalid');
 }
 
 /**
  * The amount and UPI payee this registration should pay now. The organisers can
  * change the fee or UPI ID after someone registered; null when it can't be checked.
  */
-export async function fetchPaymentDetails(
-	pending: PendingRegistration
-): Promise<Pick<PendingRegistration, 'amountRupees' | 'vpa' | 'payeeName'> | null> {
+export async function fetchPaymentDetails(pending: PendingRegistration): Promise<PaymentDetails | null> {
 	try {
 		const res = await fetch('/api/payment/details', {
 			method: 'POST',
@@ -96,10 +133,7 @@ export async function fetchPaymentDetails(
 		if (!res.ok) return null;
 		const data = await res.json();
 		if (data.status !== 'pending_payment') return null;
-		if (typeof data.amountRupees !== 'number' || typeof data.vpa !== 'string' || typeof data.payeeName !== 'string') {
-			return null;
-		}
-		return { amountRupees: data.amountRupees, vpa: data.vpa, payeeName: data.payeeName };
+		return readDetails(data);
 	} catch {
 		return null;
 	}

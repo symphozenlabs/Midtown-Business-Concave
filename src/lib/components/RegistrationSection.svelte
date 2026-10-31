@@ -8,6 +8,7 @@
 		CircleAlert,
 		Handshake,
 		History,
+		ImageUp,
 		ListChecks,
 		LoaderCircle,
 		Lock,
@@ -32,12 +33,13 @@
 		type Interest
 	} from '#lib/registration.ts';
 	import { DEFAULT_PAYMENT, formatRupees } from '#lib/payment.ts';
-	import { renderPosterFile } from '#lib/poster/renderer.ts';
+	import { PosterError, renderPosterFile } from '#lib/poster/renderer.ts';
 	import {
 		SubmitError,
 		fetchPaymentDetails,
 		submitPayment,
 		submitRegistration,
+		type PaymentDetails,
 		type PendingRegistration
 	} from '#lib/submit.ts';
 	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
@@ -153,13 +155,8 @@
 			if (!current || document.visibilityState !== 'visible') return;
 			const latest = await fetchPaymentDetails(current);
 			if (!latest || pending?.code !== current.code) return;
-			if (
-				latest.amountRupees === current.amountRupees &&
-				latest.vpa === current.vpa &&
-				latest.payeeName === current.payeeName
-			) {
-				return;
-			}
+			const same = (Object.keys(latest) as (keyof typeof latest)[]).every((k) => latest[k] === current[k]);
+			if (same) return;
 			pending = { ...current, ...latest };
 			remember(PENDING_KEY, pending);
 		};
@@ -248,7 +245,9 @@
 				photoUrl,
 				zoom,
 				dx,
-				dy
+				dy,
+				// The card's date strip shows the schedule from Event setup.
+				event: (await loadSiteConfig(), siteConfig.event)
 			});
 			pending = await submitRegistration(draft, photoBlob!, poster, { zoom, dx, dy });
 			if (posterUrl) URL.revokeObjectURL(posterUrl);
@@ -258,18 +257,29 @@
 			await goTo(PAYMENT);
 		} catch (e) {
 			status = 'idle';
-			submitError = e instanceof SubmitError ? e.message : 'Something went wrong. Your details are saved — try again.';
+			if (!(e instanceof SubmitError)) console.error('[register] failed', e);
+			submitError =
+				e instanceof SubmitError || e instanceof PosterError
+					? e.message
+					: 'Something went wrong. Your details are saved — try again.';
 		}
 	}
 
-	/** Payment step → the delegate reports their UPI transaction ID. */
-	async function completePayment(utr: string) {
+	/** A voucher was applied or removed on the payment step: the amount to pay changed. */
+	function voucherChanged(details: PaymentDetails) {
+		if (!pending) return;
+		pending = { ...pending, ...details };
+		remember(PENDING_KEY, pending);
+	}
+
+	/** Payment step → the delegate reports their UPI transaction ID (null: a voucher covers the fee). */
+	async function completePayment(utr: string | null) {
 		if (!pending || status === 'paying') return;
 		status = 'paying';
 		submitError = null;
 		try {
 			await submitPayment(pending, utr);
-			utrSent = utr;
+			utrSent = utr ?? '';
 			status = 'done';
 			remember(PENDING_KEY, null);
 			remember(DRAFT_KEY, null);
@@ -407,7 +417,10 @@
 								<span class="step-count">Step {step + 1} of {STEPS.length}</span>
 								<h3 tabindex="-1" bind:this={heading}>{STEPS[step].title}</h3>
 								<p>
-									Your registration <strong>{pending.code}</strong> is reserved. {STEPS[step].intro}
+									Your registration <strong>{pending.code}</strong> is reserved.
+								{pending.voucherCode && pending.amountRupees <= 0
+									? 'Your voucher covers the fee, so just complete your registration below.'
+									: STEPS[step].intro}
 								</p>
 							</header>
 							<PaymentPanel
@@ -415,6 +428,7 @@
 								busy={status === 'paying'}
 								error={submitError}
 								oncomplete={completePayment}
+								onvoucher={voucherChanged}
 								onback={() => goTo(REVIEW)}
 							/>
 						</div>
@@ -590,7 +604,7 @@
 										/>
 										<ChoiceChips
 											id="field-interests"
-											legend="What are you interested in at the event?"
+											legend="What are you interested at the event?"
 											help="You can pick more than one."
 											options={INTERESTS}
 											all={{ label: 'All of the above', description: 'I am interested in everything.', icon: allInterestsIcon }}
@@ -706,7 +720,19 @@
 		{#if !narrow}
 			<aside class="aside" aria-label="Your “I am attending” poster">
 				<div class="sticky" use:reveal={160}>
-					<PosterCard {draft} {photoUrl} bind:zoom bind:dx bind:dy locked={step === PAYMENT || done} />
+					{#if (step === PAYMENT || done) && !photoUrl && pending}
+						<!-- After a reload the photo is no longer in this browser, but the poster was saved with it. -->
+						<div class="poster-saved" role="status">
+							<ImageUp size={22} aria-hidden="true" />
+							<p>
+								<strong>Your poster is saved</strong>
+								Your “I am attending” poster, with your photo, was saved with registration
+								<span class="mono">{pending.code}</span>. It is emailed to you with your ticket.
+							</p>
+						</div>
+					{:else}
+						<PosterCard {draft} {photoUrl} bind:zoom bind:dx bind:dy locked={step === PAYMENT || done} />
+					{/if}
 					{#if !done && step < PAYMENT}
 						<div class="meter" aria-live="polite">
 							<p>
@@ -1065,6 +1091,38 @@
 		top: 32px;
 		display: grid;
 		gap: var(--space-4);
+	}
+
+	.poster-saved {
+		display: flex;
+		gap: var(--space-3);
+		align-items: flex-start;
+		padding: var(--space-6);
+		border-radius: var(--radius-lg);
+		background: linear-gradient(180deg, #0c1730, #060b1a);
+		box-shadow: inset 0 0 0 1px rgb(240 196 112 / 0.35);
+		color: var(--on-ink-soft);
+		font-size: 14px;
+		line-height: 1.55;
+	}
+
+	.poster-saved :global(svg) {
+		flex: none;
+		margin-top: 2px;
+		color: var(--gold);
+	}
+
+	.poster-saved strong {
+		display: block;
+		margin-bottom: 2px;
+		color: var(--on-ink);
+		font-size: 15px;
+	}
+
+	.poster-saved .mono {
+		color: var(--gold);
+		letter-spacing: 0.06em;
+		white-space: nowrap;
 	}
 
 	.meter {

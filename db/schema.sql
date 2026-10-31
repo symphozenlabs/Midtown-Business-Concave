@@ -44,6 +44,12 @@ alter table registrations add column if not exists updated_at           timestam
 -- Back of the ID card (QR and details), made when the organisers confirm payment.
 alter table registrations add column if not exists ticket_back_key      text;
 
+-- Delegate-pass voucher applied on the payment step (the voucher list itself is the
+-- "vouchers" row in settings). amount_rupees is the fee less discount_rupees.
+alter table registrations add column if not exists voucher_code    text;
+alter table registrations add column if not exists discount_rupees numeric(10, 2) not null default 0;
+create index if not exists registrations_voucher_idx on registrations (voucher_code) where voucher_code is not null;
+
 -- Optional LinkedIn profile, shown on the delegate's scan page and contact card.
 alter table registrations add column if not exists linkedin text check (char_length(linkedin) <= 200);
 

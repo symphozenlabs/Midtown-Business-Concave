@@ -1,7 +1,9 @@
 import { dev } from '$app/env';
 import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/event-settings.ts';
 import { DEFAULT_PAYMENT, type PaymentSettings } from '#lib/payment.ts';
+import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
+import { findVoucher, listVouchers } from './vouchers.ts';
 
 export type Status = 'pending_payment' | 'payment_submitted' | 'paid' | 'rejected';
 export const STATUSES: Status[] = ['payment_submitted', 'pending_payment', 'paid', 'rejected'];
@@ -51,6 +53,9 @@ export interface Registration extends RegistrationInput {
 	ticketEmailCheckedAt: string | null;
 	/** Storage key of the ID card back (QR and details); made once the payment is confirmed. */
 	ticketBackKey: string | null;
+	/** Delegate-pass voucher applied on the payment step; amountRupees is already reduced by it. */
+	voucherCode: string | null;
+	discountRupees: number;
 	createdAt: string;
 }
 
@@ -67,7 +72,23 @@ export function emailStateOf(r: Pick<Registration, 'ticketEmailedAt' | 'ticketEm
 
 export type PaymentResult =
 	| { ok: true; registration: Registration }
-	| { ok: false; reason: 'not_found' | 'paid' | 'utr_used' };
+	| { ok: false; reason: 'not_found' | 'paid' | 'utr_used' | 'utr_required' };
+
+/** What an unpaid delegate should pay now. */
+export interface PaymentDetails {
+	status: Status;
+	amountRupees: number;
+	vpa: string;
+	payeeName: string;
+	/** The fee before any voucher. */
+	priceRupees: number;
+	voucherCode: string | null;
+	discountRupees: number;
+}
+
+export type VoucherResult =
+	| { ok: true; details: PaymentDetails }
+	| { ok: false; reason: 'not_found' | 'not_pending' | 'invalid' | 'closed' | 'used_up' };
 
 export interface Stats {
 	counts: Record<Status, number>;
@@ -126,6 +147,8 @@ function fromRow(r: Record<string, any>): Registration {
 		ticketEmailEvent: r.ticket_email_event ?? null,
 		ticketEmailCheckedAt: iso(r.ticket_email_checked_at),
 		ticketBackKey: r.ticket_back_key ?? null,
+		voucherCode: r.voucher_code ?? null,
+		discountRupees: Number(r.discount_rupees ?? 0),
 		createdAt: iso(r.created_at)!
 	};
 }
@@ -135,7 +158,8 @@ function fromRow(r: Record<string, any>): Registration {
 const mem = {
 	rows: new Map<string, Registration>(),
 	payment: { ...DEFAULT_PAYMENT } as PaymentSettings,
-	event: { ...DEFAULT_EVENT } as EventSettings
+	event: { ...DEFAULT_EVENT } as EventSettings,
+	frontsOutdated: null as FrontsOutdated | null
 };
 
 const now = () => new Date().toISOString();
@@ -171,39 +195,181 @@ export async function savePaymentSettings(settings: PaymentSettings, by: string)
 		mem.payment = { ...settings };
 		let repriced = 0;
 		for (const row of mem.rows.values()) {
-			if (row.status !== 'pending_payment' || row.amountRupees === settings.priceRupees) continue;
+			if (row.status !== 'pending_payment' || row.voucherCode || row.amountRupees === settings.priceRupees) continue;
 			row.amountRupees = settings.priceRupees;
 			repriced++;
 		}
-		return repriced;
+		return repriced + (await syncVoucherHolders());
 	}
 	await writeSetting('payment', settings, by);
+	await ensureVoucherColumns();
 	const rows = await sql()`
 		update registrations set amount_rupees = ${settings.priceRupees}, updated_at = now()
-		where status = 'pending_payment' and amount_rupees <> ${settings.priceRupees}
+		where status = 'pending_payment' and voucher_code is null and amount_rupees <> ${settings.priceRupees}
 		returning id`;
-	return rows.length;
+	return rows.length + (await syncVoucherHolders());
+}
+
+/* ---------- vouchers ---------- */
+
+/** Added on first use when db/schema.sql has not been rerun. */
+async function ensureVoucherColumns() {
+	await Promise.all([
+		ensureColumn('registrations', 'voucher_code'),
+		ensureColumn('registrations', 'discount_rupees', 'numeric(10, 2) not null default 0')
+	]);
+}
+
+/**
+ * Unpaid delegates holding a voucher pay the current fee less the voucher's
+ * current discount. Run after the fee or a voucher changes. A voucher that no
+ * longer exists (or no longer covers the delegate pass) is taken off. Returns
+ * how many registrations changed.
+ */
+export async function syncVoucherHolders(): Promise<number> {
+	const [{ priceRupees: price }, vouchers] = await Promise.all([getPaymentSettings(), listVouchers()]);
+	const byCode = new Map(vouchers.filter((v) => v.scope === 'pass').map((v) => [v.code, v]));
+	const target = (code: string) => {
+		const v = byCode.get(code);
+		const discount = v ? discountFor(v, price) : 0;
+		return { code: v ? code : null, discount, amount: price - discount };
+	};
+
+	if (useMemory) {
+		let changed = 0;
+		for (const row of mem.rows.values()) {
+			if (row.status !== 'pending_payment' || !row.voucherCode) continue;
+			const t = target(row.voucherCode);
+			if (t.code === row.voucherCode && t.discount === row.discountRupees && t.amount === row.amountRupees) continue;
+			Object.assign(row, { voucherCode: t.code, discountRupees: t.discount, amountRupees: t.amount });
+			changed++;
+		}
+		return changed;
+	}
+
+	await ensureVoucherColumns();
+	const held = await sql()`
+		select distinct voucher_code from registrations where status = 'pending_payment' and voucher_code is not null`;
+	let changed = 0;
+	for (const { voucher_code: code } of held) {
+		const t = target(code);
+		const rows = await sql()`
+			update registrations set voucher_code = ${t.code}, discount_rupees = ${t.discount},
+				amount_rupees = ${t.amount}, updated_at = now()
+			where status = 'pending_payment' and voucher_code = ${code}
+				and (${t.code}::text is null or discount_rupees <> ${t.discount} or amount_rupees <> ${t.amount})
+			returning id`;
+		changed += rows.length;
+	}
+	return changed;
+}
+
+/** How many registrations hold each voucher code (any status), and how many of those are paid. */
+export async function voucherUsage(): Promise<Record<string, { used: number; paid: number }>> {
+	const usage: Record<string, { used: number; paid: number }> = {};
+	if (useMemory) {
+		for (const r of mem.rows.values()) {
+			if (!r.voucherCode) continue;
+			const u = (usage[r.voucherCode] ??= { used: 0, paid: 0 });
+			u.used++;
+			if (r.status === 'paid') u.paid++;
+		}
+		return usage;
+	}
+	await ensureVoucherColumns();
+	const rows = await sql()`
+		select voucher_code, count(*)::int as used, count(*) filter (where status = 'paid')::int as paid
+		from registrations where voucher_code is not null group by voucher_code`;
+	for (const r of rows) usage[r.voucher_code] = { used: r.used, paid: r.paid };
+	return usage;
+}
+
+/**
+ * Applies a delegate-pass voucher to an unpaid registration, or with null takes
+ * it off. The voucher is claimed here, not when the payment is reported, so the
+ * delegate pays the amount they were shown. Claims of one code take turns behind
+ * a lock, so the last use cannot go to two delegates at once.
+ */
+export async function applyVoucher(code: string, email: string, rawVoucher: string | null): Promise<VoucherResult> {
+	const settings = await getPaymentSettings();
+	const price = settings.priceRupees;
+	const wanted = rawVoucher ? normaliseVoucherCode(rawVoucher) : null;
+	const voucher: Voucher | null = wanted ? await findVoucher(wanted) : null;
+	if (wanted && (!voucher || voucher.scope !== 'pass')) return { ok: false, reason: 'invalid' };
+
+	const reg = await findForPayment(code, email);
+	if (!reg) return { ok: false, reason: 'not_found' };
+	if (reg.status !== 'pending_payment') return { ok: false, reason: 'not_pending' };
+	// Already holding this code: it stays theirs even if the voucher has since closed or filled up.
+	const already = !!voucher && reg.voucherCode === voucher.code;
+	if (voucher && !already && !voucher.active) return { ok: false, reason: 'closed' };
+
+	const discount = voucher ? discountFor(voucher, price) : 0;
+	const next = { voucherCode: voucher?.code ?? null, discountRupees: discount, amountRupees: price - discount };
+
+	if (useMemory) {
+		const row = mem.rows.get(reg.id)!;
+		if (voucher && !already) {
+			const holders = [...mem.rows.values()].filter((r) => r.voucherCode === voucher.code && r.id !== row.id).length;
+			if (holders >= voucher.quantity) return { ok: false, reason: 'used_up' };
+		}
+		Object.assign(row, next);
+		return { ok: true, details: detailsOf(row, settings) };
+	}
+
+	await ensureVoucherColumns();
+	let rows: Record<string, any>[];
+	if (voucher && !already) {
+		const [, updated] = await sql().transaction([
+			sql()`select pg_advisory_xact_lock(hashtext(${'voucher:' + voucher.code}))::text as locked`,
+			sql()`
+				update registrations set voucher_code = ${next.voucherCode}, discount_rupees = ${next.discountRupees},
+					amount_rupees = ${next.amountRupees}, updated_at = now()
+				where id = ${reg.id} and status = 'pending_payment'
+					and (select count(*) from registrations where voucher_code = ${voucher.code} and id <> ${reg.id}) < ${voucher.quantity}
+				returning *`
+		]);
+		rows = updated as Record<string, any>[];
+	} else {
+		rows = await sql()`
+			update registrations set voucher_code = ${next.voucherCode}, discount_rupees = ${next.discountRupees},
+				amount_rupees = ${next.amountRupees}, updated_at = now()
+			where id = ${reg.id} and status = 'pending_payment'
+			returning *`;
+	}
+	if (rows[0]) return { ok: true, details: detailsOf(fromRow(rows[0]), settings) };
+	// Nothing changed: either the payment was reported meanwhile, or the voucher filled up.
+	const latest = await findForPayment(code, email);
+	return { ok: false, reason: latest?.status === 'pending_payment' ? 'used_up' : 'not_pending' };
+}
+
+async function findForPayment(code: string, email: string): Promise<Registration | null> {
+	if (useMemory) {
+		return [...mem.rows.values()].find((r) => r.code === code && r.email.toLowerCase() === email.toLowerCase()) ?? null;
+	}
+	const rows = await sql()`select * from registrations where code = ${code} and lower(email) = lower(${email})`;
+	return rows[0] ? fromRow(rows[0]) : null;
+}
+
+function detailsOf(r: Registration, settings: PaymentSettings): PaymentDetails {
+	return {
+		status: r.status,
+		amountRupees: r.amountRupees,
+		vpa: settings.vpa,
+		payeeName: settings.payeeName,
+		priceRupees: r.amountRupees + r.discountRupees,
+		voucherCode: r.voucherCode,
+		discountRupees: r.discountRupees
+	};
 }
 
 /**
  * What an unpaid delegate should pay right now: their amount and the current UPI
  * payee. Null when the code and email do not match a registration.
  */
-export async function getPaymentDetails(
-	code: string,
-	email: string
-): Promise<{ status: Status; amountRupees: number; vpa: string; payeeName: string } | null> {
-	const settings = await getPaymentSettings();
-	let found: Pick<Registration, 'status' | 'amountRupees'> | undefined;
-	if (useMemory) {
-		found = [...mem.rows.values()].find((r) => r.code === code && r.email.toLowerCase() === email);
-	} else {
-		const rows = await sql()`
-			select status, amount_rupees from registrations where code = ${code} and lower(email) = ${email}`;
-		if (rows[0]) found = { status: rows[0].status, amountRupees: Number(rows[0].amount_rupees) };
-	}
-	if (!found) return null;
-	return { status: found.status, amountRupees: found.amountRupees, vpa: settings.vpa, payeeName: settings.payeeName };
+export async function getPaymentDetails(code: string, email: string): Promise<PaymentDetails | null> {
+	const [settings, found] = await Promise.all([getPaymentSettings(), findForPayment(code, email)]);
+	return found ? detailsOf(found, settings) : null;
 }
 
 /** When the event happens; shown on the public page and in ticket emails. */
@@ -219,6 +385,49 @@ export async function saveEventSettings(settings: EventSettings, by: string) {
 		return;
 	}
 	await writeSetting('event', settings, by);
+}
+
+/*
+ * ID card fronts are drawn once, with the date and time of the moment. After the
+ * schedule changes, the dashboard offers to redraw them all; this records that.
+ */
+export interface FrontsOutdated {
+	since: string;
+	by: string;
+}
+
+export async function getFrontsOutdated(): Promise<FrontsOutdated | null> {
+	if (useMemory) return mem.frontsOutdated;
+	const value = (await readSetting('frontsOutdated')) as Partial<FrontsOutdated> | null | undefined;
+	return value && typeof value.since === 'string' ? { since: value.since, by: String(value.by ?? '') } : null;
+}
+
+export async function setFrontsOutdated(value: FrontsOutdated | null, by: string) {
+	if (useMemory) {
+		mem.frontsOutdated = value;
+		return;
+	}
+	await writeSetting('frontsOutdated', value, by);
+}
+
+/** What the browser needs to redraw every delegate's ID card front. */
+export async function listFrontJobs(): Promise<
+	Pick<Registration, 'id' | 'code' | 'fullName' | 'designation' | 'companyName' | 'industry' | 'photoKey' | 'posterFraming'>[]
+> {
+	const pick = (r: Registration) => ({
+		id: r.id,
+		code: r.code,
+		fullName: r.fullName,
+		designation: r.designation,
+		companyName: r.companyName,
+		industry: r.industry,
+		photoKey: r.photoKey,
+		posterFraming: r.posterFraming
+	});
+	if (useMemory) return [...mem.rows.values()].filter((r) => r.photoKey).map(pick);
+	const rows = await sql()`
+		select * from registrations where photo_key is not null and photo_key <> '' order by created_at`;
+	return rows.map(fromRow).map(pick);
 }
 
 /* ---------- registrations ---------- */
@@ -255,6 +464,8 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			ticketEmailEvent: null,
 			ticketEmailCheckedAt: null,
 			ticketBackKey: null,
+			voucherCode: null,
+			discountRupees: 0,
 			createdAt: now()
 		};
 		mem.rows.set(row.id, row);
@@ -323,28 +534,35 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 	return fromRow(rows[0]);
 }
 
-/** The delegate reports their UPI transaction ID. They can correct it until the admin has reviewed it. */
-export async function submitPayment(code: string, email: string, utr: string): Promise<PaymentResult> {
+/**
+ * The delegate reports their UPI transaction ID. They can correct it until the admin has reviewed it.
+ * Without one (null), only a registration whose voucher covers the whole fee goes through.
+ */
+export async function submitPayment(code: string, email: string, utr: string | null): Promise<PaymentResult> {
 	if (useMemory) {
 		const row = [...mem.rows.values()].find((r) => r.code === code && r.email.toLowerCase() === email.toLowerCase());
 		if (!row) return { ok: false, reason: 'not_found' };
 		if (row.status === 'paid') return { ok: false, reason: 'paid' };
-		if ([...mem.rows.values()].some((r) => r.upiTxnId === utr && r.id !== row.id)) return { ok: false, reason: 'utr_used' };
+		if (!utr && row.amountRupees > 0) return { ok: false, reason: 'utr_required' };
+		if (utr && [...mem.rows.values()].some((r) => r.upiTxnId === utr && r.id !== row.id)) return { ok: false, reason: 'utr_used' };
 		Object.assign(row, { status: 'payment_submitted', upiTxnId: utr, paymentSubmittedAt: now(), rejectionReason: null });
 		return { ok: true, registration: row };
 	}
 
-	const existing = await sql()`select id, status from registrations where code = ${code} and lower(email) = lower(${email})`;
+	const existing = await sql()`
+		select id, status, amount_rupees from registrations where code = ${code} and lower(email) = lower(${email})`;
 	if (!existing[0]) return { ok: false, reason: 'not_found' };
 	if (existing[0].status === 'paid') return { ok: false, reason: 'paid' };
+	if (!utr && Number(existing[0].amount_rupees) > 0) return { ok: false, reason: 'utr_required' };
 	try {
+		// A free registration only goes through while it is still free: the fee may have changed meanwhile.
 		const rows = await sql()`
 			update registrations set
 				status = 'payment_submitted', upi_txn_id = ${utr}, payment_submitted_at = now(),
 				rejection_reason = null, updated_at = now()
-			where id = ${existing[0].id} and status <> 'paid'
+			where id = ${existing[0].id} and status <> 'paid' and (${utr}::text is not null or amount_rupees = 0)
 			returning *`;
-		if (!rows[0]) return { ok: false, reason: 'paid' };
+		if (!rows[0]) return { ok: false, reason: utr ? 'paid' : 'utr_required' };
 		return { ok: true, registration: fromRow(rows[0]) };
 	} catch (e) {
 		if (uniqueViolation(e) === 'registrations_upi_txn_id_key') return { ok: false, reason: 'utr_used' };
@@ -532,6 +750,32 @@ export async function markRejected(id: string, by: string, reason: string): Prom
 		where id = ${id} and status <> 'paid'
 		returning *`;
 	return rows[0] ? fromRow(rows[0]) : null;
+}
+
+/**
+ * Deletes a registration for good. Its desk records (pass tokens, check-ins, meals,
+ * certificates, connections) go with it; the scan log keeps its rows, unlinked.
+ * Returns the deleted row so the caller can remove its stored images.
+ */
+export async function deleteRegistration(id: string): Promise<Registration | null> {
+	if (useMemory) {
+		const row = mem.rows.get(id) ?? null;
+		mem.rows.delete(id);
+		return row;
+	}
+	if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+	const rows = await sql()`delete from registrations where id = ${id} returning *`;
+	return rows[0] ? fromRow(rows[0]) : null;
+}
+
+/** Records where the ID card front (poster) is stored, after the organiser redraws it. */
+export async function setPosterKey(id: string, key: string) {
+	if (useMemory) {
+		const row = mem.rows.get(id);
+		if (row) row.posterKey = key;
+		return;
+	}
+	await sql()`update registrations set poster_key = ${key}, updated_at = now() where id = ${id}`;
 }
 
 /** Records (or, with null, forgets) the ID card back, e.g. after the QR is reissued. */

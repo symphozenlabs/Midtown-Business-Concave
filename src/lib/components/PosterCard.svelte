@@ -4,6 +4,7 @@
 	import {
 		POSTER_K,
 		analysePhoto,
+		limitFraming,
 		loadImage,
 		loadPosterAssets,
 		renderPoster,
@@ -12,6 +13,7 @@
 		type PosterState
 	} from '#lib/poster/renderer.ts';
 	import { resolvedIndustry, type RegistrationDraft } from '#lib/registration.ts';
+	import { siteConfig } from '#lib/site-config.svelte.ts';
 
 	interface Props {
 		draft: RegistrationDraft;
@@ -43,7 +45,8 @@
 		photoMeta,
 		zoom,
 		dx,
-		dy
+		dy,
+		event: siteConfig.event
 	});
 
 	onMount(() => {
@@ -92,9 +95,23 @@
 	function onPointerMove(event: PointerEvent) {
 		if (!drag) return;
 		const s = canvas.width / canvas.clientWidth / POSTER_K;
-		dx = Math.round(drag.dx + (event.clientX - drag.x) * s);
-		dy = Math.round(drag.dy + (event.clientY - drag.y) * s);
+		// Stop at the arch's edge: the photo can never be dragged out of it.
+		const kept = limitFraming({
+			...posterState,
+			dx: Math.round(drag.dx + (event.clientX - drag.x) * s),
+			dy: Math.round(drag.dy + (event.clientY - drag.y) * s)
+		});
+		dx = kept.dx;
+		dy = kept.dy;
 	}
+
+	// Sliders and zoom changes: settle the offsets on what is actually shown.
+	$effect(() => {
+		if (!photo || dragging) return;
+		const kept = limitFraming(posterState);
+		if (kept.dx !== dx) dx = kept.dx;
+		if (kept.dy !== dy) dy = kept.dy;
+	});
 
 	function onPointerUp() {
 		drag = null;

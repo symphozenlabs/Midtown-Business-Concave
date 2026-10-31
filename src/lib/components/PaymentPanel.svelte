@@ -1,7 +1,19 @@
 <script lang="ts">
-	import { ArrowLeft, ArrowRight, Check, CircleAlert, Copy, LoaderCircle, Smartphone } from '@lucide/svelte';
+	import {
+		ArrowLeft,
+		ArrowRight,
+		Check,
+		ChevronRight,
+		CircleAlert,
+		Copy,
+		Gift,
+		LoaderCircle,
+		Smartphone,
+		TicketPercent,
+		X
+	} from '@lucide/svelte';
 	import { formatRupees, normaliseUtr, upiLink } from '#lib/payment.ts';
-	import type { PendingRegistration } from '#lib/submit.ts';
+	import { SubmitError, applyVoucher, type PaymentDetails, type PendingRegistration } from '#lib/submit.ts';
 	import TextField from './TextField.svelte';
 	import UpiQr from './UpiQr.svelte';
 
@@ -9,15 +21,56 @@
 		pending: PendingRegistration;
 		busy: boolean;
 		error: string | null;
-		oncomplete: (utr: string) => void;
+		/** The UPI transaction ID, or null when a voucher covers the whole fee. */
+		oncomplete: (utr: string | null) => void;
+		onvoucher: (details: PaymentDetails) => void;
 		onback: () => void;
 	}
 
-	let { pending, busy, error, oncomplete, onback }: Props = $props();
+	let { pending, busy, error, oncomplete, onvoucher, onback }: Props = $props();
 
 	let utr = $state('');
 	let utrError = $state<string | null>(null);
 	let copied = $state(false);
+
+	/* ---------- voucher ---------- */
+
+	let voucherOpen = $state(false);
+	let voucherCode = $state('');
+	let voucherError = $state<string | null>(null);
+	let voucherBusy = $state(false);
+	let voucherInput = $state<HTMLInputElement | null>(null);
+
+	const discount = $derived(pending.voucherCode ? (pending.discountRupees ?? 0) : 0);
+	const fullPrice = $derived(pending.priceRupees ?? pending.amountRupees + discount);
+	const free = $derived(discount > 0 && pending.amountRupees <= 0);
+
+	async function openVoucher() {
+		voucherOpen = true;
+		voucherError = null;
+		await Promise.resolve();
+		voucherInput?.focus();
+	}
+
+	async function setVoucher(code: string) {
+		if (voucherBusy) return;
+		if (code && !code.trim()) {
+			voucherError = 'Enter your voucher code.';
+			return;
+		}
+		voucherBusy = true;
+		voucherError = null;
+		try {
+			const details = await applyVoucher(pending, code.trim());
+			onvoucher(details);
+			voucherOpen = false;
+			voucherCode = '';
+		} catch (e) {
+			voucherError = e instanceof SubmitError && e.message ? e.message : 'The voucher could not be checked. Please try again.';
+		} finally {
+			voucherBusy = false;
+		}
+	}
 
 	const amount = $derived(formatRupees(pending.amountRupees));
 	const link = $derived(
@@ -41,6 +94,10 @@
 
 	function complete(event: SubmitEvent) {
 		event.preventDefault();
+		if (free) {
+			oncomplete(null);
+			return;
+		}
 		const value = normaliseUtr(utr);
 		if (!value) {
 			utrError = utr.trim()
@@ -54,9 +111,85 @@
 	}
 </script>
 
+{#snippet voucherBox()}
+	<div class="voucher">
+		{#if pending.voucherCode}
+			<div class="voucher-applied" role="status">
+				<TicketPercent size={18} aria-hidden="true" />
+				<p>
+					Voucher <strong class="code">{pending.voucherCode}</strong> applied:
+					<strong>{formatRupees(discount)} off</strong>
+				</p>
+				<button type="button" class="btn btn-ghost voucher-remove" onclick={() => setVoucher('')} disabled={voucherBusy || busy}>
+					{#if voucherBusy}<LoaderCircle size={15} class="spin" aria-hidden="true" />{:else}<X size={15} aria-hidden="true" />{/if}
+					Remove
+				</button>
+			</div>
+		{:else if voucherOpen}
+			<div class="voucher-entry" class:has-error={!!voucherError}>
+				<label for="field-voucher" class="voucher-label">Voucher code</label>
+				<div class="voucher-row">
+					<input
+						id="field-voucher"
+						bind:this={voucherInput}
+						bind:value={voucherCode}
+						autocomplete="off"
+						autocapitalize="characters"
+						spellcheck="false"
+						maxlength={20}
+						placeholder="e.g. EARLYBIRD"
+						aria-invalid={voucherError ? 'true' : undefined}
+						aria-describedby={voucherError ? 'voucher-error' : undefined}
+						oninput={() => {
+							voucherCode = voucherCode.toUpperCase();
+							voucherError = null;
+						}}
+						onkeydown={(e) => {
+							// Enter applies the code instead of submitting the payment form.
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								setVoucher(voucherCode);
+							}
+						}}
+					/>
+					<button type="button" class="btn btn-secondary" onclick={() => setVoucher(voucherCode)} disabled={voucherBusy}>
+						{#if voucherBusy}<LoaderCircle size={16} class="spin" aria-hidden="true" /> Checking…{:else}Apply{/if}
+					</button>
+					<button type="button" class="btn btn-ghost" onclick={() => ((voucherOpen = false), (voucherError = null))} disabled={voucherBusy}>
+						Cancel
+					</button>
+				</div>
+				{#if voucherError}
+					<p class="voucher-error" id="voucher-error" role="alert"><CircleAlert size={15} aria-hidden="true" /> {voucherError}</p>
+				{/if}
+			</div>
+		{:else}
+			<button type="button" class="voucher-open" onclick={openVoucher}>
+				<span class="voucher-icon"><TicketPercent size={20} aria-hidden="true" /></span>
+				<span class="voucher-text">
+					<strong>Have a voucher code?</strong>
+					<span>Apply it before you pay to get your discount.</span>
+				</span>
+				<span class="voucher-cta">Apply <ChevronRight size={16} aria-hidden="true" /></span>
+			</button>
+		{/if}
+	</div>
+{/snippet}
+
 <div class="pay">
+	{#if free}
+		<div class="qr-card">
+			<span class="kicker">Covered by voucher</span>
+			<s class="was">{formatRupees(fullPrice)}</s>
+			<strong class="amount">{formatRupees(0)}</strong>
+			<span class="gift"><Gift size={56} strokeWidth={1.4} aria-hidden="true" /></span>
+			<p class="payee">Nothing to pay</p>
+			<p class="ref">Voucher <strong>{pending.voucherCode}</strong> covers the full fee</p>
+		</div>
+	{:else}
 	<div class="qr-card">
 		<span class="kicker">Scan and pay</span>
+		{#if discount > 0}<s class="was">{formatRupees(fullPrice)}</s>{/if}
 		<strong class="amount">{amount}</strong>
 		<div class="qr-wrap">
 			<UpiQr {link} label="UPI payment QR: {amount} to {pending.payeeName}, reference {pending.code}" />
@@ -75,8 +208,16 @@
 		</a>
 		<p class="ref">Reference <strong>{pending.code}</strong> is added to the payment note</p>
 	</div>
+	{/if}
 
 	<form class="details" novalidate onsubmit={complete}>
+		{#if free}
+		<p class="free-note">
+			Your voucher covers the whole fee, so there is nothing to pay. Complete your registration and we will email your
+			ticket once the organisers confirm it.
+		</p>
+		{@render voucherBox()}
+		{:else}
 		<ol class="how">
 			<li>
 				<span class="num">1</span>
@@ -98,6 +239,8 @@
 			</li>
 		</ol>
 
+		{@render voucherBox()}
+
 		<TextField
 			id="field-utr"
 			label="UPI transaction ID"
@@ -114,6 +257,7 @@
 				if (utrError && normaliseUtr(utr)) utrError = null;
 			}}
 		/>
+		{/if}
 
 		{#if error}
 			<div class="alert" role="alert">
@@ -126,7 +270,7 @@
 			<button type="button" class="btn btn-ghost" onclick={onback} disabled={busy}>
 				<ArrowLeft size={18} aria-hidden="true" /> Edit details
 			</button>
-			<button type="submit" class="btn btn-primary submit" disabled={busy}>
+			<button type="submit" class="btn btn-primary submit" disabled={busy || voucherBusy}>
 				{#if busy}
 					<LoaderCircle size={18} class="spin" aria-hidden="true" /> Sending…
 				{:else}
@@ -176,6 +320,187 @@
 		width: 100%;
 		max-width: 230px;
 		margin-block: var(--space-2);
+	}
+
+	.was {
+		margin-bottom: -6px;
+		font: 500 16px/1.2 var(--font-sans);
+		color: var(--on-ink-soft);
+		opacity: 0.75;
+	}
+
+	.gift {
+		display: grid;
+		place-items: center;
+		width: 120px;
+		height: 120px;
+		margin-block: var(--space-3);
+		border-radius: 50%;
+		background: rgb(227 176 75 / 0.12);
+		color: var(--gold);
+	}
+
+	/* Voucher ------------------------------------------------------------- */
+
+	/* A card, not a link: easy to spot between the steps and the transaction ID. */
+	.voucher-open {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		width: 100%;
+		padding: var(--space-3) var(--space-4);
+		border: 1.5px dashed var(--gold-ink);
+		border-radius: var(--radius-md);
+		background: var(--gold-tint);
+		color: var(--charcoal);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background var(--duration-feedback) var(--ease-out),
+			border-color var(--duration-feedback) var(--ease-out);
+	}
+
+	.voucher-open:hover {
+		border-style: solid;
+		background: #f8ead0;
+	}
+
+	.voucher-open:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.voucher-icon {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: var(--ink);
+		color: var(--gold);
+	}
+
+	.voucher-text {
+		display: grid;
+		flex: 1;
+		min-width: 0;
+		gap: 2px;
+	}
+
+	.voucher-text strong {
+		font: 600 16px/1.3 var(--font-sans);
+		color: var(--charcoal);
+	}
+
+	.voucher-text span {
+		font-size: 14px;
+		line-height: 1.4;
+		color: var(--text-supporting);
+	}
+
+	.voucher-cta {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 2px;
+		font: 600 14px/1 var(--font-sans);
+		color: var(--gold-ink);
+	}
+
+	.voucher-entry {
+		display: grid;
+		gap: var(--space-2);
+	}
+
+	.voucher-label {
+		font: var(--text-ui);
+		color: var(--charcoal);
+	}
+
+	.voucher-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.voucher-row input {
+		flex: 1 1 180px;
+		min-width: 0;
+		min-height: var(--control-height);
+		padding: 0 var(--space-4);
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-md);
+		background: var(--white);
+		color: var(--charcoal);
+		font-size: 16px;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.voucher-row input::placeholder {
+		color: #8b8f86;
+		letter-spacing: normal;
+		text-transform: none;
+	}
+
+	.voucher-row input:hover,
+	.voucher-row input:focus {
+		border-color: var(--charcoal);
+	}
+
+	.voucher-row input:focus {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.has-error .voucher-row input {
+		border-color: var(--danger);
+	}
+
+	.voucher-error {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 14px;
+		color: var(--danger);
+	}
+
+	.voucher-applied {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+		border-radius: var(--radius-sm);
+		background: var(--success-tint);
+		color: var(--success);
+	}
+
+	.voucher-applied :global(svg) {
+		flex: none;
+	}
+
+	.voucher-applied p {
+		flex: 1;
+		min-width: 0;
+		font-size: 15px;
+		color: var(--charcoal);
+	}
+
+	.voucher-applied .code {
+		letter-spacing: 0.06em;
+	}
+
+	.voucher-remove {
+		flex: none;
+		min-height: 36px;
+	}
+
+	.free-note {
+		font-size: 15px;
+		line-height: 1.55;
+		color: var(--text-body);
 	}
 
 	.payee {

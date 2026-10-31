@@ -53,8 +53,13 @@
 		<span class="chip"><Clock size={15} aria-hidden="true" /> Payment under review</span>
 		<h3 tabindex="-1" bind:this={heading}>Your ticket is on its way</h3>
 		<p class="lead">
-			Thank you. We have your UPI transaction ID <strong class="mono">{utr}</strong>. Once the organisers confirm your
-			payment, your “I am attending” ticket will be sent to <strong>{email}</strong>.
+			{#if utr}
+				Thank you. We have your UPI transaction ID <strong class="mono">{utr}</strong>. Once the organisers confirm your
+				payment, your “I am attending” ticket will be sent to <strong>{email}</strong>.
+			{:else}
+				Thank you. Your voucher covers the full fee. Once the organisers confirm it, your “I am attending” ticket will be
+				sent to <strong>{email}</strong>.
+			{/if}
 		</p>
 
 		<ol class="timeline">

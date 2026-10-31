@@ -25,13 +25,17 @@ const ensured = new Map<string, Promise<void>>();
  * Adds a nullable column the code needs if db/schema.sql has not been rerun yet,
  * once per server instance. Same statement as the schema, so it is safe to repeat.
  */
-export function ensureColumn(table: 'registrations' | 'event_handlers', column: string) {
+export function ensureColumn(
+	table: 'registrations' | 'event_handlers',
+	column: string,
+	type: 'text' | 'numeric(10, 2) not null default 0' = 'text'
+) {
 	if (!/^[a-z_]+$/.test(column)) throw new Error(`Bad column name: ${column}`);
 	const key = `${table}.${column}`;
 	let done = ensured.get(key);
 	if (!done) {
 		done = sql()
-			.query(`alter table ${table} add column if not exists ${column} text`)
+			.query(`alter table ${table} add column if not exists ${column} ${type}`)
 			.then(() => undefined)
 			.catch((e) => {
 				ensured.delete(key);

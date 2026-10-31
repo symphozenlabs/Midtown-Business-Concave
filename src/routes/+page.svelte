@@ -11,7 +11,7 @@
 	<title>Register · {EVENT.name} 2026</title>
 	<meta
 		name="description"
-		content="Register for the {EVENT.name}: {EVENT.dateLabel}, {EVENT.timeLabel}, {EVENT.venue}. Presented by {EVENT.presenter}."
+		content="Register for the {EVENT.name} in {EVENT.venue}. Presented by {EVENT.presenter}."
 	/>
 	<meta property="og:title" content="Register · {EVENT.name} 2026" />
 	<meta property="og:description" content={EVENT.tagline} />
