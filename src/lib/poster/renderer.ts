@@ -402,7 +402,6 @@ export function renderPoster(canvas: HTMLCanvasElement, st: PosterState, A: Post
 export interface BackState {
 	name: string;
 	title: string;
-	company: string;
 	code: string;
 	/** The pass QR, already drawn at any size; scaled into the white card. */
 	qr: CanvasImageSource;
@@ -414,13 +413,12 @@ const BACK = {
 	mbc: { cx: 540, y: 276, w: 430 },
 	eyebrow: { y: 520, size: 26, track: 9, line: { len: 70, gap: 26 } },
 	qr: { cx: 540, y: 556, card: 488, pad: 34 },
-	photo: { cy: 1134, r: 62 },
-	name: { y: 1258, size: 56, maxW: 760 },
-	title: { y: 1300, size: 24, track: 6, maxW: 640 },
-	company: { y: 1352, size: 44, maxW: 760 },
-	code: { cy: 1410, h: 50, size: 26, track: 6, pad: 46 },
-	scan: { y: 1482, size: 18, track: 5 },
-	note: { y: 1522, size: 20 }
+	photo: { cy: 1146, r: 66 },
+	name: { y: 1286, size: 58, maxW: 760 },
+	title: { y: 1332, size: 26, track: 6, maxW: 640 },
+	code: { cy: 1402, h: 52, size: 26, track: 6, pad: 46 },
+	scan: { y: 1478, size: 18, track: 5 },
+	note: { y: 1518, size: 20 }
 } as const;
 
 function drawEyebrow(ctx: Ctx, text: string, cx: number, y: number, size: number, track: number, ln: { len: number; gap: number }) {
@@ -557,7 +555,6 @@ function drawBackDetails(ctx: Ctx, st: BackState) {
 		cx = 540;
 	const name = st.name.trim() || 'Delegate';
 	const title = st.title.trim().toUpperCase();
-	const company = st.company.trim();
 	ctx.save();
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'alphabetic';
@@ -575,12 +572,6 @@ function drawBackDetails(ctx: Ctx, st: BackState) {
 		const ts = fitFont(ctx, title, (s) => `700 ${s}px ${SANS}`, B.title.maxW, B.title.size, 12, B.title.track);
 		ctx.fillStyle = gold(ctx, cx - 220, 0, cx + 220, 0);
 		drawSpaced(ctx, title, cx, B.title.y, (B.title.track * ts) / B.title.size, 'center');
-	}
-
-	if (company) {
-		fitFont(ctx, company, (s) => `italic 700 ${s}px ${SERIF}`, B.company.maxW, B.company.size, 18);
-		ctx.fillStyle = '#FFFFFF';
-		ctx.fillText(company, cx, B.company.y);
 	}
 
 	// registration number in the front's category-pill style
@@ -651,7 +642,6 @@ export function renderBack(canvas: HTMLCanvasElement, st: BackState, A: PosterAs
 export interface BackFileInput {
 	name: string;
 	title: string;
-	company: string;
 	code: string;
 	/** What the QR encodes: the delegate's pass link. */
 	qrText: string;
@@ -673,7 +663,7 @@ export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WI
 		color: { dark: '#0b1430', light: '#ffffff' }
 	});
 	const canvas = document.createElement('canvas');
-	renderBack(canvas, { name: input.name, title: input.title, company: input.company, code: input.code, qr, photo }, assets, width);
+	renderBack(canvas, { name: input.name, title: input.title, code: input.code, qr, photo }, assets, width);
 	const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
 	canvas.width = 0;
 	canvas.height = 0;

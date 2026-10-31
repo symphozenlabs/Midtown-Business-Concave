@@ -115,7 +115,13 @@ export function parseScanned(text: string): { token: string } | { code: string }
 /* ---------- the back of the ID card ---------- */
 
 /** Versioned, so a reissued QR makes the old back out of date. */
-export const cardBackKey = (registrationId: string, version: number) => `registrations/2026/${registrationId}-back-v${version}.jpg`;
+/**
+ * Bump BACK_DESIGN when the back's layout changes: every existing back then has a
+ * stale key, so the admin dashboard redraws and replaces them all.
+ */
+const BACK_DESIGN = 2;
+export const cardBackKey = (registrationId: string, version: number) =>
+	`registrations/2026/${registrationId}-back-d${BACK_DESIGN}-v${version}.jpg`;
 
 export interface CardBackJob {
 	id: string;

@@ -11,6 +11,8 @@ export interface RegistrationDraft {
 	/** What the company does, in a line: shown to organisers for introductions. */
 	about: string;
 	website: string;
+	/** Optional LinkedIn profile, shown on the delegate's scan page and contact card. */
+	linkedin: string;
 	city: string;
 	cityOther: string;
 	interests: Interest[];
@@ -30,6 +32,7 @@ export function emptyDraft(): RegistrationDraft {
 		industryOther: '',
 		about: '',
 		website: '',
+		linkedin: '',
 		city: '',
 		cityOther: '',
 		interests: [],
@@ -103,6 +106,7 @@ export const LIMITS = {
 	about: 200,
 	email: 120,
 	website: 200,
+	linkedin: 200,
 	city: 60
 } as const;
 
@@ -129,7 +133,7 @@ export const STEPS: Step[] = [
 		label: 'Business',
 		title: 'Your business',
 		intro: 'This helps us introduce you to the right people on the day.',
-		fields: ['companyName', 'designation', 'industry', 'industryOther', 'about', 'website']
+		fields: ['companyName', 'designation', 'industry', 'industryOther', 'about', 'website', 'linkedin']
 	},
 	{
 		id: 'day',
@@ -155,6 +159,7 @@ export const STEPS: Step[] = [
 ];
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const LINKEDIN = /^(https?:\/\/)?([a-z]{2,3}\.)?linkedin\.com\/\S+$/i;
 const DOMAIN = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(\/\S*)?$/i;
 
 /** Returns +91XXXXXXXXXX for a valid Indian mobile number, otherwise null. */
@@ -233,6 +238,12 @@ export function validateField(key: FieldKey, d: RegistrationDraft, hasPhoto: boo
 			const v = d.website.trim();
 			if (!v) return null;
 			if (!DOMAIN.test(v) || v.length > LIMITS.website) return 'Enter a web address like yourcompany.com.';
+			return null;
+		}
+		case 'linkedin': {
+			const v = d.linkedin.trim();
+			if (!v) return null;
+			if (!LINKEDIN.test(v) || v.length > LIMITS.linkedin) return 'Paste your LinkedIn profile link, like linkedin.com/in/yourname.';
 			return null;
 		}
 		case 'city':

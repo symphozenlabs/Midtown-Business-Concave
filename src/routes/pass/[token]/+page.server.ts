@@ -9,9 +9,10 @@ import type { Actions, PageServerLoad } from './$types';
 export const prerender = false;
 
 /**
- * What a phone camera opens when it scans the QR on a delegate's ID card: the details
- * they registered with (photo, role, company, industry, city, interests), never their
- * phone or email. A delegate signed in to their own pass on this phone can ask to connect.
+ * What a phone camera opens when it scans the QR on a delegate's ID card: their contact
+ * card (name, phone, email, company, designation, LinkedIn and website when given) with a
+ * "Save contact" vCard, plus industry, city and interests. A delegate signed in to their
+ * own pass on this phone can also connect, which lists each other on their passes.
  */
 export const load: PageServerLoad = async ({ params, cookies }) => {
 	if (!(await opsReady())) return { valid: false as const };
@@ -49,7 +50,7 @@ export const actions: Actions = {
 		if (!allow(`connect:${p.me}`, 30, 60_000)) return fail(429, { message: 'Too many requests. Wait a moment.' });
 		if (!(await publicProfile(p.other))) return fail(409, { message: 'This delegate cannot receive requests.' });
 		const state = await consent(p.eventId, p.me, p.other);
-		return { success: state === 'connected' ? 'Connected. Contact details are on your pass.' : 'Request sent. You are connected once they accept.' };
+		return { success: state === 'connected' ? 'Connected. You are listed on each other’s pass.' : 'Request sent. You are connected once they accept.' };
 	},
 
 	withdraw: async ({ params, cookies }) => {

@@ -44,6 +44,9 @@ alter table registrations add column if not exists updated_at           timestam
 -- Back of the ID card (QR and details), made when the organisers confirm payment.
 alter table registrations add column if not exists ticket_back_key      text;
 
+-- Optional LinkedIn profile, shown on the delegate's scan page and contact card.
+alter table registrations add column if not exists linkedin text check (char_length(linkedin) <= 200);
+
 -- Ticket email delivery, as reported by Resend (GET /emails/:id, needs a Full access API key):
 --   ticket_email_id     Resend's id for the last ticket email
 --   ticket_email_event  Resend's last_event (sent, delivered, bounced, delivery_delayed, …)

@@ -141,18 +141,18 @@
 		<div class="ops-secret" role="status" transition:slide={{ duration: 200, easing: cubicOut }}>
 			<BadgeCheck size={18} aria-hidden="true" />
 			<span>
-				Created <b>{form.created.fullName}</b>. Username <strong>{form.created.username}</strong> · temporary password
+				Created <b>{form.created.fullName}</b>. Username <strong>{form.created.username}</strong> · password
 				<strong>{form.created.password}</strong>
 			</span>
 			<button
 				type="button"
 				class="btn btn-secondary ops-btn-sm"
-				onclick={() => copyCredentials(`Username: ${form!.created!.username}\nTemporary password: ${form!.created!.password}\nSign in: ${location.origin}/login`)}
+				onclick={() => copyCredentials(`Username: ${form!.created!.username}\nPassword: ${form!.created!.password}\nSign in: ${location.origin}/login`)}
 			>
 				<Copy size={14} aria-hidden="true" />
 				{copied ? 'Copied' : 'Copy sign-in details'}
 			</button>
-			<span class="ops-muted">Shown once. They must choose their own password at first sign-in.</span>
+			<span class="ops-muted">Same password as the admin sign-in.</span>
 		</div>
 	{:else if form?.message && !creating}
 		<div class="ops-banner error" role="alert"><CircleAlert size={16} aria-hidden="true" /><p>{form.message}</p></div>
@@ -272,8 +272,8 @@
 					<h2 id="signin-title">How handlers sign in</h2>
 				</div>
 				<ol class="steps">
-					<li>Create the account and share the temporary password once.</li>
-					<li>They open the sign-in page on their phone and choose their own password.</li>
+					<li>Create the account; it uses the admin password.</li>
+					<li>They open the sign-in page on their phone and sign in with their username.</li>
 					<li>They see only the desks you assigned.</li>
 				</ol>
 				<div class="signin-link">
@@ -290,7 +290,7 @@
 		bind:open={creating}
 		wide
 		title="Create a new handler"
-		description="A temporary password is generated and shown once; they choose their own at first sign-in."
+		description="The handler signs in with their username and the admin password."
 	>
 		{#key formKey}
 			<form

@@ -1,5 +1,5 @@
 import { dev } from '$app/env';
-import { PASS_SECRET } from '$app/env/private';
+import { ADMIN_PASSWORD, PASS_SECRET } from '$app/env/private';
 import type { Category } from '#lib/ops/categories.ts';
 import { ensureColumn, sql, uniqueViolation } from '../db.ts';
 import { DUMMY_HASH, hashPassword, randomToken, seal, sha256Hex, temporaryPassword, unseal, verifyPassword } from '../crypto.ts';
@@ -186,7 +186,7 @@ function assignmentInserts(handlerId: string, eventId: string, list: AssignmentI
 	);
 }
 
-/** Creates the account and its desks in one transaction; returns the temporary password once. */
+/** Creates the account and its desks in one transaction. New handlers sign in with the admin password. */
 export async function createHandler(
 	input: HandlerInput,
 	eventId: string,
@@ -194,13 +194,13 @@ export async function createHandler(
 	by: string
 ): Promise<{ handler: Handler; temporaryPassword: string }> {
 	const id = crypto.randomUUID();
-	const password = temporaryPassword();
+	const password = ADMIN_PASSWORD || temporaryPassword();
 	const hash = await hashPassword(password);
 	try {
 		await sql().transaction([
 			sql()`
 				insert into event_handlers (id, full_name, username, email, mobile, password_hash, must_change_password, created_by)
-				values (${id}, ${input.fullName}, ${input.username}, ${input.email}, ${input.mobile}, ${hash}, true, ${by})`,
+				values (${id}, ${input.fullName}, ${input.username}, ${input.email}, ${input.mobile}, ${hash}, false, ${by})`,
 			...assignmentInserts(id, eventId, assignments)
 		]);
 	} catch (e) {
