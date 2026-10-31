@@ -10,13 +10,18 @@ const HANDLER_PUBLIC = ['/handler/login', '/handler/forgot', '/handler/reset'];
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
-	if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+	// Organiser sign-in lives at /login and Configuration became Payments; old bookmarks still work.
+	if (pathname === '/admin/login') redirect(308, '/login');
+	if (pathname === '/admin/configuration') redirect(308, '/admin/payments');
+
+	const isLogin = pathname === '/login';
+	if (isLogin || pathname === '/admin' || pathname.startsWith('/admin/')) {
 		const admin = await readSession(event.cookies.get(SESSION_COOKIE));
 		if (admin) event.locals.admin = admin;
 
-		if (!admin && !pathname.startsWith('/admin/login')) {
+		if (!admin && !isLogin) {
 			if (pathname.startsWith('/admin/media/')) return new Response('Not found', { status: 404 });
-			redirect(303, '/admin/login');
+			redirect(303, '/login');
 		}
 	}
 
@@ -39,7 +44,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event);
-	if (pathname.startsWith('/admin') || pathname.startsWith('/api/') || isHandlerPage || pathname.startsWith('/me') || pathname.startsWith('/pass/')) {
+	if (isLogin || pathname.startsWith('/admin') || pathname.startsWith('/api/') || isHandlerPage || pathname.startsWith('/me') || pathname.startsWith('/pass/')) {
 		response.headers.set('cache-control', 'no-store');
 		response.headers.set('x-robots-tag', 'noindex');
 	}

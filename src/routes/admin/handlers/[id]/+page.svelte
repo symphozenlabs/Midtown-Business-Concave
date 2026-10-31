@@ -130,15 +130,15 @@
 		<p class="ops-hint">No scans yet.</p>
 	{:else}
 		<div class="ops-table-wrap">
-			<table class="ops-table">
+			<table class="ops-table stack">
 				<thead><tr><th>Time</th><th>Desk</th><th>Participant</th><th>Result</th></tr></thead>
 				<tbody>
 					{#each data.transactions as t (t.id)}
 						<tr>
-							<td class="ops-muted">{fmt(t.at)}</td>
-							<td>{categoryInfo(t.category as Category).label}</td>
-							<td>{t.participantName ?? '—'} <span class="ops-muted ops-mono">{t.participantCode ?? ''}</span></td>
-							<td><span class="ops-pill {t.result}">{RESULT[t.result]}</span> <span class="ops-muted">{t.title}</span></td>
+							<td class="ops-muted" data-label="Time">{fmt(t.at)}</td>
+							<td data-label="Desk">{categoryInfo(t.category as Category).label}</td>
+							<td class="lead">{t.participantName ?? '—'} <span class="ops-muted ops-mono">{t.participantCode ?? ''}</span></td>
+							<td class="end"><span class="ops-pill {t.result}">{RESULT[t.result]}</span> <span class="ops-muted">{t.title}</span></td>
 						</tr>
 					{/each}
 				</tbody>
@@ -153,15 +153,15 @@
 		<p class="ops-hint">Nothing recorded yet.</p>
 	{:else}
 		<div class="ops-table-wrap">
-			<table class="ops-table">
+			<table class="ops-table stack">
 				<thead><tr><th>Time</th><th>Who</th><th>What</th><th>Details</th></tr></thead>
 				<tbody>
 					{#each data.auditLog as a (a.id)}
 						<tr>
-							<td class="ops-muted">{fmt(a.at)}</td>
-							<td>{a.actor} <span class="ops-muted">({a.actorType})</span></td>
-							<td class="ops-mono">{a.action}</td>
-							<td class="ops-muted details">{a.details ? JSON.stringify(a.details) : ''}</td>
+							<td class="ops-muted" data-label="Time">{fmt(a.at)}</td>
+							<td data-label="Who">{a.actor} <span class="ops-muted">({a.actorType})</span></td>
+							<td class="ops-mono lead">{a.action}</td>
+							<td class="ops-muted details" data-label="Details">{a.details ? JSON.stringify(a.details) : ''}</td>
 						</tr>
 					{/each}
 				</tbody>

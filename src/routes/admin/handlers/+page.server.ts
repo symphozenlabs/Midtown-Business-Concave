@@ -6,7 +6,7 @@ import { DuplicateHandlerError, createHandler, listHandlers } from '#lib/server/
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.admin) redirect(303, '/admin/login');
+	if (!locals.admin) redirect(303, '/login');
 	if (!(await opsReady())) return { available: false as const };
 	const event = await getDefaultEvent();
 	const [events, handlers, options, ov] = await Promise.all([listEvents(), listHandlers(), assignmentOptions(event.id), overview(event.id)]);

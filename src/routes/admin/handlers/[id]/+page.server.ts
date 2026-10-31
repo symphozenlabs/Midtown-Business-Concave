@@ -15,7 +15,7 @@ import {
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
-	if (!locals.admin) redirect(303, '/admin/login');
+	if (!locals.admin) redirect(303, '/login');
 	if (!(await opsReady())) redirect(303, '/admin/handlers');
 	const handler = await getHandler(params.id);
 	if (!handler) error(404, 'No such handler.');

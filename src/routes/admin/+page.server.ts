@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { SESSION_COOKIE } from '#lib/server/auth.ts';
+import { SESSION_COOKIE, SESSION_COOKIE_PATH } from '#lib/server/auth.ts';
 import { isDatabaseConfigured } from '#lib/server/db.ts';
 import {
 	EmailError,
@@ -43,7 +43,7 @@ const SEND_GAP_MS = 550;
 const CHECK_BATCH = 25;
 
 export const load: PageServerLoad = async ({ url, locals }) => {
-	if (!locals.admin) redirect(303, '/admin/login');
+	if (!locals.admin) redirect(303, '/login');
 	const configured = { database: isDatabaseConfigured, storage: isR2Configured, email: isEmailConfigured };
 	if (!isStoreAvailable) {
 		return { configured, available: false as const };
@@ -250,7 +250,8 @@ export const actions: Actions = {
 	},
 
 	logout: async ({ cookies }) => {
+		cookies.delete(SESSION_COOKIE, { path: SESSION_COOKIE_PATH });
 		cookies.delete(SESSION_COOKIE, { path: '/admin' });
-		redirect(303, '/admin/login');
+		redirect(303, '/login');
 	}
 };

@@ -1,7 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { dev } from '$app/env';
-import { SESSION_COOKIE, SESSION_HOURS, checkCredentials, createSession, isAdminConfigured } from '#lib/server/auth.ts';
+import { SESSION_COOKIE, SESSION_COOKIE_PATH, SESSION_HOURS, checkCredentials, createSession, isAdminConfigured } from '#lib/server/auth.ts';
 import type { Actions, PageServerLoad } from './$types';
+
+// Private and per-request: never prerendered.
+export const prerender = false;
 
 export const load: PageServerLoad = ({ locals }) => {
 	if (locals.admin) redirect(303, '/admin');
@@ -21,8 +24,10 @@ export const actions: Actions = {
 			return fail(400, { email, message: 'That email and password do not match.' });
 		}
 
+		// Clear a cookie from before sign-in moved to /login, so only one session cookie is sent.
+		cookies.delete(SESSION_COOKIE, { path: '/admin' });
 		cookies.set(SESSION_COOKIE, await createSession(), {
-			path: '/admin',
+			path: SESSION_COOKIE_PATH,
 			httpOnly: true,
 			sameSite: 'strict',
 			secure: !dev,

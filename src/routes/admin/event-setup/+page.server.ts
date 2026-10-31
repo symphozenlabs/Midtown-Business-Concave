@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { toEventFormFields } from '#lib/event-settings.ts';
+import { sameName } from '#lib/catalog.ts';
+import { fromEventFormFields, toEventFormFields } from '#lib/event-settings.ts';
 import { sql, uniqueViolation } from '#lib/server/db.ts';
 import { sendPassEmail } from '#lib/server/email.ts';
 import {
@@ -21,19 +22,16 @@ import {
 } from '#lib/server/ops/event.ts';
 import { accessPath, isPassConfigured, markPassEmailed, passUrl, reissuePass } from '#lib/server/ops/passes.ts';
 import { qrPng } from '#lib/server/qr-png.ts';
-import { getEventSettings, getRegistration } from '#lib/server/store.ts';
+import { getEventSettings, getRegistration, isStoreAvailable, saveEventSettings } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.admin) redirect(303, '/admin/login');
-	if (!(await opsReady())) return { available: false as const };
+	if (!locals.admin) redirect(303, '/login');
+	// The date and time are editable even before the event-desk tables exist.
+	const schedule = isStoreAvailable ? await getEventSettings() : null;
+	if (!(await opsReady())) return { available: false as const, schedule };
 	const event = await getDefaultEvent();
-	const [gates, sessions, meals, schedule] = await Promise.all([
-		listGates(event.id),
-		listSessions(event.id),
-		listMeals(event.id),
-		getEventSettings()
-	]);
+	const [gates, sessions, meals] = await Promise.all([listGates(event.id), listSessions(event.id), listMeals(event.id)]);
 	return {
 		available: true as const,
 		passesReady: isPassConfigured,
@@ -41,7 +39,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		gates,
 		sessions,
 		meals,
-		eventDate: toEventFormFields(schedule).date
+		schedule,
+		eventDate: schedule ? toEventFormFields(schedule).date : ''
 	};
 };
 
@@ -56,6 +55,16 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const at = (date: string, time: string) => (DATE.test(date) && TIME.test(time) ? `${date}T${time}:00+05:30` : null);
 
 export const actions: Actions = {
+	/** When the event happens, in Indian time: shown on the site, the countdown and the emails. */
+	saveEvent: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { scope: 'schedule', message: 'Sign in again.' });
+		const form = await request.formData();
+		const result = fromEventFormFields({ date: text(form, 'date'), start: text(form, 'start'), end: text(form, 'end') });
+		if (!result.ok) return fail(400, { scope: 'schedule', errors: result.errors, message: 'Check the date and time.' });
+		await saveEventSettings(result.settings, locals.admin.email);
+		return { scope: 'schedule', success: 'Event date and time saved. The site, countdown and emails use them now.' };
+	},
+
 	rules: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { scope: 'rules', message: 'Sign in again.' });
 		const form = await request.formData();
@@ -86,9 +95,13 @@ export const actions: Actions = {
 
 	addGate: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { scope: 'gates', message: 'Sign in again.' });
-		const name = text(await request.formData(), 'name').slice(0, 60);
+		const name = text(await request.formData(), 'name').replace(/\s+/g, ' ').slice(0, 60);
 		if (!name) return fail(400, { scope: 'gates', message: 'Name the gate.' });
 		const event = await getDefaultEvent();
+		// Case and spacing do not make a new gate: Main gate and main  GATE are the same.
+		if ((await listGates(event.id)).some((g) => sameName(g.name, name))) {
+			return fail(409, { scope: 'gates', message: `There is already a gate called ${name}.` });
+		}
 		try {
 			await addGate(event.id, name);
 		} catch (e) {
@@ -112,7 +125,8 @@ export const actions: Actions = {
 	addSession: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { scope: 'sessions', message: 'Sign in again.' });
 		const form = await request.formData();
-		const hall = text(form, 'hall').slice(0, 60);
+		// An existing hall from the dropdown, or the name typed for a new one.
+		const hall = (text(form, 'hall') || text(form, 'newHall')).replace(/\s+/g, ' ').slice(0, 60);
 		const title = text(form, 'title').slice(0, 120);
 		const startsAt = at(text(form, 'date'), text(form, 'start'));
 		const endsAt = at(text(form, 'date'), text(form, 'end'));

@@ -13,7 +13,7 @@
 	let { eyebrow, title, intro, inline = false, children }: Props = $props();
 </script>
 
-<!-- Same card as the organiser sign-in (/admin/login). -->
+<!-- Same card as the organiser sign-in (/login). -->
 <main class="auth" class:inline>
 	<section class="card" aria-labelledby="auth-title">
 		{#if !inline}

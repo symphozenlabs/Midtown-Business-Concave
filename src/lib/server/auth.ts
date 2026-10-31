@@ -2,6 +2,8 @@ import { ADMIN_EMAIL, ADMIN_PASSWORD } from '$app/env/private';
 
 export const SESSION_COOKIE = 'mbc_admin';
 export const SESSION_HOURS = 12;
+// Site-wide, so /login can tell a signed-in organiser to go straight to the dashboard.
+export const SESSION_COOKIE_PATH = '/';
 
 export const isAdminConfigured = Boolean(ADMIN_EMAIL && ADMIN_PASSWORD);
 

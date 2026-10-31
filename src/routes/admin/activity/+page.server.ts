@@ -5,7 +5,7 @@ import { listHandlers } from '#lib/server/ops/handlers.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	if (!locals.admin) redirect(303, '/admin/login');
+	if (!locals.admin) redirect(303, '/login');
 	if (!(await opsReady())) return { available: false as const };
 	const event = await getDefaultEvent();
 	const filter = readFilter(url.searchParams);

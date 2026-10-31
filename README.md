@@ -31,10 +31,16 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
   table filter by that state, and **Resend n failed emails** sends the ticket again to everyone whose email
   did not arrive. Reading email status needs a Resend API key with **Full access**; a *Sending access* key
   can send but not check. Run [db/schema.sql](db/schema.sql) again to add the delivery columns.
-- `/admin/configuration` sets the event fee and UPI ID (**Generate QR** saves both and regenerates the QR and
-  payment link the registration form uses), and the event date and time (shown in the hero, countdown and
-  ticket emails). The page shows the current QR and the `upi://pay` link that mobile users tap, and can read
-  the payee out of an uploaded QR image (a Google Pay or PhonePe screenshot, for example).
+- `/admin/payments` has three tabs. **Delegate pass** sets the event fee and UPI ID (**Generate QR** saves
+  both and regenerates the QR and payment link the registration form uses); it shows the current QR and the
+  `upi://pay` link mobile users tap, and can read the payee out of an uploaded QR image (a Google Pay or
+  PhonePe screenshot, for example). **Stalls** lists stall types, each with its own name, size in metres,
+  price and number available; **Memberships** lists plans with a price, how long they last and their
+  benefits. Both are added and edited in a popup, can be closed for sale, and each has its own payment QR and
+  link whose note names the item. They are paid to the delegate-pass UPI account unless given their own.
+  Names must be unique, ignoring case. Both lists live in the `settings` table, so no migration is needed.
+- `/admin/event-setup` sets the event date and time (shown in the hero, countdown and ticket emails), and the
+  gates (unique names), halls and sessions, meals and certificate rules.
 
 ## Event day: one QR, six desks
 
@@ -87,7 +93,7 @@ npm install
 npm run dev
 ```
 
-Fill in `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` to sign in at `http://localhost:5173/admin`. Without the
+Fill in `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` to sign in at `http://localhost:5173/login`. Without the
 service keys, development uses an in-memory stand-in (data resets when the dev server restarts) and prints
 emails in the terminal.
 
@@ -107,8 +113,8 @@ emails in the terminal.
    directory `.svelte-kit/cloudflare`, then add every variable from `.env.example` as an encrypted
    environment variable (Settings → Environment variables). Use a long, unique `ADMIN_PASSWORD`.
 
-The ticket price, the event date and time, and the UPI details behind the payment QR are changed at
-`/admin/configuration` (defaults: ₹500 to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
+The ticket price and the UPI details behind the payment QR are changed at `/admin/payments`, and the event date
+and time at `/admin/event-setup` (defaults: ₹500 to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
 stored in the `settings` table. A new fee or UPI ID also applies to delegates who registered but have not paid:
 their payment page picks up the new amount and QR within 30 seconds (or as soon as they return to the tab).
 Anyone who has already entered a UPI transaction ID keeps the amount they paid. The poster artwork carries its

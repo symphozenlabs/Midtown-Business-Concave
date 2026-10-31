@@ -927,6 +927,9 @@
 	/* Table ------------------------------------------------------------- */
 
 	.table-wrap {
+		/* Positioned, so visually hidden column labels stay inside the scroller on phones. */
+		position: relative;
+		min-width: 0;
 		overflow-x: auto;
 		margin-inline: calc(-1 * var(--space-6));
 		padding-inline: var(--space-6);
