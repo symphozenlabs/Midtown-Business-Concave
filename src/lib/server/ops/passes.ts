@@ -112,6 +112,52 @@ export function parseScanned(text: string): { token: string } | { code: string }
 	return null;
 }
 
+/* ---------- the back of the ID card ---------- */
+
+/** Versioned, so a reissued QR makes the old back out of date. */
+export const cardBackKey = (registrationId: string, version: number) => `registrations/2026/${registrationId}-back-v${version}.jpg`;
+
+export interface CardBackJob {
+	id: string;
+	/** Where the finished back must be stored. */
+	key: string;
+	/** What its QR encodes: the delegate's pass link. */
+	qrText: string;
+}
+
+/**
+ * Paid delegates whose ID card back is missing or shows an old QR. The organiser's
+ * browser draws these with the poster artwork and uploads them.
+ */
+export async function cardBacksToMake(
+	regs: { id: string; ticketBackKey: string | null }[],
+	origin: string,
+	limit = 12
+): Promise<CardBackJob[]> {
+	if (!regs.length || !isPassConfigured || !(await opsReady())) return [];
+	const event = await getDefaultEvent();
+	const rows = await sql()`
+		select registration_id, version from participant_qr_tokens
+		where event_id = ${event.id} and revoked_at is null and registration_id = any(${regs.map((r) => r.id)}::uuid[])`;
+	const versions = new Map<string, number>(rows.map((r) => [r.registration_id, r.version]));
+	const jobs: CardBackJob[] = [];
+	for (const reg of regs) {
+		if (jobs.length >= limit) break;
+		const version = versions.get(reg.id) ?? (await ensurePass(event.id, reg.id)).version;
+		const key = cardBackKey(reg.id, version);
+		if (reg.ticketBackKey === key) continue;
+		jobs.push({ id: reg.id, key, qrText: passUrl(origin, await qrToken(reg.id, version)) });
+	}
+	return jobs;
+}
+
+/** The key a back for this delegate must have right now, or null when passes are off. */
+export async function currentCardBackKey(registrationId: string): Promise<string | null> {
+	if (!isPassConfigured || !(await opsReady())) return null;
+	const event = await getDefaultEvent();
+	return cardBackKey(registrationId, (await ensurePass(event.id, registrationId)).version);
+}
+
 /* ---------- emailing passes ---------- */
 
 /** QR and "My pass" link for a delegate's email, or null when passes are not set up. */

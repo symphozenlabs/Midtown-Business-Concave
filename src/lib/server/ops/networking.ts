@@ -59,6 +59,22 @@ export async function publicProfile(registrationId: string): Promise<PublicProfi
 	return rows[0] ? profileFrom(rows[0]) : null;
 }
 
+/** What scanning the QR on the ID card shows: the details the delegate registered with (never phone or email). */
+export interface PassHolder extends PublicProfile {
+	code: string;
+	interests: string[];
+	photoKey: string | null;
+}
+
+export async function passHolder(registrationId: string): Promise<PassHolder | null> {
+	const rows = await sql()`
+		select id, code, full_name, designation, company_name, industry, city, about, website, interests, photo_key
+		from registrations where id = ${registrationId} and status = 'paid'`;
+	const r = rows[0];
+	if (!r) return null;
+	return { ...profileFrom(r), code: r.code, interests: r.interests ?? [], photoKey: r.photo_key ?? null };
+}
+
 /** Rows store the pair once, smaller id first, so each side has a fixed column. */
 const pair = (x: string, y: string) => (x.toLowerCase() < y.toLowerCase() ? { a: x, b: y, meIsA: true } : { a: y, b: x, meIsA: false });
 

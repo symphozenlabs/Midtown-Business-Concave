@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { opsReady } from '#lib/server/ops/event.ts';
-import { connectionState, consent, publicProfile, withdraw } from '#lib/server/ops/networking.ts';
+import { INTERESTS } from '#lib/registration.ts';
+import { connectionState, consent, passHolder, publicProfile, withdraw } from '#lib/server/ops/networking.ts';
 import { PARTICIPANT_COOKIE, readParticipant, resolveToken } from '#lib/server/ops/passes.ts';
 import { allow } from '#lib/server/rate-limit.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -8,9 +9,9 @@ import type { Actions, PageServerLoad } from './$types';
 export const prerender = false;
 
 /**
- * What a phone camera opens when it scans a delegate's QR. Strangers see only the
- * professional card (name, role, company, industry). A delegate signed in to their
- * own pass on this phone can ask to connect.
+ * What a phone camera opens when it scans the QR on a delegate's ID card: the details
+ * they registered with (photo, role, company, industry, city, interests), never their
+ * phone or email. A delegate signed in to their own pass on this phone can ask to connect.
  */
 export const load: PageServerLoad = async ({ params, cookies }) => {
 	if (!(await opsReady())) return { valid: false as const };
@@ -20,12 +21,15 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 	const viewer = await readParticipant(cookies.get(PARTICIPANT_COOKIE));
 	if (viewer?.registrationId === resolved.registrationId) redirect(303, '/me');
 
-	const profile = await publicProfile(resolved.registrationId);
-	if (!profile) return { valid: false as const };
+	const holder = await passHolder(resolved.registrationId);
+	if (!holder) return { valid: false as const };
+	const { photoKey, interests, ...profile } = holder;
 	const sameEvent = viewer?.eventId === resolved.eventId;
 	return {
 		valid: true as const,
 		profile,
+		hasPhoto: Boolean(photoKey),
+		interests: interests.map((v) => INTERESTS.find((i) => i.value === v)?.label ?? v),
 		signedIn: Boolean(viewer && sameEvent),
 		state: viewer && sameEvent ? await connectionState(resolved.eventId, viewer.registrationId, resolved.registrationId) : null
 	};

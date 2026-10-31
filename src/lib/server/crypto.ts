@@ -42,6 +42,32 @@ export function bytesEqual(a: Uint8Array, b: Uint8Array) {
 	return diff === 0;
 }
 
+/* ---------- reversible encryption ---------- */
+
+function aesKey(secret: string, purpose: string) {
+	return crypto.subtle
+		.digest('SHA-256', enc.encode(`${purpose}:${secret}`))
+		.then((raw) => crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']));
+}
+
+/** AES-GCM: "<iv>.<ciphertext>", both base64url. Tampering makes unseal fail. */
+export async function seal(text: string, secret: string, purpose: string) {
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+	const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(secret, purpose), enc.encode(text));
+	return `${b64url(iv)}.${b64url(new Uint8Array(data))}`;
+}
+
+export async function unseal(sealed: string, secret: string, purpose: string): Promise<string | null> {
+	const [iv, data] = sealed.split('.');
+	if (!iv || !data) return null;
+	try {
+		const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(iv) }, await aesKey(secret, purpose), fromB64url(data));
+		return new TextDecoder().decode(plain);
+	} catch {
+		return null;
+	}
+}
+
 /* ---------- passwords ---------- */
 
 // Cloudflare Workers cap PBKDF2 at 100,000 iterations.

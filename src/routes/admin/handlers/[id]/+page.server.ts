@@ -6,6 +6,8 @@ import {
 	DuplicateHandlerError,
 	deleteOrArchive,
 	getHandler,
+	handlerPasswords,
+	isPasswordLookupAvailable,
 	resetPassword,
 	revokeSessions,
 	setAssignments,
@@ -21,12 +23,22 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!handler) error(404, 'No such handler.');
 	const event = await getDefaultEvent();
 	const filter = { ...readFilter(new URLSearchParams()), handlerId: handler.id };
-	const [options, transactions, auditLog] = await Promise.all([
+	const [options, transactions, auditLog, passwords] = await Promise.all([
 		assignmentOptions(event.id),
 		listTransactions(event.id, filter, 50),
-		listAudit(50, handler.id)
+		listAudit(50, handler.id),
+		handlerPasswords([handler.id])
 	]);
-	return { handler, eventId: event.id, options, transactions, auditLog };
+	return {
+		handler,
+		eventId: event.id,
+		options,
+		transactions,
+		auditLog,
+		// Organisers can look up the current password (stored encrypted).
+		password: passwords[handler.id] ?? null,
+		passwordLookup: isPasswordLookupAvailable
+	};
 };
 
 const by = (locals: App.Locals) => locals.admin!.email;

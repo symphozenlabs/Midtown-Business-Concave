@@ -58,12 +58,15 @@ and what a scan does depends on the signed-in handler's assigned category:
 
 - **Organiser.** `/admin/handlers` creates handler accounts (there is no public sign-up): name, username,
   optional email and mobile, the event, and one or more categories with their gate, hall/session, meal and counter.
-  A temporary password is shown once; the handler must replace it at first sign-in. The organiser can edit, reset
+  A temporary password is generated; the handler must replace it at first sign-in. The organiser can always look up
+  and copy each handler's username and current password (kept encrypted with `PASS_SECRET`, besides the one-way hash
+  used for sign-in); passwords set before this was added show as not stored until reset. The organiser can edit, reset
   passwords, deactivate, sign out every device, change categories, and delete (archive, if the handler has scan
   history). `/admin/event-setup` holds gates, halls and sessions, meals (times, servings per delegate, who may
   collect), the re-entry rule, certificate rules and **Reissue QR** (revokes a lost or shared pass).
   `/admin/activity` shows totals by category and handler, filterable scan history, CSV export and the audit log.
-- **Handlers** sign in at `/handler/login`. One category opens its desk straight away; several show a choice. Tap
+- **Handlers** sign in at `/login` (the same page as the organiser) with their username or email; `/handler/login`
+  also works. One category opens its desk straight away; several show a choice. Tap
   **Start scanning**: the camera reads passes (rear or front camera, torch where the phone has one), each result
   fills the screen in green, amber or red with its own sound and vibration, and scanning resumes after a delay
   the handler chooses. **Manual lookup** finds a delegate by registration number or name when a QR will not scan.
@@ -74,7 +77,11 @@ and what a scan does depends on the signed-in handler's assigned category:
   gets the first answer back.
 - **Offline.** Hall attendance scanned without a connection is kept on the phone and sent when it reconnects.
   Gate entry, meals and certificates are never confirmed offline: the screen says *No connection, not recorded*.
-- **Delegates.** The ticket email now attaches the QR and an **Open my pass** link (private: it signs that phone in).
+- **Delegates.** The ticket email attaches the ID card front and back with an **Open my pass** link (private: it signs
+  that phone in). The front is the poster made at registration; the back, drawn in the organiser's browser from the
+  same artwork when the payment is marked paid, carries the QR, photo, name, role, company and registration number.
+  Its key includes the QR version, so a reissued QR gets a fresh back. Scanning the QR with any camera shows the
+  details the delegate registered with (never phone or email).
   On their pass they see the QR, connection requests and their certificate. Scanning another delegate's QR with
   any camera opens that delegate's card with **Connect**; phone and email are shared only once both accept, and
   either can withdraw. Delegates whose ticket went out earlier get their pass from the **event passes to send**

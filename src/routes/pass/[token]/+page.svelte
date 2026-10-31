@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import { BadgeCheck, CircleAlert, Handshake, UserRoundCheck } from '@lucide/svelte';
 	import PublicShell from '#lib/components/ops/PublicShell.svelte';
 
@@ -37,12 +38,24 @@
 		{/if}
 
 		<section class="ops-card" aria-labelledby="name">
-			<span class="ops-eyebrow">Confirmed delegate</span>
-			<h1 id="name" class="ops-title name">{data.profile.fullName}</h1>
-			<p class="role">{data.profile.designation}, {data.profile.companyName}</p>
+			<div class="holder">
+				{#if data.hasPhoto}
+					<img class="photo" src="/pass/{page.params.token}/photo" alt="Photo of {data.profile.fullName}" width="96" height="96" />
+				{:else}
+					<span class="photo initials" aria-hidden="true">{data.profile.fullName.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>
+				{/if}
+				<div>
+					<span class="ops-eyebrow"><BadgeCheck size={14} aria-hidden="true" /> Confirmed delegate · {data.profile.code}</span>
+					<h1 id="name" class="ops-title name">{data.profile.fullName}</h1>
+					<p class="role">{data.profile.designation}, {data.profile.companyName}</p>
+				</div>
+			</div>
 			<dl class="facts">
 				<div><dt>Industry</dt><dd>{data.profile.industry}</dd></div>
 				<div><dt>City</dt><dd>{data.profile.city}</dd></div>
+				{#if data.interests.length}
+					<div><dt>Interested in</dt><dd>{data.interests.join(', ')}</dd></div>
+				{/if}
 				{#if data.profile.website}
 					<div><dt>Website</dt><dd><a href={data.profile.website} rel="noopener noreferrer nofollow" target="_blank">{data.profile.website.replace(/^https?:\/\//, '')}</a></dd></div>
 				{/if}
@@ -92,6 +105,35 @@
 </PublicShell>
 
 <style>
+	.holder {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+	}
+
+	.photo {
+		flex: none;
+		width: 96px;
+		height: 96px;
+		border-radius: 50%;
+		object-fit: cover;
+		box-shadow: 0 0 0 3px var(--gold);
+	}
+
+	.initials {
+		display: grid;
+		place-items: center;
+		background: var(--ink);
+		color: var(--gold);
+		font: 700 30px/1 var(--font-sans);
+	}
+
+	.holder .ops-eyebrow {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
 	.name {
 		font-family: var(--font-display);
 		font-weight: 500;

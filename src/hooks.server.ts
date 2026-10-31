@@ -27,11 +27,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const isHandlerPage = pathname === '/handler' || pathname.startsWith('/handler/');
 	const isOpsApi = pathname.startsWith('/api/ops/');
-	if ((isHandlerPage || isOpsApi) && (await opsReady())) {
+	if ((isHandlerPage || isOpsApi || isLogin) && (await opsReady())) {
 		const handler = await readHandlerSession(event.cookies.get(HANDLER_COOKIE));
 		if (handler) event.locals.handler = handler;
 
-		const isPublic = HANDLER_PUBLIC.some((p) => pathname.startsWith(p));
+		const isPublic = isLogin || HANDLER_PUBLIC.some((p) => pathname.startsWith(p));
 		if (!handler && !isPublic) {
 			if (isOpsApi) return json({ message: 'Sign in again.' }, { status: 401 });
 			redirect(303, `/handler/login?next=${encodeURIComponent(pathname)}`);
