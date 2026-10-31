@@ -32,7 +32,6 @@
 		type FieldKey,
 		type Interest
 	} from '#lib/registration.ts';
-	import { DEFAULT_PAYMENT, formatRupees } from '#lib/payment.ts';
 	import { PosterError, renderPosterFile } from '#lib/poster/renderer.ts';
 	import {
 		SubmitError,
@@ -78,7 +77,6 @@
 	let pending = $state<PendingRegistration | null>(null);
 	let posterUrl = $state<string | null>(null);
 	let utrSent = $state('');
-	let price = $state(DEFAULT_PAYMENT.priceRupees);
 
 	let panel: HTMLElement;
 	let heading = $state<HTMLElement | null>(null);
@@ -113,9 +111,7 @@
 		narrow = query.matches;
 		query.addEventListener('change', (e) => (narrow = e.matches));
 		ready = true;
-		loadSiteConfig().then(() => {
-			price = siteConfig.priceRupees;
-		});
+		loadSiteConfig();
 		try {
 			const saved = localStorage.getItem(DRAFT_KEY);
 			if (saved) {
@@ -366,7 +362,6 @@
 			]
 		}
 	]);
-	const ticketPrice = $derived(formatRupees(pending?.amountRupees ?? price));
 
 	const industryOptions = INDUSTRIES.map((i) => ({ value: i, label: i }));
 	const heardOptions = HEARD_FROM.map((h) => ({ value: h, label: h }));
@@ -604,7 +599,7 @@
 										/>
 										<ChoiceChips
 											id="field-interests"
-											legend="What are you interested at the event?"
+											legend="What interests you at the event?"
 											help="You can pick more than one."
 											options={INTERESTS}
 											all={{ label: 'All of the above', description: 'I am interested in everything.', icon: allInterestsIcon }}
@@ -679,7 +674,7 @@
 										{/each}
 										<div class="ticket">
 											<div>
-												<strong>Delegate ticket · {ticketPrice}</strong>
+												<strong>Delegate ticket</strong>
 												<span>Pay by UPI on the next step. Your ticket is emailed once the payment is confirmed.</span>
 											</div>
 										</div>
@@ -705,7 +700,7 @@
 								{#if status === 'submitting'}
 									<LoaderCircle size={18} class="spin" aria-hidden="true" /> Preparing your ticket…
 								{:else if step === REVIEW}
-									Continue to payment · {ticketPrice} <ArrowRight size={18} aria-hidden="true" />
+									Proceed to pay <ArrowRight size={18} aria-hidden="true" />
 								{:else}
 									Continue <ArrowRight size={18} aria-hidden="true" />
 								{/if}

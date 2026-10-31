@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HTMLInputAttributes } from 'svelte/elements';
-	import { CircleAlert } from '@lucide/svelte';
+	import { CircleAlert, Eye, EyeOff } from '@lucide/svelte';
 
 	interface Props {
 		id: string;
@@ -42,6 +42,10 @@
 		oninput
 	}: Props = $props();
 
+	// Password fields get an eye button so people can check what they typed.
+	let revealed = $state(false);
+	const inputType = $derived(type === 'password' && revealed ? 'text' : type);
+
 	const describedBy = $derived(
 		[help && `${id}-help`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
 	);
@@ -77,7 +81,7 @@
 			<input
 				{id}
 				name={id}
-				{type}
+				type={inputType}
 				bind:value
 				{autocomplete}
 				{inputmode}
@@ -89,6 +93,18 @@
 				onblur={() => onblur?.()}
 				oninput={() => oninput?.(value)}
 			/>
+			{#if type === 'password'}
+				<button
+					type="button"
+					class="reveal"
+					aria-label={revealed ? 'Hide password' : 'Show password'}
+					aria-pressed={revealed}
+					aria-controls={id}
+					onclick={() => (revealed = !revealed)}
+				>
+					{#if revealed}<EyeOff size={18} aria-hidden="true" />{:else}<Eye size={18} aria-hidden="true" />{/if}
+				</button>
+			{/if}
 		{/if}
 	</div>
 
@@ -180,6 +196,26 @@
 		padding-block: var(--space-3);
 		resize: vertical;
 		line-height: 1.5;
+	}
+
+	.reveal {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 44px;
+		border: 0;
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--text-supporting);
+		cursor: pointer;
+	}
+
+	.reveal:hover {
+		color: var(--charcoal);
+	}
+
+	.reveal:focus-visible {
+		outline-offset: -4px;
 	}
 
 	input:focus,

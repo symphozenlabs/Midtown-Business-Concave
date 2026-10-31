@@ -3,14 +3,14 @@ export const EVENT = {
 	presenter: 'Salem Entrepreneurs Forum',
 	presenterTagline: 'Meet. Learn. Collaborate. Grow.',
 	tagline: 'Connecting entrepreneurs across Tamil Nadu at one place in Salem.',
-	// As on the client-approved "I am attending" artwork.
-	startsAt: '2026-11-28T10:00:00+05:30',
+	// The confirmed schedule; Event setup on the dashboard can change it.
+	startsAt: '2026-11-28T10:30:00+05:30',
 	endsAt: '2026-11-28T18:00:00+05:30',
 	dateLabel: 'Saturday, 28 November 2026',
 	shortDate: '28 Nov 2026',
-	timeLabel: '10.00 am – 6.00 pm',
+	timeLabel: '10.30 am – 6.00 pm',
 	compactDate: 'Sat, 28 Nov 2026',
-	compactTime: '10 am – 6 pm',
+	compactTime: '10.30 am – 6 pm',
 	compactVenue: 'Salem, TN',
 	venue: 'Salem, Tamil Nadu',
 	partners: [

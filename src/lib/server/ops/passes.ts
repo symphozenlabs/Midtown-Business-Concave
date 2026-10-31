@@ -1,9 +1,11 @@
 import { dev } from '$app/env';
 import { PASS_SECRET } from '$app/env/private';
+import type { EventSettings } from '#lib/event-settings.ts';
 import { sql } from '../db.ts';
 import { b64url, bytesEqual, fromB64url, hmac, hmacKey, sha256Hex } from '../crypto.ts';
 import type { PassEmail } from '../email.ts';
 import { qrPng } from '../qr-png.ts';
+import { getEventSettings } from '../store.ts';
 import { audit, getDefaultEvent, opsReady } from './event.ts';
 
 /**
@@ -114,15 +116,18 @@ export function parseScanned(text: string): { token: string } | { code: string }
 
 /* ---------- the back of the ID card ---------- */
 
-/** Versioned, so a reissued QR makes the old back out of date. */
 /**
- * Bump BACK_DESIGN when the back's layout changes: every existing back then has a
- * stale key, so the admin dashboard redraws and replaces them all.
+ * Versioned, so a reissued QR makes the old back out of date. The key also carries
+ * the schedule printed on the artwork, so changing the event date or time in Event
+ * setup makes every back stale too. Bump BACK_DESIGN when the back's layout changes:
+ * every existing back then has a stale key, and the admin dashboard redraws them all.
  */
 // 3: name, photo and designation taken off the back (they are on the front).
 const BACK_DESIGN = 3;
-export const cardBackKey = (registrationId: string, version: number) =>
-	`registrations/2026/${registrationId}-back-d${BACK_DESIGN}-v${version}.jpg`;
+const scheduleTag = (event: EventSettings) =>
+	[event.startsAt, event.endsAt].map((t) => (Date.parse(t) / 60000).toString(36)).join('-');
+export const cardBackKey = (registrationId: string, version: number, event: EventSettings) =>
+	`registrations/2026/${registrationId}-back-d${BACK_DESIGN}-v${version}-s${scheduleTag(event)}.jpg`;
 
 export interface CardBackJob {
 	id: string;
@@ -142,7 +147,7 @@ export async function cardBacksToMake(
 	limit = 12
 ): Promise<CardBackJob[]> {
 	if (!regs.length || !isPassConfigured || !(await opsReady())) return [];
-	const event = await getDefaultEvent();
+	const [event, schedule] = await Promise.all([getDefaultEvent(), getEventSettings()]);
 	const rows = await sql()`
 		select registration_id, version from participant_qr_tokens
 		where event_id = ${event.id} and revoked_at is null and registration_id = any(${regs.map((r) => r.id)}::uuid[])`;
@@ -151,7 +156,7 @@ export async function cardBacksToMake(
 	for (const reg of regs) {
 		if (jobs.length >= limit) break;
 		const version = versions.get(reg.id) ?? (await ensurePass(event.id, reg.id)).version;
-		const key = cardBackKey(reg.id, version);
+		const key = cardBackKey(reg.id, version, schedule);
 		if (reg.ticketBackKey === key) continue;
 		jobs.push({ id: reg.id, key, qrText: passUrl(origin, await qrToken(reg.id, version)) });
 	}
@@ -161,8 +166,8 @@ export async function cardBacksToMake(
 /** The key a back for this delegate must have right now, or null when passes are off. */
 export async function currentCardBackKey(registrationId: string): Promise<string | null> {
 	if (!isPassConfigured || !(await opsReady())) return null;
-	const event = await getDefaultEvent();
-	return cardBackKey(registrationId, (await ensurePass(event.id, registrationId)).version);
+	const [event, schedule] = await Promise.all([getDefaultEvent(), getEventSettings()]);
+	return cardBackKey(registrationId, (await ensurePass(event.id, registrationId)).version, schedule);
 }
 
 /* ---------- emailing passes ---------- */

@@ -561,6 +561,7 @@
 	.details {
 		display: grid;
 		gap: var(--space-6);
+		container-type: inline-size;
 	}
 
 	.how {
@@ -620,16 +621,16 @@
 
 	.nav {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-3);
 		padding-top: var(--space-6);
 		border-top: 1px solid var(--rule);
 	}
 
+	/* Takes the rest of the row, so it fits beside "Edit details" in the desktop column. */
 	.submit {
-		margin-left: auto;
-		min-width: 220px;
+		flex: 1 1 auto;
+		padding-inline: var(--space-4);
 	}
 
 	@media (max-width: 760px) {
@@ -644,17 +645,19 @@
 		}
 	}
 
-	/* Phones: full-width primary action on top, the way back below it. */
-	@media (max-width: 600px) {
+	/*
+	 * "Edit details" sits left of the primary action while both fit on one row (they
+	 * need about 375px). Narrower (phones, and the payment column on small laptops):
+	 * full-width primary action on top, the way back below it.
+	 */
+	@container (max-width: 374px) {
 		.nav {
 			flex-direction: column-reverse;
 			align-items: stretch;
 		}
 
 		.submit {
-			width: 100%;
-			min-width: 0;
-			margin-left: 0;
+			flex: none;
 		}
 	}
 </style>

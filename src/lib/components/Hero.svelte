@@ -326,12 +326,40 @@
 			--gap: clamp(8px, 1.9svh, 18px);
 		}
 
+		.bar {
+			gap: var(--space-3);
+		}
+
 		.organised-by {
 			font-size: 10px;
 		}
 
+		/* The logos shrink with the screen so they never run under the Register button. */
+		.organisers,
 		.logos {
-			gap: var(--space-3);
+			min-width: 0;
+		}
+
+		.logos {
+			gap: clamp(8px, 2.5vw, 12px);
+		}
+
+		.logos img {
+			min-width: 0;
+			height: auto;
+		}
+
+		.sef {
+			flex: 0 1 134px;
+		}
+
+		.me {
+			flex: 0 1 106px;
+		}
+
+		.small {
+			flex: none;
+			padding-inline: var(--space-3);
 		}
 
 		.lead {

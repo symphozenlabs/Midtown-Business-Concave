@@ -6,7 +6,7 @@
  * the artwork; keep them in sync with the poster maker if it is revised.
  */
 
-import { DEFAULT_EVENT, eventLabels, type EventSettings } from '#lib/event-settings.ts';
+import { eventLabels, type EventSettings } from '#lib/event-settings.ts';
 
 export interface PosterAssets {
 	sef: HTMLImageElement;
@@ -424,7 +424,8 @@ const SCHEDULE = {
 	maxW: 205
 } as const;
 
-const ARTWORK_SCHEDULE = eventLabels(DEFAULT_EVENT);
+// What bgFinal has printed in its bottom strip, whatever the current schedule.
+const ARTWORK_SCHEDULE = eventLabels({ startsAt: '2026-11-28T10:00:00+05:30', endsAt: '2026-11-28T18:00:00+05:30' });
 
 /** Rebuilds the panel behind a value by blending the clean rows above and below it. */
 function repaintPanel(ctx: Ctx, x: number, w: number) {
@@ -507,6 +508,8 @@ export interface BackState {
 	code: string;
 	/** The pass QR, already drawn at any size; scaled into the white card. */
 	qr: CanvasImageSource;
+	/** The saved schedule, so the artwork's date and time strip matches the front. */
+	event?: EventSettings | null;
 }
 
 const BACK = {
@@ -681,6 +684,7 @@ export function renderBack(canvas: HTMLCanvasElement, st: BackState, A: PosterAs
 
 	drawBackQr(ctx, st.qr);
 	drawBackDetails(ctx, st);
+	drawSchedule(ctx, st.event ?? null);
 	return canvas;
 }
 
@@ -688,6 +692,7 @@ export interface BackFileInput {
 	code: string;
 	/** What the QR encodes: the delegate's pass link. */
 	qrText: string;
+	event?: EventSettings | null;
 }
 
 /** Renders the ID card back as a 4K JPEG, the same size as the front. */
@@ -701,7 +706,7 @@ export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WI
 		color: { dark: '#0b1430', light: '#ffffff' }
 	});
 	const canvas = document.createElement('canvas');
-	renderBack(canvas, { code: input.code, qr }, assets, width);
+	renderBack(canvas, { code: input.code, qr, event: input.event }, assets, width);
 	const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
 	canvas.width = 0;
 	canvas.height = 0;

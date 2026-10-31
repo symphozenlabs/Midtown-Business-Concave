@@ -269,7 +269,7 @@
 			const { renderBackFile } = await import('#lib/poster/renderer.ts');
 			for (const job of jobs) {
 				try {
-					const blob = await renderBackFile({ code: job.code, qrText: job.qrText });
+					const blob = await renderBackFile({ code: job.code, qrText: job.qrText, event: data.available ? data.event : null });
 					const res = await fetch(`/admin/card-back/${job.id}`, { method: 'POST', body: blob, headers: { 'content-type': 'image/jpeg' } });
 					if (!res.ok) throw new Error(`${res.status}`);
 					backs!.done++;
@@ -1541,7 +1541,7 @@
 
 	.details-body {
 		display: grid;
-		grid-template-columns: 110px minmax(0, 1fr);
+		grid-template-columns: auto minmax(0, 1fr);
 		gap: var(--space-4) var(--space-6);
 		margin: 0 var(--space-3) var(--space-3) 48px;
 		padding: var(--space-4);
@@ -1554,11 +1554,13 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	/* Front and back of the ID card side by side. */
+	/* Front and back of the ID card side by side, each its own 110px column. */
 	.card-sides {
-		display: flex;
-		gap: var(--space-2);
-		align-items: flex-start;
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: 110px;
+		gap: var(--space-3);
+		align-items: start;
 	}
 
 	.poster {
@@ -1678,7 +1680,7 @@
 		display: grid;
 		justify-items: center;
 		gap: 2px;
-		max-width: 140px;
+		min-width: 0;
 	}
 
 	.regen {
