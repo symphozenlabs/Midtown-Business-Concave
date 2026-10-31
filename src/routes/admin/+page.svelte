@@ -84,7 +84,7 @@
 	const selected = new SvelteSet<string>();
 	let selecting = $state(false);
 	let rejecting = $state<string | null>(null);
-	// Which control is working: a row id, 'bulk', 'send', 'check' or 'resendFailed'.
+	// Which control is working: a row id, 'bulk', 'send', 'passes', 'check' or 'resendFailed'.
 	let busy = $state<string | null>(null);
 	let copied = $state<string | null>(null);
 
@@ -318,6 +318,24 @@
 						{/if}
 					</button>
 				</form>
+				{#if data.passesToSend > 0}
+					<form method="post" action={act('sendPasses')} use:enhance={working('passes')}>
+						<button
+							type="submit"
+							class="btn btn-sm send-btn has-queue"
+							disabled={busy === 'passes'}
+							title="Email the QR event pass to delegates whose ticket went out without one"
+						>
+							{#if busy === 'passes'}
+								<LoaderCircle size={15} class="spin" aria-hidden="true" /> Sending passes…
+							{:else}
+								<QrCode size={15} aria-hidden="true" />
+								<span class="badge">{data.passesToSend}</span>
+								event {data.passesToSend === 1 ? 'pass' : 'passes'} to send
+							{/if}
+						</button>
+					</form>
+				{/if}
 			</div>
 		</div>
 

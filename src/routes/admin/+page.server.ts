@@ -6,10 +6,12 @@ import {
 	emailStatusFor,
 	fetchEmailEvent,
 	isEmailConfigured,
+	sendPassEmail,
 	sendRejectionEmail,
 	sendTicketEmail
 } from '#lib/server/email.ts';
 import { getObject, isR2Configured } from '#lib/server/r2.ts';
+import { markPassEmailed, passEmailFor, passesToSend } from '#lib/server/ops/passes.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
@@ -59,26 +61,45 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 
-	const registrations = await listRegistrations({ status, q, email });
-	return { configured, available: true as const, stats, filter: { status, q, email }, registrations };
+	const [registrations, passes] = await Promise.all([listRegistrations({ status, q, email }), passesToSend(1)]);
+	return {
+		configured,
+		available: true as const,
+		stats,
+		passesToSend: passes.total,
+		filter: { status, q, email },
+		registrations
+	};
 };
 
-async function emailTicket(reg: Registration) {
+/** The pass is attached when event operations are set up; the ticket goes out either way. */
+async function passFor(reg: Registration, origin: string) {
+	try {
+		return await passEmailFor(reg, origin);
+	} catch (e) {
+		console.error('[admin] could not attach the event pass', e);
+		return null;
+	}
+}
+
+async function emailTicket(reg: Registration, origin: string) {
 	const poster = reg.posterKey ? await getObject(reg.posterKey) : null;
-	const emailId = await sendTicketEmail(reg, poster?.body ?? null);
+	const pass = await passFor(reg, origin);
+	const emailId = await sendTicketEmail(reg, poster?.body ?? null, pass);
 	await markTicketEmailed(reg.id, emailId);
+	if (pass) await markPassEmailed(reg.id);
 }
 
 const pause = () => new Promise((r) => setTimeout(r, SEND_GAP_MS));
 
 /** Sends tickets one by one within Resend's rate limit; returns who failed. */
-async function sendAll(queue: Registration[]) {
+async function sendAll(queue: Registration[], origin: string) {
 	let sent = 0;
 	const failed: string[] = [];
 	for (const [i, reg] of queue.entries()) {
 		if (i > 0) await pause();
 		try {
-			await emailTicket(reg);
+			await emailTicket(reg, origin);
 			sent++;
 		} catch (e) {
 			failed.push(`${reg.fullName} (${emailFailure(e)})`);
@@ -117,12 +138,12 @@ export const actions: Actions = {
 	},
 
 	/** Emails every paid delegate who has not received their ticket yet. */
-	sendTickets: async ({ locals }) => {
+	sendTickets: async ({ locals, url }) => {
 		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
 		const queue = await listUnsentTickets(SEND_BATCH);
 		if (!queue.length) return { success: 'Every paid delegate already has their ticket.' };
 
-		const { sent, failed } = await sendAll(queue);
+		const { sent, failed } = await sendAll(queue, url.origin);
 		const { ticketsToSend: left } = await getStats();
 		const parts = [`Sent ${plural(sent, 'ticket')}.`];
 		if (left > 0) parts.push(`${plural(left, 'ticket')} still waiting: click Send again to continue.`);
@@ -158,11 +179,11 @@ export const actions: Actions = {
 	},
 
 	/** Sends the ticket again to everyone whose last ticket email bounced or failed. */
-	resendFailed: async ({ locals }) => {
+	resendFailed: async ({ locals, url }) => {
 		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
 		const queue = await listFailedTickets(SEND_BATCH);
 		if (!queue.length) return { success: 'No ticket emails have failed.' };
-		const { sent, failed } = await sendAll(queue);
+		const { sent, failed } = await sendAll(queue, url.origin);
 		const { email } = await getStats();
 		const parts = [`Resent ${plural(sent, 'ticket')}. Check delivery again in a minute.`];
 		if (email.failed > 0) parts.push(`${plural(email.failed, 'failed email')} left: click again to continue.`);
@@ -187,13 +208,41 @@ export const actions: Actions = {
 		return { id, success: `Rejected the payment from ${reg.fullName} and let them know by email.` };
 	},
 
-	resend: async ({ request, locals }) => {
+	/** Emails the QR pass to delegates whose ticket went out before passes existed. */
+	sendPasses: async ({ locals, url }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const { ids } = await passesToSend(SEND_BATCH);
+		if (!ids.length) return { success: 'Every delegate with a ticket has their event pass.' };
+		let sent = 0;
+		const failed: string[] = [];
+		for (const [i, id] of ids.entries()) {
+			if (i > 0) await pause();
+			const reg = await getRegistration(id);
+			if (!reg) continue;
+			try {
+				const pass = await passEmailFor(reg, url.origin);
+				if (!pass) return fail(503, { message: 'Event passes need DATABASE_URL and PASS_SECRET.' });
+				await sendPassEmail(reg, pass);
+				await markPassEmailed(reg.id);
+				sent++;
+			} catch (e) {
+				failed.push(`${reg.fullName} (${emailFailure(e)})`);
+			}
+		}
+		const { total: left } = await passesToSend(1);
+		const parts = [`Sent ${plural(sent, 'event pass', 'event passes')}.`];
+		if (left > 0) parts.push(`${plural(left, 'pass', 'passes')} still waiting: click again to continue.`);
+		if (failed.length) return fail(502, { message: `${parts.join(' ')} Failed: ${failed.slice(0, 3).join('; ')}` });
+		return { success: parts.join(' ') };
+	},
+
+	resend: async ({ request, locals, url }) => {
 		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
 		const id = String((await request.formData()).get('id') ?? '');
 		const reg = await getRegistration(id);
 		if (!reg || reg.status !== 'paid') return fail(409, { id, message: 'Only paid registrations have a ticket to send.' });
 		try {
-			await emailTicket(reg);
+			await emailTicket(reg, url.origin);
 		} catch (e) {
 			return fail(502, { id, message: `The ticket email failed: ${emailFailure(e)}` });
 		}
