@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import {
@@ -32,7 +32,13 @@
 	} from '#lib/registration.ts';
 	import { DEFAULT_PAYMENT, formatRupees } from '#lib/payment.ts';
 	import { renderPosterFile } from '#lib/poster/renderer.ts';
-	import { SubmitError, submitPayment, submitRegistration, type PendingRegistration } from '#lib/submit.ts';
+	import {
+		SubmitError,
+		fetchPaymentDetails,
+		submitPayment,
+		submitRegistration,
+		type PendingRegistration
+	} from '#lib/submit.ts';
 	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
 	import { scrollToElement } from '#lib/smooth-scroll.ts';
 	import { reveal } from '#lib/actions/reveal.ts';
@@ -135,6 +141,35 @@
 			/* ignore */
 		}
 	}
+
+	// While the payment step is open, follow fee or UPI changes made on the dashboard
+	// after this delegate registered: on arrival, on returning to the tab, and every 30 s.
+	const awaitingPayment = $derived(step === PAYMENT && !!pending && status !== 'done');
+	$effect(() => {
+		if (!awaitingPayment) return;
+		const refresh = async () => {
+			const current = untrack(() => pending);
+			if (!current || document.visibilityState !== 'visible') return;
+			const latest = await fetchPaymentDetails(current);
+			if (!latest || pending?.code !== current.code) return;
+			if (
+				latest.amountRupees === current.amountRupees &&
+				latest.vpa === current.vpa &&
+				latest.payeeName === current.payeeName
+			) {
+				return;
+			}
+			pending = { ...current, ...latest };
+			remember(PENDING_KEY, pending);
+		};
+		refresh();
+		const timer = setInterval(refresh, 30_000);
+		document.addEventListener('visibilitychange', refresh);
+		return () => {
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', refresh);
+		};
+	});
 
 	$effect(() => {
 		const snapshot = JSON.stringify({ ...draft, consent: false });

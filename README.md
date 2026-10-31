@@ -65,7 +65,9 @@ emails in the terminal.
 
 The ticket price, the event date and time, and the UPI details behind the payment QR are changed at
 `/admin/configuration` (defaults: ₹500 to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
-stored in the `settings` table. Registrations keep the price they were shown. The poster artwork carries its
+stored in the `settings` table. A new fee or UPI ID also applies to delegates who registered but have not paid:
+their payment page picks up the new amount and QR within 30 seconds (or as soon as they return to the tab).
+Anyone who has already entered a UPI transaction ID keeps the amount they paid. The poster artwork carries its
 own printed date, so changing the date does not redraw posters.
 
 ## How it fits together

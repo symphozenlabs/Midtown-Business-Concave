@@ -43,11 +43,13 @@ export const actions: Actions = {
 		if (Object.keys(errors).length) return fail(400, { scope: 'qr', errors, message: 'Check the payment details.' });
 
 		const payment: PaymentSettings = { priceRupees: price, vpa, payeeName };
-		await savePaymentSettings(payment, locals.admin.email);
+		const repriced = await savePaymentSettings(payment, locals.admin.email);
+		const moved =
+			repriced === 0 ? '' : ` ${repriced} unpaid registration${repriced === 1 ? '' : 's'} moved to the new amount.`;
 		return {
 			scope: 'qr',
 			link: linkFor(payment),
-			success: 'New QR generated. The registration form now uses this amount and UPI ID.'
+			success: `New QR generated. The registration form and every open payment page now use this amount and UPI ID.${moved}`
 		};
 	},
 

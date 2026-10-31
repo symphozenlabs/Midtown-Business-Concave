@@ -358,7 +358,8 @@
 			</div>
 		</div>
 
-		{#if paidTotal > 0}
+		<!-- Only paid delegates get a ticket email, so the filter belongs to Paid and All. -->
+		{#if paidTotal > 0 && (data.filter.status === 'paid' || data.filter.status === 'all')}
 			<nav class="email-tabs" aria-label="Filter by ticket email">
 				<span class="email-tabs-label">Ticket email</span>
 				{#each EMAIL_TABS as tab (tab.value)}
