@@ -48,6 +48,51 @@ async function detectNative(bitmap: ImageBitmap): Promise<string | null> {
 	}
 }
 
+/**
+ * Reads QR codes from live camera frames for the event desks. BarcodeDetector
+ * reads the video element directly; jsQR gets a frame scaled to 720px, which
+ * keeps each read to a few milliseconds on mid-range phones.
+ */
+export function createVideoDecoder() {
+	let detector: BarcodeDetectorLike | null = null;
+	if (typeof BarcodeDetector !== 'undefined') {
+		try {
+			detector = new BarcodeDetector({ formats: ['qr_code'] });
+		} catch {
+			detector = null;
+		}
+	}
+	const canvas = document.createElement('canvas');
+	const ctx = canvas.getContext('2d', { willReadFrequently: true });
+	let jsQR: JsQr | null = null;
+
+	return {
+		/** True when the platform decoder is used (fast enough to read every frame). */
+		native: detector !== null,
+		async read(video: HTMLVideoElement): Promise<string | null> {
+			if (!video.videoWidth) return null;
+			if (detector) {
+				try {
+					const found = await detector.detect(video);
+					return found.find((f) => f.rawValue)?.rawValue ?? null;
+				} catch {
+					detector = null; // fall through to jsQR from now on
+				}
+			}
+			if (!ctx) return null;
+			jsQR ??= resolveJsQr();
+			const scale = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight));
+			const width = Math.round(video.videoWidth * scale);
+			const height = Math.round(video.videoHeight * scale);
+			if (canvas.width !== width) canvas.width = width;
+			if (canvas.height !== height) canvas.height = height;
+			ctx.drawImage(video, 0, 0, width, height);
+			const { data } = ctx.getImageData(0, 0, width, height);
+			return jsQR(data, width, height, { inversionAttempts: 'dontInvert' })?.data ?? null;
+		}
+	};
+}
+
 export async function decodeQrImage(file: Blob): Promise<string | null> {
 	const bitmap = await createImageBitmap(file);
 	try {

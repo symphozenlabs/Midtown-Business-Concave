@@ -1,12 +1,16 @@
 <script lang="ts">
+	import '#lib/ops/ops.css';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
-	import { LayoutDashboard, LogOut, Settings2 } from '@lucide/svelte';
+	import { Activity, LayoutDashboard, LogOut, Settings2, SlidersHorizontal, Users } from '@lucide/svelte';
 
 	let { data, children } = $props();
 
 	const NAV = [
 		{ href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+		{ href: '/admin/handlers', label: 'Handlers', icon: Users },
+		{ href: '/admin/event-setup', label: 'Event setup', icon: SlidersHorizontal },
+		{ href: '/admin/activity', label: 'Activity', icon: Activity },
 		{ href: '/admin/configuration', label: 'Configuration', icon: Settings2 }
 	];
 
@@ -103,6 +107,7 @@
 		display: flex;
 		gap: var(--space-1);
 		margin-inline: auto;
+		overflow-x: auto;
 	}
 
 	.nav a {
@@ -116,6 +121,7 @@
 		font: var(--text-ui);
 		font-size: 14px;
 		text-decoration: none;
+		white-space: nowrap;
 	}
 
 	.nav a:hover {

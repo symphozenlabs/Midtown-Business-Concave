@@ -37,5 +37,10 @@ export const variables = defineEnvVars({
 	EMAIL_FROM: {
 		schema: optional,
 		description: 'Sender on a domain verified in Resend, e.g. Midtown Business Conclave <tickets@yourdomain.com>'
+	},
+	PASS_SECRET: {
+		schema: optional,
+		description:
+			'Long random secret that signs every participant QR pass and "My pass" link (e.g. `openssl rand -base64 48`). Set once and never change it: a new secret makes every issued QR unreadable until passes are reissued.'
 	}
 });
