@@ -1,13 +1,17 @@
 <script lang="ts">
+	import '#lib/ops/ops.css';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
-	import { LayoutDashboard, LogOut, Settings2 } from '@lucide/svelte';
+	import { Activity, IndianRupee, LayoutDashboard, LogOut, SlidersHorizontal, Users } from '@lucide/svelte';
 
 	let { data, children } = $props();
 
 	const NAV = [
 		{ href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-		{ href: '/admin/configuration', label: 'Configuration', icon: Settings2 }
+		{ href: '/admin/handlers', label: 'Handlers', icon: Users },
+		{ href: '/admin/event-setup', label: 'Event setup', icon: SlidersHorizontal },
+		{ href: '/admin/activity', label: 'Activity', icon: Activity },
+		{ href: '/admin/payments', label: 'Payments', icon: IndianRupee }
 	];
 
 	const current = (href: string) =>
@@ -103,6 +107,7 @@
 		display: flex;
 		gap: var(--space-1);
 		margin-inline: auto;
+		overflow-x: auto;
 	}
 
 	.nav a {
@@ -116,6 +121,7 @@
 		font: var(--text-ui);
 		font-size: 14px;
 		text-decoration: none;
+		white-space: nowrap;
 	}
 
 	.nav a:hover {
@@ -161,20 +167,51 @@
 		padding: var(--space-6) clamp(var(--space-4), 3vw, var(--space-8)) var(--space-16);
 	}
 
-	@media (max-width: 760px) {
+	/* Tablets and phones: brand and Sign out on one row, every page visible below
+	   (no sideways-scrolling nav). Not sticky, so it does not take the screen. */
+	@media (max-width: 960px) {
 		.topbar {
+			position: static;
 			flex-wrap: wrap;
+			gap: var(--space-2) var(--space-4);
 		}
 
 		.nav {
 			order: 3;
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 			width: 100%;
 			margin-inline: 0;
+			overflow: visible;
+		}
+
+		.nav a {
+			justify-content: center;
+			padding: 0 var(--space-2);
 		}
 
 		.who span,
 		.brand span {
 			display: none;
+		}
+	}
+
+	@media (max-width: 420px) {
+		.brand img {
+			width: 72px;
+		}
+
+		.brand strong {
+			font-size: 15px;
+		}
+
+		.nav {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+
+		.nav a {
+			gap: 6px;
+			font-size: 13px;
 		}
 	}
 </style>

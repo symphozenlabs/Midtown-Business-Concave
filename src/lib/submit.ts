@@ -80,6 +80,31 @@ export async function submitPayment(pending: PendingRegistration, utr: string): 
 	failure(res, await res.json().catch(() => ({})));
 }
 
+/**
+ * The amount and UPI payee this registration should pay now. The organisers can
+ * change the fee or UPI ID after someone registered; null when it can't be checked.
+ */
+export async function fetchPaymentDetails(
+	pending: PendingRegistration
+): Promise<Pick<PendingRegistration, 'amountRupees' | 'vpa' | 'payeeName'> | null> {
+	try {
+		const res = await fetch('/api/payment/details', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ code: pending.code, email: pending.email })
+		});
+		if (!res.ok) return null;
+		const data = await res.json();
+		if (data.status !== 'pending_payment') return null;
+		if (typeof data.amountRupees !== 'number' || typeof data.vpa !== 'string' || typeof data.payeeName !== 'string') {
+			return null;
+		}
+		return { amountRupees: data.amountRupees, vpa: data.vpa, payeeName: data.payeeName };
+	} catch {
+		return null;
+	}
+}
+
 export interface SiteConfig {
 	priceRupees: number | null;
 	event: EventSettings | null;

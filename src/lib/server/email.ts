@@ -112,8 +112,38 @@ function slug(s: string) {
 	return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'delegate';
 }
 
+/** The delegate's event pass: one QR for the gate, halls, meals and networking. */
+export interface PassEmail {
+	/** Private link that opens the pass, connections and certificate on their phone. */
+	myPassUrl: string;
+	/** The QR as a PNG, attached to the email. */
+	qr: Uint8Array;
+}
+
+const passAttachment = (reg: Registration, pass: PassEmail): Attachment => ({
+	filename: `MBC2026-Pass-${reg.code}.png`,
+	content: pass.qr
+});
+
+function passHtml(pass: PassEmail) {
+	return `
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0b1430;border-radius:10px;">
+<tr><td style="padding:16px 18px;color:#e9dfc9;font-size:14px;line-height:1.7;">
+<strong style="color:#ffffff;">Your event pass</strong><br>
+The attached QR is your one pass for the day: show it at the gate, the halls, the food counters and the certificate desk. Other delegates can scan it to connect with you; your phone number and email are shared only with people you accept.
+<div style="margin-top:14px;"><a href="${escape(pass.myPassUrl)}" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#e3b04b;color:#171916;font-weight:bold;text-decoration:none;">Open my pass</a></div>
+<div style="margin-top:10px;font-size:12px;color:#a69c8a;">Keep this link to yourself: it signs you in to your pass and connections.</div>
+</td></tr></table>`;
+}
+
+function passText(pass: PassEmail) {
+	return `Your event pass: the attached QR works at the gate, halls, food counters and certificate desk.
+Open your pass and connections: ${pass.myPassUrl}
+Keep this link to yourself: it signs you in to your pass.`;
+}
+
 /** Emails the ticket and returns Resend's id, for checking delivery later. */
-export async function sendTicketEmail(reg: Registration, poster: Uint8Array | null): Promise<string> {
+export async function sendTicketEmail(reg: Registration, poster: Uint8Array | null, pass: PassEmail | null = null): Promise<string> {
 	const when = await schedule();
 	const first = reg.fullName.split(/\s+/)[0];
 	const details = `
@@ -125,7 +155,7 @@ export async function sendTicketEmail(reg: Registration, poster: Uint8Array | nu
 </td></tr></table>`;
 	const html = layout(
 		`Your seat is confirmed, ${escape(first)}.`,
-		`<p style="margin:0 0 12px;">We have received your payment. Your “I am attending” ticket is attached: share it on WhatsApp, Instagram or LinkedIn, and keep this email for the registration desk.</p>${details}<p style="margin:0;">See you in Salem on ${escape(when.dateLabel)}.</p>`,
+		`<p style="margin:0 0 12px;">We have received your payment. Your “I am attending” ticket is attached: share it on WhatsApp, Instagram or LinkedIn, and keep this email for the registration desk.</p>${details}${pass ? passHtml(pass) : ''}<p style="margin:0;">See you in Salem on ${escape(when.dateLabel)}.</p>`,
 		when
 	);
 	const text = `Your seat is confirmed, ${first}.
@@ -135,15 +165,48 @@ We have received your payment. Your "I am attending" ticket is attached.
 Registration number: ${reg.code}
 Delegate: ${reg.fullName}, ${reg.designation}, ${reg.companyName}
 Paid: ${formatRupees(reg.amountRupees)}${reg.upiTxnId ? ` (UPI ref ${reg.upiTxnId})` : ''}
+${pass ? `\n${passText(pass)}\n` : ''}
+${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
+	const attachments: Attachment[] = poster ? [{ filename: `MBC2026-IAmAttending-${slug(reg.fullName)}-4K.jpg`, content: poster }] : [];
+	if (pass) attachments.push(passAttachment(reg, pass));
+	return send(reg.email, `Your ticket · ${EVENT.name} 2026 · ${reg.code}`, html, text, attachments);
+}
+
+/** The pass on its own, for delegates whose ticket email went out before passes existed. */
+export async function sendPassEmail(reg: Registration, pass: PassEmail): Promise<string> {
+	const when = await schedule();
+	const first = reg.fullName.split(/\s+/)[0];
+	const html = layout(
+		`Your event pass, ${escape(first)}`,
+		`<p style="margin:0 0 12px;">Here is your QR pass for ${escape(EVENT.name)} (registration <strong style="color:#f7d07d;">${escape(reg.code)}</strong>). Bring it on your phone or printed.</p>${passHtml(pass)}<p style="margin:0;">See you in Salem on ${escape(when.dateLabel)}.</p>`,
+		when
+	);
+	const text = `Your event pass, ${first}
+
+Here is your QR pass for ${EVENT.name} (registration ${reg.code}). Bring it on your phone or printed.
+
+${passText(pass)}
 
 ${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
-	return send(
-		reg.email,
-		`Your ticket · ${EVENT.name} 2026 · ${reg.code}`,
-		html,
-		text,
-		poster ? [{ filename: `MBC2026-IAmAttending-${slug(reg.fullName)}-4K.jpg`, content: poster }] : []
+	return send(reg.email, `Your event pass · ${EVENT.name} 2026 · ${reg.code}`, html, text, [passAttachment(reg, pass)]);
+}
+
+/** A one-time link for an event handler who forgot their password. */
+export async function sendHandlerResetEmail(to: string, name: string, link: string) {
+	const when = await schedule();
+	const html = layout(
+		'Reset your handler password',
+		`<p style="margin:0 0 12px;">Hello ${escape(name.split(/\s+/)[0])}, someone asked to reset the password of your event handler account.</p>
+<p style="margin:0 0 16px;"><a href="${escape(link)}" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#e3b04b;color:#171916;font-weight:bold;text-decoration:none;">Choose a new password</a></p>
+<p style="margin:0;font-size:13px;color:#a69c8a;">The link works once, for 30 minutes. If you did not ask for it, ignore this email: your password stays the same.</p>`,
+		when
 	);
+	const text = `Someone asked to reset the password of your event handler account.
+
+Choose a new password: ${link}
+
+The link works once, for 30 minutes. If you did not ask for it, ignore this email.`;
+	await send(to, `Reset your handler password · ${EVENT.name}`, html, text);
 }
 
 export async function sendRejectionEmail(reg: Registration, reason: string) {

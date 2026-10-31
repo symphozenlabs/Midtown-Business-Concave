@@ -156,12 +156,49 @@ export async function getPaymentSettings(): Promise<PaymentSettings> {
 	return { ...DEFAULT_PAYMENT, ...(value ?? {}) };
 }
 
-export async function savePaymentSettings(settings: PaymentSettings, by: string) {
+/**
+ * Saves the fee and UPI details. Delegates who have not paid yet move to the new
+ * fee (their payment page picks it up); anyone who already reported a payment
+ * keeps the amount they were shown. Returns how many registrations were repriced.
+ */
+export async function savePaymentSettings(settings: PaymentSettings, by: string): Promise<number> {
 	if (useMemory) {
 		mem.payment = { ...settings };
-		return;
+		let repriced = 0;
+		for (const row of mem.rows.values()) {
+			if (row.status !== 'pending_payment' || row.amountRupees === settings.priceRupees) continue;
+			row.amountRupees = settings.priceRupees;
+			repriced++;
+		}
+		return repriced;
 	}
 	await writeSetting('payment', settings, by);
+	const rows = await sql()`
+		update registrations set amount_rupees = ${settings.priceRupees}, updated_at = now()
+		where status = 'pending_payment' and amount_rupees <> ${settings.priceRupees}
+		returning id`;
+	return rows.length;
+}
+
+/**
+ * What an unpaid delegate should pay right now: their amount and the current UPI
+ * payee. Null when the code and email do not match a registration.
+ */
+export async function getPaymentDetails(
+	code: string,
+	email: string
+): Promise<{ status: Status; amountRupees: number; vpa: string; payeeName: string } | null> {
+	const settings = await getPaymentSettings();
+	let found: Pick<Registration, 'status' | 'amountRupees'> | undefined;
+	if (useMemory) {
+		found = [...mem.rows.values()].find((r) => r.code === code && r.email.toLowerCase() === email);
+	} else {
+		const rows = await sql()`
+			select status, amount_rupees from registrations where code = ${code} and lower(email) = ${email}`;
+		if (rows[0]) found = { status: rows[0].status, amountRupees: Number(rows[0].amount_rupees) };
+	}
+	if (!found) return null;
+	return { status: found.status, amountRupees: found.amountRupees, vpa: settings.vpa, payeeName: settings.payeeName };
 }
 
 /** When the event happens; shown on the public page and in ticket emails. */

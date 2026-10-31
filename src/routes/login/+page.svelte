@@ -13,6 +13,7 @@
 
 <svelte:head>
 	<title>Sign in · Admin · Midtown Business Conclave</title>
+	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <main class="login">
