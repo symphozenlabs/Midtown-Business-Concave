@@ -82,17 +82,49 @@
 		return () => cancelAnimationFrame(frame);
 	});
 
-	// Drag to reposition, in the poster maker's units.
+	// Drag to reposition, in the poster maker's units; pinch with two fingers to zoom.
+	const ZOOM_MIN = 0.5;
+	const ZOOM_MAX = 2.2;
+	const pointers = new Map<number, { x: number; y: number }>();
 	let drag: { x: number; y: number; dx: number; dy: number } | null = null;
+	let pinch: { distance: number; zoom: number } | null = null;
+
+	function pointerDistance() {
+		const [a, b] = [...pointers.values()];
+		return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+	}
+
+	// Start (or restart) a one-finger drag or a two-finger pinch from the current pointers.
+	function startGesture() {
+		drag = null;
+		pinch = null;
+		if (pointers.size >= 2) {
+			pinch = { distance: pointerDistance(), zoom };
+		} else if (pointers.size === 1) {
+			const [p] = pointers.values();
+			drag = { x: p.x, y: p.y, dx, dy };
+		}
+		dragging = pointers.size > 0;
+	}
 
 	function onPointerDown(event: PointerEvent) {
 		if (!adjustable) return;
-		drag = { x: event.clientX, y: event.clientY, dx, dy };
 		canvas.setPointerCapture(event.pointerId);
-		dragging = true;
+		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		startGesture();
 	}
 
 	function onPointerMove(event: PointerEvent) {
+		if (!pointers.has(event.pointerId)) return;
+		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		if (pinch && pointers.size >= 2) {
+			const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (pinch.zoom * pointerDistance()) / pinch.distance));
+			zoom = Math.round(next * 100) / 100;
+			const kept = limitFraming({ ...posterState, zoom });
+			dx = kept.dx;
+			dy = kept.dy;
+			return;
+		}
 		if (!drag) return;
 		const s = canvas.width / canvas.clientWidth / POSTER_K;
 		// Stop at the arch's edge: the photo can never be dragged out of it.
@@ -113,9 +145,10 @@
 		if (kept.dy !== dy) dy = kept.dy;
 	});
 
-	function onPointerUp() {
-		drag = null;
-		dragging = false;
+	function onPointerUp(event: PointerEvent) {
+		pointers.delete(event.pointerId);
+		// Lifting one finger of a pinch carries on as a drag with the other.
+		startGesture();
 	}
 
 	function resetFraming() {
@@ -155,6 +188,7 @@
 	</div>
 
 	{#if adjustable}
+		<p class="touch-hint"><Move size={14} aria-hidden="true" /> Drag and pinch to reposition</p>
 		<div class="controls">
 			<label>
 				<span>Zoom</span>
@@ -244,6 +278,26 @@
 
 	.frame:hover .drag-hint {
 		opacity: 1;
+	}
+
+	/* Touch screens have no hover, so the hint sits under the poster instead. */
+	.touch-hint {
+		display: none;
+		align-items: center;
+		gap: 6px;
+		margin: calc(var(--space-2) * -1) 0 0;
+		color: var(--gold-ink);
+		font: 600 13px/1.3 var(--font-sans);
+	}
+
+	@media (hover: none) {
+		.drag-hint {
+			display: none;
+		}
+
+		.touch-hint {
+			display: inline-flex;
+		}
 	}
 
 	.controls {
