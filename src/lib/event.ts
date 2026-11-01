@@ -17,7 +17,9 @@ export const EVENT = {
 		{ role: 'Networking partner', name: 'Coimbatore Entrepreneurs Forum' },
 		{ role: 'Event partner', name: 'Midtown Events' },
 		{ role: 'AI technology partner', name: 'ITK' },
-		{ role: 'Associate sponsor', name: 'Namma Office' }
+		{ role: 'Associate sponsor', name: 'Namma Office' },
+		{ role: 'Startup ecosystem partner', name: 'StartupTN' },
+		{ role: 'Ticketing and technology partner', name: 'SymphoZen Labs' }
 	]
 } as const;
 

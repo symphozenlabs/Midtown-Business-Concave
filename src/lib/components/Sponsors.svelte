@@ -6,7 +6,9 @@
 	// wordmarks its width, so both read at the same visual weight.
 	const SPONSORS = [
 		{ role: 'AI Technology Partner', name: 'ITK', src: '/poster/itk.webp', width: 444, height: 285, fit: 'tall' },
-		{ role: 'Associate Sponsor', name: 'Namma Office', src: '/poster/namma-office.webp', width: 707, height: 179, fit: 'wide' }
+		{ role: 'Associate Sponsor', name: 'Namma Office', src: '/poster/namma-office.webp', width: 707, height: 179, fit: 'wide' },
+		{ role: 'Startup Ecosystem Partner', name: 'StartupTN', src: '/poster/startuptn.webp', width: 900, height: 200, fit: 'wide' },
+		{ role: 'Ticketing and Technology Partner', name: 'SymphoZen Labs', src: '/poster/symphozen-labs.webp', width: 900, height: 171, fit: 'wide' }
 	] as const;
 </script>
 
