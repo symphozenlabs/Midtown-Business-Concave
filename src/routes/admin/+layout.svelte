@@ -2,7 +2,7 @@
 	import '#lib/ops/ops.css';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
-	import { Activity, IndianRupee, LayoutDashboard, LogOut, SlidersHorizontal, Users } from '@lucide/svelte';
+	import { Activity, IndianRupee, KeyRound, LayoutDashboard, LogOut, SlidersHorizontal, Users } from '@lucide/svelte';
 
 	let { data, children } = $props();
 
@@ -44,6 +44,9 @@
 
 			<div class="who">
 				<span>{data.admin.email}</span>
+				<a href="/admin/password" class="btn btn-ghost small" aria-current={current('/admin/password') ? 'page' : undefined}>
+					<KeyRound size={16} aria-hidden="true" /> Password
+				</a>
 				<form method="post" action="/admin?/logout" use:enhance>
 					<button type="submit" class="btn btn-ghost small"><LogOut size={16} aria-hidden="true" /> Sign out</button>
 				</form>

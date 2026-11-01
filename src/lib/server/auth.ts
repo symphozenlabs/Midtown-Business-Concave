@@ -1,4 +1,4 @@
-import { b64url, bytesEqual, DUMMY_HASH, fromB64url, hmac, hmacKey, verifyPassword } from './crypto.ts';
+import { b64url, bytesEqual, DUMMY_HASH, fromB64url, hashPassword, hmac, hmacKey, verifyPassword } from './crypto.ts';
 import { isDatabaseConfigured, sql } from './db.ts';
 
 export const SESSION_COOKIE = 'mbc_admin';
@@ -37,6 +37,19 @@ export async function checkCredentials(email: string, password: string): Promise
 	if (!admin || !ok) return null;
 	await sql()`update admin_users set last_login_at = now() where lower(email) = lower(${admin.email})`;
 	return admin;
+}
+
+/**
+ * Replaces the password after checking the current one. The new hash changes the
+ * signing key, so every open session ends; the caller signs this one in again.
+ */
+export async function changeAdminPassword(email: string, current: string, next: string): Promise<AdminRow | null> {
+	const admin = await findAdmin(email);
+	if (!admin || !(await verifyPassword(current, admin.password_hash))) return null;
+	const hash = await hashPassword(next);
+	await sql()`
+		update admin_users set password_hash = ${hash}, updated_at = now() where lower(email) = lower(${admin.email})`;
+	return { email: admin.email, password_hash: hash };
 }
 
 export async function createSession(admin: AdminRow) {
