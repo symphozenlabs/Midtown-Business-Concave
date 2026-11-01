@@ -103,6 +103,20 @@ insert into settings (key, value)
 values ('payment', '{"priceRupees": 500, "vpa": "gmouly1@oksbi", "payeeName": "MOULISHWAR G"}')
 on conflict (key) do nothing;
 
+-- Organiser accounts for /login → /admin. Passwords are pbkdf2-sha256 hashes
+-- (src/lib/server/crypto.ts). Add one or reset its password with:
+--   node --env-file=.env db/set-admin.ts <email> <password>
+create table if not exists admin_users (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null check (char_length(email) between 3 and 120),
+  -- pbkdf2-sha256$<iterations>$<salt>$<hash>
+  password_hash text not null,
+  last_login_at timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create unique index if not exists admin_users_email_key on admin_users (lower(email));
+
 -- ============================================================================
 -- Event operations: one QR per participant, used at six kinds of desk.
 -- Participants are the registrations above. Handlers (gate staff, food counters…)

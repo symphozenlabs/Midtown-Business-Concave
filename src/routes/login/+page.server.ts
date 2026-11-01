@@ -31,10 +31,11 @@ export const actions: Actions = {
 			return fail(429, { identifier, message: 'Too many attempts. Wait five minutes.' });
 		}
 
-		if (isAdminConfigured && (await checkCredentials(identifier, password))) {
+		const admin = await checkCredentials(identifier, password);
+		if (admin) {
 			// Clear a cookie from before sign-in moved to /login, so only one session cookie is sent.
 			cookies.delete(SESSION_COOKIE, { path: '/admin' });
-			cookies.set(SESSION_COOKIE, await createSession(), {
+			cookies.set(SESSION_COOKIE, await createSession(admin), {
 				path: SESSION_COOKIE_PATH,
 				httpOnly: true,
 				sameSite: 'strict',

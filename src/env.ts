@@ -22,13 +22,9 @@ export const variables = defineEnvVars({
 		schema: optional,
 		description: 'R2 API token secret access key'
 	},
-	ADMIN_EMAIL: {
-		schema: optional,
-		description: 'Email address used to sign in to /admin'
-	},
 	ADMIN_PASSWORD: {
 		schema: optional,
-		description: 'Password for /admin (use a long, unique one). Changing it signs out every session.'
+		description: 'Optional starting password for new event handlers; without it each gets a temporary one. Organisers sign in with the admin_users table.'
 	},
 	RESEND_API_KEY: {
 		schema: optional,

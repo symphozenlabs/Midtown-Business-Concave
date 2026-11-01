@@ -100,14 +100,16 @@ npm install
 npm run dev
 ```
 
-Fill in `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` to sign in at `http://localhost:5173/login`. Without the
-service keys, development uses an in-memory stand-in (data resets when the dev server restarts) and prints
+Organisers sign in at `http://localhost:5173/login` with an account in the `admin_users` table in Neon
+(see below). Without the service keys, development uses an in-memory stand-in (data resets when the dev server restarts) and prints
 emails in the terminal.
 
 ## Set up the services
 
 1. **Neon** — create a project, open the SQL editor and run [db/schema.sql](db/schema.sql).
-   Copy the connection string into `DATABASE_URL`.
+   Copy the connection string into `DATABASE_URL`, then add the organiser's sign-in (run it again to reset
+   the password; it signs out their open sessions):
+   `node --env-file=.env db/set-admin.ts admin@example.com 'a-long-password'`
 2. **Cloudflare R2** — create a bucket (keep it private). Copy its **S3 API** URL from the bucket's
    settings into `R2_S3_API_URL`, then create an R2 API token with *Object Read & Write* on that bucket
    for `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. Photos are stored as `registrations/2026/<uuid>.<ext>`.
@@ -118,7 +120,7 @@ emails in the terminal.
      Add every variable from `.env.example` under Settings → Environment Variables, then redeploy.
    - **Cloudflare Pages** — connect the repository with build command `npm run build` and output
    directory `.svelte-kit/cloudflare`, then add every variable from `.env.example` as an encrypted
-   environment variable (Settings → Environment variables). Use a long, unique `ADMIN_PASSWORD`.
+   environment variable (Settings → Environment variables).
 
 The ticket price and the UPI details behind the payment QR are changed at `/admin/payments`, and the event date
 and time at `/admin/event-setup` (defaults: ₹500 to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
@@ -152,8 +154,8 @@ own printed date, so changing the date does not redraw posters.
   content-hashed and a regenerated image is never served from a stale cache.
 - [src/routes/api/payment/+server.ts](src/routes/api/payment/+server.ts) records the UPI transaction ID;
   each ID can be claimed by one registration only.
-- [src/routes/admin](src/routes/admin) is the organiser dashboard, signed in with `ADMIN_EMAIL` /
-  `ADMIN_PASSWORD` (an HMAC-signed, HTTP-only cookie; changing the password signs everyone out).
+- [src/routes/admin](src/routes/admin) is the organiser dashboard, signed in with an
+  `admin_users` account in Neon (an HMAC-signed, HTTP-only cookie; resetting the password signs everyone out).
 - The photo framing each delegate chose (zoom and position) is saved in `poster_framing`, so the
   organisers can regenerate any poster.
 - Event operations live in [src/lib/server/ops](src/lib/server/ops): `scan.ts` is the one scan engine every desk

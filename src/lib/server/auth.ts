@@ -1,57 +1,47 @@
-import { ADMIN_EMAIL, ADMIN_PASSWORD } from '$app/env/private';
+import { b64url, bytesEqual, DUMMY_HASH, fromB64url, hmac, hmacKey, verifyPassword } from './crypto.ts';
+import { isDatabaseConfigured, sql } from './db.ts';
 
 export const SESSION_COOKIE = 'mbc_admin';
 export const SESSION_HOURS = 12;
 // Site-wide, so /login can tell a signed-in organiser to go straight to the dashboard.
 export const SESSION_COOKIE_PATH = '/';
 
-export const isAdminConfigured = Boolean(ADMIN_EMAIL && ADMIN_PASSWORD);
+// Organiser accounts live in the admin_users table in Neon (db/schema.sql);
+// db/set-admin.ts adds one or resets its password.
+export const isAdminConfigured = isDatabaseConfigured;
 
 const enc = new TextEncoder();
 
-function b64url(bytes: Uint8Array) {
-	return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+interface AdminRow {
+	email: string;
+	password_hash: string;
 }
 
-function fromB64url(s: string) {
-	const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
-	return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+async function findAdmin(email: string): Promise<AdminRow | null> {
+	const rows = (await sql()`
+		select email, password_hash from admin_users where lower(email) = lower(${email}) limit 1`) as AdminRow[];
+	return rows[0] ?? null;
 }
 
-// The signing key is derived from the credentials, so changing the password
-// in the environment signs out every existing session.
-let keyPromise: Promise<CryptoKey> | null = null;
-function key() {
-	keyPromise ??= crypto.subtle
-		.digest('SHA-256', enc.encode(`mbc-admin:${ADMIN_EMAIL}:${ADMIN_PASSWORD}`))
-		.then((raw) => crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']));
-	return keyPromise;
+// Each session is signed with a key derived from the account's password hash,
+// so resetting the password signs out every existing session.
+function sessionKey(admin: AdminRow) {
+	return hmacKey(`mbc-admin:${admin.email.toLowerCase()}:${admin.password_hash}`);
 }
 
-async function hmac(data: string) {
-	return new Uint8Array(await crypto.subtle.sign('HMAC', await key(), enc.encode(data)));
+export async function checkCredentials(email: string, password: string): Promise<AdminRow | null> {
+	if (!isAdminConfigured) return null;
+	const admin = await findAdmin(email.trim());
+	// Unknown emails take as long as wrong passwords.
+	const ok = await verifyPassword(password, admin?.password_hash ?? DUMMY_HASH);
+	if (!admin || !ok) return null;
+	await sql()`update admin_users set last_login_at = now() where lower(email) = lower(${admin.email})`;
+	return admin;
 }
 
-/** Compares two strings in constant time by comparing their HMACs. */
-async function safeEqual(a: string, b: string) {
-	const [x, y] = await Promise.all([hmac(a), hmac(b)]);
-	let diff = 0;
-	for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
-	return diff === 0;
-}
-
-export async function checkCredentials(email: string, password: string) {
-	if (!isAdminConfigured) return false;
-	const [emailOk, passwordOk] = await Promise.all([
-		safeEqual(email.trim().toLowerCase(), ADMIN_EMAIL!.trim().toLowerCase()),
-		safeEqual(password, ADMIN_PASSWORD!)
-	]);
-	return emailOk && passwordOk;
-}
-
-export async function createSession() {
-	const payload = b64url(enc.encode(JSON.stringify({ email: ADMIN_EMAIL, exp: Date.now() + SESSION_HOURS * 3600_000 })));
-	return `${payload}.${b64url(await hmac(payload))}`;
+export async function createSession(admin: AdminRow) {
+	const payload = b64url(enc.encode(JSON.stringify({ email: admin.email, exp: Date.now() + SESSION_HOURS * 3600_000 })));
+	return `${payload}.${b64url(await hmac(await sessionKey(admin), payload))}`;
 }
 
 export async function readSession(cookie: string | undefined): Promise<{ email: string } | null> {
@@ -59,11 +49,12 @@ export async function readSession(cookie: string | undefined): Promise<{ email: 
 	const [payload, signature] = cookie.split('.');
 	if (!payload || !signature) return null;
 	try {
-		const ok = await crypto.subtle.verify('HMAC', await key(), fromB64url(signature), enc.encode(payload));
-		if (!ok) return null;
 		const data = JSON.parse(new TextDecoder().decode(fromB64url(payload)));
-		if (typeof data.exp !== 'number' || data.exp < Date.now()) return null;
-		return { email: String(data.email) };
+		if (typeof data.exp !== 'number' || data.exp < Date.now() || typeof data.email !== 'string') return null;
+		const admin = await findAdmin(data.email);
+		if (!admin) return null;
+		if (!bytesEqual(await hmac(await sessionKey(admin), payload), fromB64url(signature))) return null;
+		return { email: admin.email };
 	} catch {
 		return null;
 	}
