@@ -10,6 +10,8 @@
 		CalendarClock,
 		CheckCheck,
 		ChevronDown,
+		ChevronLeft,
+		ChevronRight,
 		ChevronsDownUp,
 		ChevronsUpDown,
 		CircleAlert,
@@ -201,12 +203,36 @@
 		}
 	}
 
-	// Actions keep the current tab and search, so the list does not jump after a click.
-	const keep = $derived(
+	// The current tab, ticket-email filter and search, as query parameters.
+	const filterQuery = $derived(
 		data.available
-			? `&status=${data.filter.status}${data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}`
+			? `status=${data.filter.status}${data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}`
 			: ''
 	);
+	// Actions keep the current tab, search and page, so the list does not jump after a click.
+	const keep = $derived(
+		data.available ? `&${filterQuery}${data.pagination.page > 1 ? `&page=${data.pagination.page}` : ''}` : ''
+	);
+
+	/* Pagination: the table shows one page of the matching registrations at a time. */
+	const pageHref = (n: number) => `?${filterQuery}${n > 1 ? `&page=${n}` : ''}`;
+	/** Page numbers to offer: the first, the last, and two either side of the current one; null marks a gap. */
+	const pageList = $derived.by(() => {
+		if (!data.available) return [];
+		const { page, pages } = data.pagination;
+		const list: (number | null)[] = [];
+		for (let n = 1; n <= pages; n++) {
+			if (n === 1 || n === pages || Math.abs(n - page) <= 2) list.push(n);
+			else if (list.at(-1) !== null) list.push(null);
+		}
+		return list;
+	});
+	const shown = $derived.by(() => {
+		if (!data.available) return { from: 0, to: 0 };
+		const { page, pageSize } = data.pagination;
+		const from = (page - 1) * pageSize + 1;
+		return { from, to: from + registrations.length - 1 };
+	});
 	const act = (name: string) => `?/${name}${keep}`;
 
 	function toggle(id: string) {
@@ -821,6 +847,14 @@
 															{:else}
 																<span class="poster pending-back">Back<br />being prepared</span>
 															{/if}
+															{#if r.postKey}
+																<a href={media(r.postKey)} target="_blank" rel="noopener" class="poster">
+																	<img src={media(r.postKey)} alt="Square (1:1) post for {r.fullName}" loading="lazy" width="2160" height="2160" />
+																	<span>Post (1:1)</span>
+																</a>
+															{:else}
+																<span class="poster pending-back square">Post (1:1)<br />being prepared</span>
+															{/if}
 														{/if}
 													</div>
 												{/if}
@@ -922,6 +956,40 @@
 					</tbody>
 				</table>
 			</div>
+			{#if data.pagination.pages > 1}
+				<nav class="pager" aria-label="Pages">
+					<span class="pager-info">
+						Showing <strong>{shown.from}–{shown.to}</strong> of <strong>{data.pagination.total}</strong>
+					</span>
+					<div class="pager-links">
+						{#if data.pagination.page > 1}
+							<a class="pager-step" href={pageHref(data.pagination.page - 1)} rel="prev">
+								<ChevronLeft size={15} aria-hidden="true" /> Previous
+							</a>
+						{:else}
+							<span class="pager-step" aria-disabled="true"><ChevronLeft size={15} aria-hidden="true" /> Previous</span>
+						{/if}
+						{#each pageList as n, i (n ?? `gap-${i}`)}
+							{#if n === null}
+								<span class="pager-gap" aria-hidden="true">…</span>
+							{:else}
+								<a
+									href={pageHref(n)}
+									aria-current={n === data.pagination.page ? 'page' : undefined}
+									aria-label="Page {n}">{n}</a
+								>
+							{/if}
+						{/each}
+						{#if data.pagination.page < data.pagination.pages}
+							<a class="pager-step" href={pageHref(data.pagination.page + 1)} rel="next">
+								Next <ChevronRight size={15} aria-hidden="true" />
+							</a>
+						{:else}
+							<span class="pager-step" aria-disabled="true">Next <ChevronRight size={15} aria-hidden="true" /></span>
+						{/if}
+					</div>
+				</nav>
+			{/if}
 		{/if}
 	</section>
 {/if}
@@ -1616,6 +1684,68 @@
 		height: auto;
 		border-radius: 6px;
 		box-shadow: 0 0 0 1px var(--rule);
+	}
+
+	.pager {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2) var(--space-4);
+		padding-top: var(--space-4);
+		font-size: 13px;
+		color: var(--text-supporting);
+	}
+
+	.pager-info strong {
+		color: var(--text-body);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.pager-links {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.pager-links a,
+	.pager-links span {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		min-width: 32px;
+		min-height: 32px;
+		padding-inline: var(--space-2);
+		border-radius: var(--radius-sm);
+		color: var(--text-body);
+		font-variant-numeric: tabular-nums;
+		text-decoration: none;
+	}
+
+	.pager-links a:hover {
+		background: var(--mist);
+	}
+
+	.pager-links a[aria-current='page'] {
+		background: var(--gold-tint);
+		color: var(--charcoal);
+		font-weight: 600;
+		box-shadow: inset 0 -2px 0 var(--gold-ink);
+	}
+
+	.pager-links [aria-disabled='true'] {
+		color: var(--text-supporting);
+		opacity: 0.5;
+	}
+
+	.pager-gap {
+		min-width: 20px;
+	}
+
+	.pending-back.square {
+		aspect-ratio: 1;
 	}
 
 	.pending-back {

@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { getRegistration } from '#lib/server/store.ts';
+import { publicOrigin } from '#lib/server/site.ts';
 import { certificateFor } from '#lib/server/ops/certificates.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
 import { connectionState, consent, listConnections, withdraw } from '#lib/server/ops/networking.ts';
@@ -28,7 +29,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 	return {
 		signedIn: true as const,
 		me: { name: reg.fullName, code: reg.code, designation: reg.designation, company: reg.companyName, paid: reg.status === 'paid' },
-		passUrl: passUrl(url.origin, pass.token),
+		passUrl: passUrl(publicOrigin(url), pass.token),
 		connections,
 		certificate: certificate && !certificate.revokedAt ? certificate.number : null
 	};

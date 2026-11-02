@@ -23,6 +23,7 @@ import {
 } from '#lib/server/ops/event.ts';
 import { accessPath, isPassConfigured, markPassEmailed, passUrl, reissuePass } from '#lib/server/ops/passes.ts';
 import { qrPng } from '#lib/server/qr-png.ts';
+import { publicOrigin } from '#lib/server/site.ts';
 import { getEventSettings, getRegistration, isStoreAvailable, saveEventSettings, setFrontsOutdated } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -241,8 +242,8 @@ export const actions: Actions = {
 		if (form.get('email') === 'on') {
 			try {
 				await sendPassEmail(reg, {
-					myPassUrl: url.origin + (await accessPath(reg.code, reg.id, pass.version)),
-					qr: await qrPng(passUrl(url.origin, pass.token))
+					myPassUrl: publicOrigin(url) + (await accessPath(reg.code, reg.id, pass.version)),
+					qr: await qrPng(passUrl(publicOrigin(url), pass.token))
 				});
 				await markPassEmailed(reg.id);
 			} catch (e) {

@@ -574,16 +574,36 @@ export async function submitPayment(code: string, email: string, utr: string | n
 	}
 }
 
-export async function listRegistrations(filter: {
+export interface RegistrationFilter {
 	status: Status | 'all';
 	q: string;
 	email?: EmailFilter;
-}): Promise<Registration[]> {
+}
+
+/** Every registration matching the filter (up to 500), newest first within each status. */
+export async function listRegistrations(filter: RegistrationFilter): Promise<Registration[]> {
+	return (await queryRegistrations(filter, 500, 0)).rows;
+}
+
+/** One page of the matching registrations, with how many match in all. */
+export async function listRegistrationsPage(
+	filter: RegistrationFilter,
+	page: number,
+	pageSize: number
+): Promise<{ rows: Registration[]; total: number }> {
+	return queryRegistrations(filter, pageSize, (Math.max(1, page) - 1) * pageSize);
+}
+
+async function queryRegistrations(
+	filter: RegistrationFilter,
+	limit: number,
+	offset: number
+): Promise<{ rows: Registration[]; total: number }> {
 	const q = filter.q.trim();
 	const email = filter.email ?? 'all';
 	if (useMemory) {
 		const needle = q.toLowerCase();
-		return [...mem.rows.values()]
+		const all = [...mem.rows.values()]
 			.filter((r) => filter.status === 'all' || r.status === filter.status)
 			.filter((r) => email === 'all' || (r.status === 'paid' && emailStateOf(r) === email))
 			.filter(
@@ -598,10 +618,11 @@ export async function listRegistrations(filter: {
 					STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status) ||
 					(b.paymentSubmittedAt ?? b.createdAt).localeCompare(a.paymentSubmittedAt ?? a.createdAt)
 			);
+		return { rows: all.slice(offset, offset + limit), total: all.length };
 	}
 	const like = `%${q.replace(/[\\%_]/g, (c) => '\\' + c)}%`;
 	const rows = await sql()`
-		select * from registrations
+		select *, count(*) over ()::int as total_matches from registrations
 		where (${filter.status}::text = 'all' or status = ${filter.status})
 			and (${email}::text = 'all' or (status = 'paid' and (
 				case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end
@@ -610,9 +631,11 @@ export async function listRegistrations(filter: {
 				or company_name ilike ${like} or phone ilike ${like} or coalesce(upi_txn_id, '') ilike ${like})
 		order by
 			case status when 'payment_submitted' then 0 when 'pending_payment' then 1 when 'paid' then 2 else 3 end,
-			coalesce(payment_submitted_at, created_at) desc
-		limit 500`;
-	return rows.map(fromRow);
+			coalesce(payment_submitted_at, created_at) desc, id
+		limit ${limit} offset ${offset}`;
+	// An offset past the end returns no rows, and so no total: count again.
+	if (!rows.length && offset > 0) return { rows: [], total: (await queryRegistrations(filter, 1, 0)).total };
+	return { rows: rows.map(fromRow), total: rows[0]?.total_matches ?? 0 };
 }
 
 export async function getStats(): Promise<Stats> {

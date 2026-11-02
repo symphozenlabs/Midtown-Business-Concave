@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { publicOrigin } from '#lib/server/site.ts';
 import { SESSION_COOKIE, SESSION_COOKIE_PATH } from '#lib/server/auth.ts';
 import { isDatabaseConfigured } from '#lib/server/db.ts';
 import {
@@ -23,6 +24,7 @@ import {
 	getStats,
 	isStoreAvailable,
 	listRegistrations,
+	listRegistrationsPage,
 	listEmailsToCheck,
 	listFailedTickets,
 	listUnsentTickets,
@@ -76,6 +78,21 @@ async function cardPostJobs() {
 	}
 }
 
+/** Registrations per page of the dashboard table. */
+const PAGE_SIZE = 25;
+
+/** One page of the table; a page past the end (e.g. after rows left the tab) shows the last page. */
+async function tablePage(filter: { status: Status | 'all'; q: string; email: EmailFilter }, requested: number) {
+	let page = requested;
+	let { rows, total } = await listRegistrationsPage(filter, page, PAGE_SIZE);
+	const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+	if (page > pages) {
+		page = pages;
+		({ rows, total } = await listRegistrationsPage(filter, page, PAGE_SIZE));
+	}
+	return { rows, pagination: { page, pages, pageSize: PAGE_SIZE, total } };
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.admin) redirect(303, '/login');
 	const configured = { database: isDatabaseConfigured, storage: isR2Configured, email: isEmailConfigured };
@@ -94,11 +111,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const q = (url.searchParams.get('q') ?? '').slice(0, 100);
 	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
+	const requestedPage = Math.max(1, Math.floor(Number(url.searchParams.get('page')) || 1));
 
-	const [registrations, passes, cardBacks, cardPosts, event, frontsOutdated] = await Promise.all([
-		listRegistrations({ status, q, email }),
+	const [table, passes, cardBacks, cardPosts, event, frontsOutdated] = await Promise.all([
+		tablePage({ status, q, email }, requestedPage),
 		passesToSend(1),
-		cardBackJobs(url.origin),
+		cardBackJobs(publicOrigin(url)),
 		cardPostJobs(),
 		getEventSettings(),
 		getFrontsOutdated()
@@ -109,7 +127,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		stats,
 		passesToSend: passes.total,
 		filter: { status, q, email },
-		registrations,
+		registrations: table.rows,
+		pagination: table.pagination,
 		cardBacks,
 		cardPosts,
 		event,
@@ -198,7 +217,7 @@ export const actions: Actions = {
 		const queue = await listUnsentTickets(SEND_BATCH);
 		if (!queue.length) return { success: 'Every paid delegate already has their ticket.' };
 
-		const { sent, failed } = await sendAll(queue, url.origin);
+		const { sent, failed } = await sendAll(queue, publicOrigin(url));
 		const { ticketsToSend: left } = await getStats();
 		const parts = [`Sent ${plural(sent, 'ticket')}.`];
 		if (left > 0) parts.push(`${plural(left, 'ticket')} still waiting: click Send again to continue.`);
@@ -238,7 +257,7 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
 		const queue = await listFailedTickets(SEND_BATCH);
 		if (!queue.length) return { success: 'No ticket emails have failed.' };
-		const { sent, failed } = await sendAll(queue, url.origin);
+		const { sent, failed } = await sendAll(queue, publicOrigin(url));
 		const { email } = await getStats();
 		const parts = [`Resent ${plural(sent, 'ticket')}. Check delivery again in a minute.`];
 		if (email.failed > 0) parts.push(`${plural(email.failed, 'failed email')} left: click again to continue.`);
@@ -299,7 +318,7 @@ export const actions: Actions = {
 			const reg = await getRegistration(id);
 			if (!reg) continue;
 			try {
-				const pass = await passEmailFor(reg, url.origin);
+				const pass = await passEmailFor(reg, publicOrigin(url));
 				if (!pass) return fail(503, { message: 'Event passes need DATABASE_URL and PASS_SECRET.' });
 				await sendPassEmail(reg, pass, (await cardImages(reg)).back);
 				await markPassEmailed(reg.id);
@@ -321,7 +340,7 @@ export const actions: Actions = {
 		const reg = await getRegistration(id);
 		if (!reg || reg.status !== 'paid') return fail(409, { id, message: 'Only paid registrations have a ticket to send.' });
 		try {
-			await emailTicket(reg, url.origin);
+			await emailTicket(reg, publicOrigin(url));
 		} catch (e) {
 			return fail(502, { id, message: `The ticket email failed: ${emailFailure(e)}` });
 		}
