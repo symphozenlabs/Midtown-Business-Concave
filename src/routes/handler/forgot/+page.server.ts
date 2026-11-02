@@ -3,6 +3,7 @@ import { sendHandlerResetEmail } from '#lib/server/email.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
 import { createPasswordReset } from '#lib/server/ops/handlers.ts';
 import { allow } from '#lib/server/rate-limit.ts';
+import { publicOrigin } from '#lib/server/site.ts';
 import type { Actions } from './$types';
 
 const SENT = 'If that account has an email address, a reset link is on its way. It works for 30 minutes.';
@@ -20,7 +21,7 @@ export const actions: Actions = {
 		const reset = await createPasswordReset(identifier);
 		if (reset) {
 			try {
-				await sendHandlerResetEmail(reset.email, reset.fullName, `${url.origin}/handler/reset/${reset.token}`);
+				await sendHandlerResetEmail(reset.email, reset.fullName, `${publicOrigin(url)}/handler/reset/${reset.token}`);
 			} catch (e) {
 				console.error('[handler] reset email failed', e);
 			}

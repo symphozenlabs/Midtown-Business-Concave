@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { page } from '$app/state';
+	import { SITE_URL } from '#lib/event.ts';
 	import {
 		ArrowLeft,
 		BadgeCheck,
@@ -34,7 +34,8 @@
 	const fmt = (iso: string | null) => (iso ? when.format(new Date(iso)) : '—');
 	const RESULT = { success: 'Done', duplicate: 'Duplicate', rejected: 'Rejected' } as const;
 	const status = $derived(h.status === 'active' ? (h.lockedUntil ? 'Locked' : 'Active') : h.status === 'inactive' ? 'Deactivated' : 'Archived');
-	const signInUrl = $derived(`${page.url.origin}/login`);
+	// Always the live site, even when the dashboard runs on localhost.
+	const signInUrl = `${SITE_URL}/login`;
 	const keep = () => async ({ update }: { update: (o?: { reset?: boolean }) => Promise<void> }) => update({ reset: false });
 
 	async function copy(text: string) {

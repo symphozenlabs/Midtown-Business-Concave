@@ -1,3 +1,10 @@
+/**
+ * The public address of the live site. Every link and QR that leaves the site
+ * (ticket emails, passes, reset links, links organisers copy) uses it, never the
+ * address the page happened to be opened at, which can be a laptop's localhost.
+ */
+export const SITE_URL = 'https://conclave.midtownevents.in';
+
 export const EVENT = {
 	name: 'Midtown Business Conclave',
 	presenter: 'Salem Entrepreneurs Forum',

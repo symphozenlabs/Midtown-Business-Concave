@@ -4,6 +4,7 @@
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { page } from '$app/state';
+	import { SITE_URL } from '#lib/event.ts';
 	import {
 		BadgeCheck,
 		ChevronRight,
@@ -24,7 +25,8 @@
 
 	let { data, form } = $props();
 
-	const origin = $derived(page.url.origin);
+	// Links handed to handlers always point at the live site, even from a laptop's localhost.
+	const origin = SITE_URL;
 
 	/* ---------- list filters ---------- */
 
