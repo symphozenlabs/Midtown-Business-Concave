@@ -285,6 +285,43 @@
 		})();
 	});
 
+	/*
+	 * Square posts: this browser cuts each paid delegate's 1:1 Instagram post from
+	 * their stored ID card front and uploads it, so the ticket email carries it.
+	 */
+	let posts = $state<{ done: number; total: number; failed: number } | null>(null);
+	$effect(() => {
+		if (!data.available || !data.cardPosts.length || posts) return;
+		const jobs = data.cardPosts;
+		posts = { done: 0, total: jobs.length, failed: 0 };
+		(async () => {
+			const { renderPostFromFront } = await import('#lib/poster/renderer.ts');
+			for (const job of jobs) {
+				try {
+					// A fresh URL, so a front redrawn in this session is not read from the image cache.
+					const blob = await renderPostFromFront(`${media(job.posterKey)}?v=${Date.now()}`);
+					const res = await fetch(`/admin/card-post/${job.id}`, { method: 'POST', body: blob, headers: { 'content-type': 'image/jpeg' } });
+					if (!res.ok) throw new Error(`${res.status}`);
+					posts!.done++;
+				} catch (e) {
+					console.error('[admin] square post failed', job.code, e);
+					posts!.failed++;
+				}
+			}
+			const failed = posts!.failed;
+			await invalidateAll();
+			// Stop retrying in a loop when something keeps failing; a reload tries again.
+			posts = failed ? { done: 0, total: 0, failed } : null;
+		})();
+	});
+
+	/** ID card backs and square posts still being made; tickets wait for them. */
+	const preparing = $derived.by(() => {
+		const total = (backs?.total ?? 0) + (posts?.total ?? 0);
+		const done = (backs ? backs.done + backs.failed : 0) + (posts ? posts.done + posts.failed : 0);
+		return total > 0 ? { done, total } : null;
+	});
+
 	// Opening the dashboard quietly asks Resend about emails still on their way.
 	onMount(() => {
 		if (!inFlight) return;
@@ -452,11 +489,13 @@
 						type="submit"
 						class="btn btn-sm send-btn"
 						class:has-queue={toSend > 0}
-						disabled={toSend === 0 || busy === 'send' || (backs !== null && backs.total > 0)}
-						title={toSend ? 'Email the ID card (front and back) to every delegate marked as paid' : 'Every paid delegate has their ticket'}
+						disabled={toSend === 0 || busy === 'send' || preparing !== null}
+						title={toSend
+							? 'Email the ID card (story front, square post and QR pass) to every delegate marked as paid'
+							: 'Every paid delegate has their ticket'}
 					>
-						{#if backs && backs.total > 0}
-							<LoaderCircle size={15} class="spin" aria-hidden="true" /> Preparing ID cards {backs.done + backs.failed + 1} of {backs.total}…
+						{#if preparing}
+							<LoaderCircle size={15} class="spin" aria-hidden="true" /> Preparing ID cards {Math.min(preparing.done + 1, preparing.total)} of {preparing.total}…
 						{:else if busy === 'send'}
 							<LoaderCircle size={15} class="spin" aria-hidden="true" /> Sending {plural(toSend, 'email')}…
 						{:else if toSend > 0}

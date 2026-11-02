@@ -43,6 +43,8 @@ alter table registrations add column if not exists ticket_emailed_at    timestam
 alter table registrations add column if not exists updated_at           timestamptz not null default now();
 -- Back of the ID card (QR and details), made when the organisers confirm payment.
 alter table registrations add column if not exists ticket_back_key      text;
+-- Square (1:1) post cut from the ID card front, emailed with the ticket.
+alter table registrations add column if not exists post_key             text;
 
 -- Delegate-pass voucher applied on the payment step (the voucher list itself is the
 -- "vouchers" row in settings). amount_rupees is the fee less discount_rupees.

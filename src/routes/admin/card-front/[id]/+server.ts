@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
-import { putObject } from '#lib/server/r2.ts';
-import { getRegistration, setPosterKey } from '#lib/server/store.ts';
+import { deleteObject, putObject } from '#lib/server/r2.ts';
+import { getRegistration, setPostKey, setPosterKey } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
 
 export const prerender = false;
@@ -24,6 +24,11 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const key = reg.posterKey || `registrations/2026/${reg.id}-poster.jpg`;
 	await putObject(key, body, 'image/jpeg');
 	if (key !== reg.posterKey) await setPosterKey(reg.id, key);
+	// The square post was cut from the old front: drop it so the dashboard cuts a new one.
+	if (reg.postKey) {
+		await setPostKey(reg.id, null);
+		await deleteObject(reg.postKey).catch((e) => console.error('[admin] could not delete the old square post', e));
+	}
 	console.info(`[admin] ${locals.admin.email} regenerated the ID card front of ${reg.code}`);
 	return json({ key });
 };

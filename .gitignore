@@ -12,3 +12,6 @@ node_modules
 # Raw source images (personal UPI QR photo etc.); the app uses static/poster instead
 /posters
 .vercel
+
+# Local-only one-off email page (renders and sends a sample ticket without the database)
+/src/routes/dev-one-off-email

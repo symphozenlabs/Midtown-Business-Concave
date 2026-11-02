@@ -62,6 +62,20 @@ async function cardBackJobs(origin: string) {
 	}
 }
 
+/** Paid delegates whose square (1:1) post the organiser's browser should cut from their front now. */
+async function cardPostJobs() {
+	try {
+		const paid = await listRegistrations({ status: 'paid', q: '' });
+		return paid
+			.filter((r) => r.posterKey && !r.postKey)
+			.slice(0, 12)
+			.map((r) => ({ id: r.id, code: r.code, posterKey: r.posterKey }));
+	} catch (e) {
+		console.error('[admin] could not list square posts to make', e);
+		return [];
+	}
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.admin) redirect(303, '/login');
 	const configured = { database: isDatabaseConfigured, storage: isR2Configured, email: isEmailConfigured };
@@ -81,10 +95,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 
-	const [registrations, passes, cardBacks, event, frontsOutdated] = await Promise.all([
+	const [registrations, passes, cardBacks, cardPosts, event, frontsOutdated] = await Promise.all([
 		listRegistrations({ status, q, email }),
 		passesToSend(1),
 		cardBackJobs(url.origin),
+		cardPostJobs(),
 		getEventSettings(),
 		getFrontsOutdated()
 	]);
@@ -96,6 +111,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		filter: { status, q, email },
 		registrations,
 		cardBacks,
+		cardPosts,
 		event,
 		frontsOutdated
 	};
@@ -111,18 +127,20 @@ async function passFor(reg: Registration, origin: string) {
 	}
 }
 
-/** Front (the poster) and back (QR and details) of the ID card, as stored. */
+/** Front (the poster), back (QR and details) and square post of the ID card, as stored. */
 async function cardImages(reg: Registration) {
-	const [front, back] = await Promise.all([
+	const [front, back, post] = await Promise.all([
 		reg.posterKey ? getObject(reg.posterKey) : null,
-		reg.ticketBackKey ? getObject(reg.ticketBackKey) : null
+		reg.ticketBackKey ? getObject(reg.ticketBackKey) : null,
+		reg.postKey ? getObject(reg.postKey) : null
 	]);
-	return { front: front?.body ?? null, back: back?.body ?? null };
+	return { front: front?.body ?? null, back: back?.body ?? null, post: post?.body ?? null };
 }
 
 async function emailTicket(reg: Registration, origin: string) {
 	const [card, pass] = await Promise.all([cardImages(reg), passFor(reg, origin)]);
-	const emailId = await sendTicketEmail(reg, card.front, pass, card.back);
+	// Three images: the story-size front, the square post and the story-size QR pass.
+	const emailId = await sendTicketEmail(reg, card.front, pass, card.back, card.post);
 	await markTicketEmailed(reg.id, emailId);
 	if (pass) await markPassEmailed(reg.id);
 }
@@ -260,7 +278,7 @@ export const actions: Actions = {
 		const reg = await deleteRegistration(id);
 		if (!reg) return fail(404, { message: 'This registration no longer exists.' });
 		console.info(`[admin] ${locals.admin.email} deleted registration ${reg.code} (${reg.email})`);
-		const keys = [reg.photoKey, reg.posterKey, reg.ticketBackKey].filter((k): k is string => !!k);
+		const keys = [reg.photoKey, reg.posterKey, reg.ticketBackKey, reg.postKey].filter((k): k is string => !!k);
 		const left = await Promise.allSettled(keys.map((k) => deleteObject(k)));
 		const kept = left.filter((r) => r.status === 'rejected').length;
 		return {
