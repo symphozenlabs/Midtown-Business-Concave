@@ -53,6 +53,8 @@ export interface Registration extends RegistrationInput {
 	ticketEmailCheckedAt: string | null;
 	/** Storage key of the ID card back (QR and details); made once the payment is confirmed. */
 	ticketBackKey: string | null;
+	/** Storage key of the square (1:1) post cut from the front; made before tickets go out. */
+	postKey: string | null;
 	/** Delegate-pass voucher applied on the payment step; amountRupees is already reduced by it. */
 	voucherCode: string | null;
 	discountRupees: number;
@@ -147,6 +149,7 @@ function fromRow(r: Record<string, any>): Registration {
 		ticketEmailEvent: r.ticket_email_event ?? null,
 		ticketEmailCheckedAt: iso(r.ticket_email_checked_at),
 		ticketBackKey: r.ticket_back_key ?? null,
+		postKey: r.post_key ?? null,
 		voucherCode: r.voucher_code ?? null,
 		discountRupees: Number(r.discount_rupees ?? 0),
 		createdAt: iso(r.created_at)!
@@ -464,6 +467,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			ticketEmailEvent: null,
 			ticketEmailCheckedAt: null,
 			ticketBackKey: null,
+			postKey: null,
 			voucherCode: null,
 			discountRupees: 0,
 			createdAt: now()
@@ -787,6 +791,17 @@ export async function setTicketBack(id: string, key: string | null) {
 	}
 	await ensureColumn('registrations', 'ticket_back_key');
 	await sql()`update registrations set ticket_back_key = ${key}, updated_at = now() where id = ${id}`;
+}
+
+/** Records (or, with null, forgets) the square post, e.g. after the front is redrawn. */
+export async function setPostKey(id: string, key: string | null) {
+	if (useMemory) {
+		const row = mem.rows.get(id);
+		if (row) row.postKey = key;
+		return;
+	}
+	await ensureColumn('registrations', 'post_key');
+	await sql()`update registrations set post_key = ${key}, updated_at = now() where id = ${id}`;
 }
 
 /** A ticket email left: remember Resend's id and start tracking it as "sent". */

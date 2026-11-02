@@ -156,12 +156,18 @@ Open your pass and connections: ${pass.myPassUrl}
 Keep this link to yourself: it signs you in to your pass.`;
 }
 
-/** Emails the ticket (front and back of the ID card) and returns Resend's id, for checking delivery later. */
+/**
+ * Emails the ticket and returns Resend's id, for checking delivery later. With a
+ * square (1:1) post, three images go: the story-size front, the square front and
+ * the story-size QR pass (the card back). Without it, the front and back.
+ */
 export async function sendTicketEmail(
 	reg: Registration,
 	poster: Uint8Array | null,
 	pass: PassEmail | null = null,
-	back: Uint8Array | null = null
+	back: Uint8Array | null = null,
+	/** The ID card front as a square (1:1) post. */
+	post: Uint8Array | null = null
 ): Promise<string> {
 	const when = await schedule();
 	const first = reg.fullName.split(/\s+/)[0];
@@ -172,21 +178,38 @@ export async function sendTicketEmail(
 <strong style="color:#ffffff;">Delegate:</strong> ${escape(reg.fullName)}, ${escape(reg.designation)}, ${escape(reg.companyName)}<br>
 <strong style="color:#ffffff;">Paid:</strong> ${escape(formatRupees(reg.amountRupees))}${reg.upiTxnId ? ` (UPI ref ${escape(reg.upiTxnId)})` : ''}
 </td></tr></table>`;
+	const name = slug(reg.fullName);
+	const posts = Boolean(post);
+	const attachments: Attachment[] = post
+		? [
+				...(poster ? [{ filename: `MBC2026-${name}-story.jpg`, content: poster }] : []),
+				{ filename: `MBC2026-${name}-post.jpg`, content: post },
+				...(back
+					? [{ filename: `MBC2026-${name}-qr-pass.jpg`, content: back }]
+					: pass
+						? [passAttachment(reg, pass)]
+						: [])
+			]
+		: cardAttachments(reg, poster, back, pass);
+	const intro = posts
+		? 'We have received your payment. Three images are attached: your “I am attending” card for WhatsApp and Instagram stories, the same card as a square post for Instagram, LinkedIn and Facebook, and your QR pass. Keep the QR pass on your phone or print it for the gate.'
+		: `We have received your payment. Your ID card is attached, front and back. Share the front (“I am attending”) on WhatsApp, Instagram or LinkedIn; ${back ? 'the back carries your QR pass, so keep it on your phone or print it' : 'keep this email for the registration desk'}.`;
+	const qrOnCard = Boolean(back) && !posts;
 	const html = layout(
 		`Your seat is confirmed, ${escape(first)}.`,
-		`<p style="margin:0 0 12px;">We have received your payment. Your ID card is attached, front and back. Share the front (“I am attending”) on WhatsApp, Instagram or LinkedIn; ${back ? 'the back carries your QR pass, so keep it on your phone or print it' : 'keep this email for the registration desk'}.</p>${details}${pass ? passHtml(pass, Boolean(back)) : ''}<p style="margin:0;">See you in Salem on ${escape(when.dateLabel)}.</p>`,
+		`<p style="margin:0 0 12px;">${escape(intro)}</p>${details}${pass ? passHtml(pass, qrOnCard) : ''}<p style="margin:0;">See you in Salem on ${escape(when.dateLabel)}.</p>`,
 		when
 	);
 	const text = `Your seat is confirmed, ${first}.
 
-We have received your payment. Your ID card is attached, front and back.
+${posts ? intro : 'We have received your payment. Your ID card is attached, front and back.'}
 
 Registration number: ${reg.code}
 Delegate: ${reg.fullName}, ${reg.designation}, ${reg.companyName}
 Paid: ${formatRupees(reg.amountRupees)}${reg.upiTxnId ? ` (UPI ref ${reg.upiTxnId})` : ''}
-${pass ? `\n${passText(pass, Boolean(back))}\n` : ''}
+${pass ? `\n${passText(pass, qrOnCard)}\n` : ''}
 ${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
-	return send(reg.email, `Your ticket · ${EVENT.name} 2026 · ${reg.code}`, html, text, cardAttachments(reg, poster, back, pass));
+	return send(reg.email, `Your ticket · ${EVENT.name} 2026 · ${reg.code}`, html, text, attachments);
 }
 
 /** The pass on its own, for delegates whose ticket email went out before passes existed. */

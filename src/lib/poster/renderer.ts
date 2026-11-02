@@ -715,6 +715,217 @@ export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WI
 	return blob;
 }
 
+/*
+ * The square (1:1) Instagram post of the ID card front. It is cut from the finished
+ * story-size front, so the approved artwork, fonts and schedule carry over: the photo
+ * arch with the name plate on the left; "I am attending", the organisers and the event
+ * logo on the right; the feature and date strips below.
+ */
+type Rect = readonly [x: number, y: number, w: number, h: number];
+
+const SQUARE = {
+	size: 1080,
+	/** Story regions (base units) cut out for the post. */
+	hero: [212, 436, 656, 778] as Rect,
+	heading: [96, 226, 888, 228] as Rect,
+	logos: [150, 40, 780, 190] as Rect,
+	signoff: [250, 1752, 580, 100] as Rect,
+	/** The feature pill and the date panel, cut along their own rounded edges (radius last). */
+	chips: [25, 1548, 1030, 70] as Rect,
+	chipsRadius: 35,
+	strip: [44, 1640, 992, 110] as Rect,
+	stripRadius: 22
+} as const;
+
+/** Draws the base-unit region `r` of `story` at (dx, dy), `dw` wide; returns the drawn height. */
+function cut(ctx: Ctx, story: HTMLCanvasElement, r: Rect, dx: number, dy: number, dw: number) {
+	const s = story.width / FINAL.W;
+	const dh = (r[3] * dw) / r[2];
+	ctx.drawImage(story, r[0] * s, r[1] * s, r[2] * s, r[3] * s, dx, dy, dw, dh);
+	return dh;
+}
+
+/** Like `cut`, with edges that fade out over `feather` (a fraction of each side), so no box shows. */
+function cutSoft(ctx: Ctx, story: HTMLCanvasElement, r: Rect, dx: number, dy: number, dw: number, feather = 0.12) {
+	const s = story.width / FINAL.W;
+	const w = Math.round(r[2] * s),
+		h = Math.round(r[3] * s);
+	const tmp = makeCanvas(w, h);
+	const t = tmp.getContext('2d')!;
+	t.drawImage(story, r[0] * s, r[1] * s, w, h, 0, 0, w, h);
+	t.globalCompositeOperation = 'destination-in';
+	for (const [x1, y1] of [
+		[w, 0],
+		[0, h]
+	]) {
+		const g = t.createLinearGradient(0, 0, x1, y1);
+		g.addColorStop(0, 'rgba(0,0,0,0)');
+		g.addColorStop(feather, 'rgba(0,0,0,1)');
+		g.addColorStop(1 - feather, 'rgba(0,0,0,1)');
+		g.addColorStop(1, 'rgba(0,0,0,0)');
+		t.fillStyle = g;
+		t.fillRect(0, 0, w, h);
+	}
+	const dh = (r[3] * dw) / r[2];
+	ctx.drawImage(tmp, dx, dy, dw, dh);
+	tmp.width = tmp.height = 0;
+	return dh;
+}
+
+/** Draws region `r` of `src` (`k` source px per base unit) clipped to a rounded rectangle, with a soft shadow. */
+function cutRounded(ctx: Ctx, src: CanvasImageSource, k: number, r: Rect, radius: number, dx: number, dy: number, dw: number) {
+	const f = dw / r[2],
+		dh = r[3] * f,
+		rad = radius * f;
+	ctx.save();
+	ctx.shadowColor = 'rgba(0,0,0,0.55)';
+	ctx.shadowBlur = 22 * SC;
+	ctx.shadowOffsetY = 6 * SC;
+	roundRect(ctx, dx, dy, dw, dh, rad);
+	ctx.fillStyle = '#070B16';
+	ctx.fill();
+	ctx.restore();
+	ctx.save();
+	roundRect(ctx, dx, dy, dw, dh, rad);
+	ctx.clip();
+	ctx.drawImage(src, r[0] * k, r[1] * k, r[2] * k, r[3] * k, dx, dy, dw, dh);
+	ctx.restore();
+	return dh;
+}
+
+function renderSquare(canvas: HTMLCanvasElement, story: HTMLCanvasElement, A: PosterAssets) {
+	const Q = SQUARE;
+	const scale = story.width / FINAL.W;
+	canvas.width = canvas.height = Math.round(Q.size * scale);
+	const ctx = canvas.getContext('2d')!;
+	ctx.setTransform(scale, 0, 0, scale, 0, 0);
+	ctx.imageSmoothingEnabled = true;
+	ctx.imageSmoothingQuality = 'high';
+
+	// the artwork's hall, blurred and dimmed, as the backdrop
+	ctx.fillStyle = '#070B16';
+	ctx.fillRect(0, 0, Q.size, Q.size);
+	ctx.save();
+	ctx.filter = `blur(${14 * scale}px) brightness(0.45)`;
+	ctx.drawImage(A.bgFinal, -60, -480, 1200, 2133);
+	ctx.restore();
+
+	// bottom: feature pill, then date, time and venue, full width
+	SC = scale;
+	const stripH = (Q.strip[3] * 1000) / Q.strip[2];
+	const stripY = Q.size - 38 - stripH;
+	cutRounded(ctx, story, scale, Q.strip, Q.stripRadius, 40, stripY, 1000);
+	const chipsH = (Q.chips[3] * 1000) / Q.chips[2];
+	const chipsY = stripY - 20 - chipsH;
+	// straight from the artwork, which has the same row
+	cutRounded(ctx, A.bgFinal, A.bgFinal.width / FINAL.W, Q.chips, Q.chipsRadius, 40, chipsY, 1000);
+
+	// left: the hero, framed in gold, as tall as the space above the strips allows
+	const r = Q.hero;
+	const top = 34,
+		room = chipsY - 24 - top;
+	const hw = Math.min(556, (r[2] * room) / r[3]),
+		hh = (r[3] * hw) / r[2];
+	const hx = 40,
+		hy = top + (room - hh) / 2;
+	ctx.save();
+	ctx.shadowColor = 'rgba(0,0,0,0.6)';
+	ctx.shadowBlur = 30 * scale;
+	ctx.shadowOffsetY = 10 * scale;
+	roundRect(ctx, hx, hy, hw, hh, 26);
+	ctx.fillStyle = '#070B16';
+	ctx.fill();
+	ctx.restore();
+	ctx.save();
+	roundRect(ctx, hx, hy, hw, hh, 26);
+	ctx.clip();
+	cut(ctx, story, r, hx, hy, hw);
+	ctx.restore();
+	roundRect(ctx, hx, hy, hw, hh, 26);
+	ctx.lineWidth = 3;
+	ctx.strokeStyle = gold(ctx, hx, hy, hx + hw, hy + hh);
+	ctx.stroke();
+
+	// right: the "I am attending" heading, organisers, the event logo and the sign-off
+	const cx0 = hx + hw + 24,
+		cw = Q.size - 30 - cx0,
+		ccx = cx0 + cw / 2;
+	const items: { h: number; draw: (y: number) => void }[] = [];
+	const piece = (rect: Rect, w: number) => {
+		w = Math.min(cw, w);
+		items.push({ h: (rect[3] * w) / rect[2], draw: (y) => cutSoft(ctx, story, rect, ccx - w / 2, y, w) });
+	};
+	piece(Q.heading, 470);
+	piece(Q.logos, 380);
+	const mbcW = Math.min(cw - 10, 360),
+		mbcH = (mbcW * A.mbc.height) / A.mbc.width;
+	items.push({
+		h: mbcH,
+		draw: (y) => {
+			ctx.save();
+			ctx.shadowColor = 'rgba(0,0,0,0.6)';
+			ctx.shadowBlur = 24 * scale;
+			ctx.shadowOffsetY = 8 * scale;
+			ctx.drawImage(A.mbc, ccx - mbcW / 2, y, mbcW, mbcH);
+			ctx.restore();
+		}
+	});
+	piece(Q.signoff, 360);
+	const gap = 20;
+	let y = top + (room - (items.reduce((n, i) => n + i.h, 0) + gap * (items.length - 1))) / 2;
+	for (const it of items) {
+		it.draw(y);
+		y += it.h + gap;
+	}
+	return canvas;
+}
+
+async function squareBlob(story: HTMLCanvasElement) {
+	const canvas = document.createElement('canvas');
+	try {
+		renderSquare(canvas, story, await loadPosterAssets());
+		const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
+		if (!blob) throw new Error('Could not create the square post');
+		return blob;
+	} finally {
+		canvas.width = canvas.height = 0;
+	}
+}
+
+/** The ID card front as a square (1:1) post, 2160 px by default. */
+export async function renderPosterSquareFile(input: PosterFileInput, width = POSTER_UHD_WIDTH): Promise<Blob> {
+	const [assets, photo] = await Promise.all([loadPosterAssets(), input.photoUrl ? loadImage(input.photoUrl) : null]);
+	const story = document.createElement('canvas');
+	try {
+		renderPoster(
+			story,
+			{ ...input, category: input.category, photo, photoMeta: photo ? analysePhoto(photo) : null, event: input.event ?? null },
+			assets,
+			width
+		);
+		return await squareBlob(story);
+	} finally {
+		story.width = story.height = 0;
+	}
+}
+
+/**
+ * The square (1:1) post cut from a stored story-size front (a same-origin URL, so the
+ * canvas stays readable). The dashboard makes these for paid delegates before tickets go out.
+ */
+export async function renderPostFromFront(frontUrl: string): Promise<Blob> {
+	const front = await loadImage(frontUrl);
+	const story = document.createElement('canvas');
+	story.width = front.naturalWidth;
+	story.height = Math.round((front.naturalWidth * FINAL.H) / FINAL.W);
+	try {
+		story.getContext('2d')!.drawImage(front, 0, 0, story.width, story.height);
+		return await squareBlob(story);
+	} finally {
+		story.width = story.height = 0;
+	}
+}
+
 /** Does the image have a transparent background, and where is the subject? */
 export function analysePhoto(img: HTMLImageElement): PhotoMeta {
 	const S = 360,
