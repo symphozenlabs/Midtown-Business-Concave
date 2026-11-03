@@ -718,8 +718,8 @@ export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WI
 /*
  * The square (1:1) Instagram post of the ID card front. It is cut from the finished
  * story-size front, so the approved artwork, fonts and schedule carry over: the photo
- * arch with the name plate on the left; "I am attending", the organisers and the event
- * logo on the right; the feature and date strips below.
+ * arch with the name plate on the left; "I am attending", the event logo, the sign-off
+ * and the organisers on the right; the feature and date strips below.
  */
 type Rect = readonly [x: number, y: number, w: number, h: number];
 
@@ -727,9 +727,15 @@ const SQUARE = {
 	size: 1080,
 	/** Story regions (base units) cut out for the post. */
 	hero: [212, 436, 656, 778] as Rect,
+	/** Artwork lettering, lifted off its navy panel. */
 	heading: [96, 226, 888, 228] as Rect,
-	logos: [150, 40, 780, 190] as Rect,
 	signoff: [250, 1752, 580, 100] as Rect,
+	eyebrow: [320, 46, 440, 36] as Rect,
+	/** Right column widths (base units). */
+	headingW: 430,
+	mbcW: 420,
+	signoffW: 360,
+	organisersW: 380,
 	/** The feature pill and the date panel, cut along their own rounded edges (radius last). */
 	chips: [25, 1548, 1030, 70] as Rect,
 	chipsRadius: 35,
@@ -745,18 +751,13 @@ function cut(ctx: Ctx, story: HTMLCanvasElement, r: Rect, dx: number, dy: number
 	return dh;
 }
 
-/** Like `cut`, with edges that fade out over `feather` (a fraction of each side), so no box shows. */
-function cutSoft(ctx: Ctx, story: HTMLCanvasElement, r: Rect, dx: number, dy: number, dw: number, feather = 0.12) {
-	const s = story.width / FINAL.W;
-	const w = Math.round(r[2] * s),
-		h = Math.round(r[3] * s);
-	const tmp = makeCanvas(w, h);
-	const t = tmp.getContext('2d')!;
-	t.drawImage(story, r[0] * s, r[1] * s, w, h, 0, 0, w, h);
+/** Fades the edges of `c` out over `feather` (a fraction of each side), so no box shows. */
+function featherEdges(c: HTMLCanvasElement, feather: number) {
+	const t = c.getContext('2d')!;
 	t.globalCompositeOperation = 'destination-in';
 	for (const [x1, y1] of [
-		[w, 0],
-		[0, h]
+		[c.width, 0],
+		[0, c.height]
 	]) {
 		const g = t.createLinearGradient(0, 0, x1, y1);
 		g.addColorStop(0, 'rgba(0,0,0,0)');
@@ -764,12 +765,82 @@ function cutSoft(ctx: Ctx, story: HTMLCanvasElement, r: Rect, dx: number, dy: nu
 		g.addColorStop(1 - feather, 'rgba(0,0,0,1)');
 		g.addColorStop(1, 'rgba(0,0,0,0)');
 		t.fillStyle = g;
-		t.fillRect(0, 0, w, h);
+		t.fillRect(0, 0, c.width, c.height);
 	}
-	const dh = (r[3] * dw) / r[2];
-	ctx.drawImage(tmp, dx, dy, dw, dh);
-	tmp.width = tmp.height = 0;
-	return dh;
+	t.globalCompositeOperation = 'source-over';
+}
+
+/** The artwork's navy panel colour, unmixed from the lettering's soft edges. */
+const PANEL = [10, 18, 40] as const;
+
+const lettering = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
+
+/**
+ * Region `r` of the artwork with its dark panel made transparent, so only the gold and
+ * cream lettering (and its glow) is left. Opacity follows the brighter of red and green,
+ * which the navy panel lacks; the panel colour is then unmixed so edges stay clean.
+ * Cached per artwork image.
+ */
+function liftLettering(art: HTMLImageElement, r: Rect) {
+	let cache = lettering.get(art);
+	if (!cache) lettering.set(art, (cache = new Map()));
+	const key = r.join();
+	const hit = cache.get(key);
+	if (hit) return hit;
+	const k = art.width / FINAL.W;
+	const w = Math.round(r[2] * k),
+		h = Math.round(r[3] * k);
+	const c = makeCanvas(w, h);
+	const t = c.getContext('2d', { willReadFrequently: true })!;
+	t.drawImage(art, r[0] * k, r[1] * k, w, h, 0, 0, w, h);
+	const img = t.getImageData(0, 0, w, h);
+	const d = img.data;
+	const LO = 45,
+		HI = 140;
+	for (let i = 0; i < d.length; i += 4) {
+		const a = Math.min(1, Math.max(0, (Math.max(d[i], d[i + 1]) - LO) / (HI - LO)));
+		if (a === 0) {
+			d[i + 3] = 0;
+			continue;
+		}
+		for (let j = 0; j < 3; j++) d[i + j] = Math.min(255, Math.max(0, (d[i + j] - PANEL[j] * (1 - a)) / a));
+		d[i + 3] = Math.round(a * 255);
+	}
+	t.putImageData(img, 0, 0);
+	featherEdges(c, 0.04);
+	cache.set(key, c);
+	return c;
+}
+
+/**
+ * Blurs `img` by drawing it small and scaling it back up, in steps, so the result is
+ * smooth. Works in every browser (Safari ignores `ctx.filter`).
+ */
+function softBlur(img: CanvasImageSource, w: number, h: number, factor: number) {
+	let src: CanvasImageSource = img,
+		sw = w,
+		sh = h;
+	const steps: HTMLCanvasElement[] = [];
+	for (let f = 2; f <= factor; f *= 2) {
+		const c = makeCanvas(Math.max(1, Math.round(w / f)), Math.max(1, Math.round(h / f)));
+		const t = c.getContext('2d')!;
+		t.imageSmoothingEnabled = true;
+		t.imageSmoothingQuality = 'high';
+		t.drawImage(src, 0, 0, sw, sh, 0, 0, c.width, c.height);
+		steps.push(c);
+		src = c;
+		sw = c.width;
+		sh = c.height;
+	}
+	for (let i = steps.length - 2; i >= 0; i--) {
+		const t = steps[i].getContext('2d')!;
+		t.imageSmoothingEnabled = true;
+		t.imageSmoothingQuality = 'high';
+		t.clearRect(0, 0, steps[i].width, steps[i].height);
+		t.drawImage(steps[i + 1], 0, 0, steps[i].width, steps[i].height);
+	}
+	for (const c of steps.slice(1)) c.width = c.height = 0;
+	return steps[0] ?? null;
 }
 
 /** Draws region `r` of `src` (`k` source px per base unit) clipped to a rounded rectangle, with a soft shadow. */
@@ -802,25 +873,11 @@ function renderSquare(canvas: HTMLCanvasElement, story: HTMLCanvasElement, A: Po
 	ctx.imageSmoothingEnabled = true;
 	ctx.imageSmoothingQuality = 'high';
 
-	// the artwork's hall, blurred and dimmed, as the backdrop
-	ctx.fillStyle = '#070B16';
-	ctx.fillRect(0, 0, Q.size, Q.size);
-	ctx.save();
-	ctx.filter = `blur(${14 * scale}px) brightness(0.45)`;
-	ctx.drawImage(A.bgFinal, -60, -480, 1200, 2133);
-	ctx.restore();
-
-	// bottom: feature pill, then date, time and venue, full width
 	SC = scale;
 	const stripH = (Q.strip[3] * 1000) / Q.strip[2];
 	const stripY = Q.size - 38 - stripH;
-	cutRounded(ctx, story, scale, Q.strip, Q.stripRadius, 40, stripY, 1000);
 	const chipsH = (Q.chips[3] * 1000) / Q.chips[2];
 	const chipsY = stripY - 20 - chipsH;
-	// straight from the artwork, which has the same row
-	cutRounded(ctx, A.bgFinal, A.bgFinal.width / FINAL.W, Q.chips, Q.chipsRadius, 40, chipsY, 1000);
-
-	// left: the hero, framed in gold, as tall as the space above the strips allows
 	const r = Q.hero;
 	const top = 34,
 		room = chipsY - 24 - top;
@@ -828,6 +885,36 @@ function renderSquare(canvas: HTMLCanvasElement, story: HTMLCanvasElement, A: Po
 		hh = (r[3] * hw) / r[2];
 	const hx = 40,
 		hy = top + (room - hh) / 2;
+	const cx0 = hx + hw + 24,
+		cw = Q.size - 30 - cx0,
+		ccx = cx0 + cw / 2;
+
+	// the artwork's hall, lightly blurred and dimmed, as the backdrop
+	ctx.fillStyle = '#070B16';
+	ctx.fillRect(0, 0, Q.size, Q.size);
+	const hall = softBlur(A.bgFinal, A.bgFinal.width, A.bgFinal.height, 16);
+	ctx.drawImage(hall ?? A.bgFinal, -60, -480, 1200, 2133);
+	if (hall) hall.width = hall.height = 0;
+	ctx.fillStyle = 'rgba(0,0,0,0.45)';
+	ctx.fillRect(0, 0, Q.size, Q.size);
+	// a soft shade behind the right column so the lettering reads on the hall
+	ctx.save();
+	ctx.translate(ccx, top + room / 2);
+	ctx.scale(1, room / cw);
+	const shade = ctx.createRadialGradient(0, 0, 0, 0, 0, cw * 0.62);
+	shade.addColorStop(0, 'rgba(4,7,16,0.6)');
+	shade.addColorStop(0.6, 'rgba(4,7,16,0.38)');
+	shade.addColorStop(1, 'rgba(4,7,16,0)');
+	ctx.fillStyle = shade;
+	ctx.fillRect(-cw, -cw, cw * 2, cw * 2);
+	ctx.restore();
+
+	// bottom: feature pill, then date, time and venue, full width
+	cutRounded(ctx, story, scale, Q.strip, Q.stripRadius, 40, stripY, 1000);
+	// straight from the artwork, which has the same row
+	cutRounded(ctx, A.bgFinal, A.bgFinal.width / FINAL.W, Q.chips, Q.chipsRadius, 40, chipsY, 1000);
+
+	// left: the hero, framed in gold, as tall as the space above the strips allows
 	ctx.save();
 	ctx.shadowColor = 'rgba(0,0,0,0.6)';
 	ctx.shadowBlur = 30 * scale;
@@ -846,18 +933,15 @@ function renderSquare(canvas: HTMLCanvasElement, story: HTMLCanvasElement, A: Po
 	ctx.strokeStyle = gold(ctx, hx, hy, hx + hw, hy + hh);
 	ctx.stroke();
 
-	// right: the "I am attending" heading, organisers, the event logo and the sign-off
-	const cx0 = hx + hw + 24,
-		cw = Q.size - 30 - cx0,
-		ccx = cx0 + cw / 2;
+	// right: "I am attending", the event logo, the sign-off, then the organisers
 	const items: { h: number; draw: (y: number) => void }[] = [];
 	const piece = (rect: Rect, w: number) => {
 		w = Math.min(cw, w);
-		items.push({ h: (rect[3] * w) / rect[2], draw: (y) => cutSoft(ctx, story, rect, ccx - w / 2, y, w) });
+		const art = liftLettering(A.bgFinal, rect);
+		items.push({ h: (rect[3] * w) / rect[2], draw: (y) => ctx.drawImage(art, ccx - w / 2, y, w, (rect[3] * w) / rect[2]) });
 	};
-	piece(Q.heading, 470);
-	piece(Q.logos, 380);
-	const mbcW = Math.min(cw - 10, 360),
+	piece(Q.heading, Q.headingW);
+	const mbcW = Math.min(cw - 10, Q.mbcW),
 		mbcH = (mbcW * A.mbc.height) / A.mbc.width;
 	items.push({
 		h: mbcH,
@@ -870,7 +954,37 @@ function renderSquare(canvas: HTMLCanvasElement, story: HTMLCanvasElement, A: Po
 			ctx.restore();
 		}
 	});
-	piece(Q.signoff, 360);
+	piece(Q.signoff, Q.signoffW);
+	// "Organised by" from the artwork, over the two organiser logos from their own files
+	{
+		const L = FINAL.logos;
+		const sefW = (L.sefH * A.sef.width) / A.sef.height,
+			meW = (L.meH * A.me.width) / A.me.height;
+		const f = Math.min(cw, Q.organisersW) / (sefW + L.gap + meW);
+		const eb = Q.eyebrow,
+			ebArt = liftLettering(A.bgFinal, eb),
+			ebW = eb[2] * f,
+			ebH = eb[3] * f,
+			ebGap = 10;
+		const lh = L.sefH * f;
+		items.push({
+			h: ebH + ebGap + lh,
+			draw: (y) => {
+				ctx.drawImage(ebArt, ccx - ebW / 2, y, ebW, ebH);
+				const ly = y + ebH + ebGap,
+					x0 = ccx - ((sefW + L.gap + meW) * f) / 2;
+				ctx.drawImage(A.sef, x0, ly, sefW * f, lh);
+				const dx = x0 + (sefW + L.gap / 2) * f;
+				const g = ctx.createLinearGradient(0, ly, 0, ly + lh);
+				g.addColorStop(0, 'rgba(240,190,100,0)');
+				g.addColorStop(0.5, 'rgba(240,190,100,0.9)');
+				g.addColorStop(1, 'rgba(240,190,100,0)');
+				ctx.fillStyle = g;
+				ctx.fillRect(dx - 0.75, ly, 1.5, lh);
+				ctx.drawImage(A.me, x0 + (sefW + L.gap) * f, ly + ((L.sefH - L.meH) * f) / 2, meW * f, L.meH * f);
+			}
+		});
+	}
 	const gap = 20;
 	let y = top + (room - (items.reduce((n, i) => n + i.h, 0) + gap * (items.length - 1))) / 2;
 	for (const it of items) {
