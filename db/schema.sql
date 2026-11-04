@@ -389,3 +389,26 @@ create table if not exists audit_logs (
   created_at  timestamptz not null default now()
 );
 create index if not exists audit_logs_time_idx on audit_logs (created_at desc);
+
+-- ============================================================================
+-- Floor maps (/admin/floor-maps): an uploaded floor plan image, the layout traced over
+-- it (walls, stalls and other zones, markers) and the published copy the public 3D view
+-- at /map/<public_token> shows. The token never changes, so printed QRs keep working.
+-- Images live in R2 under floor-maps/<id>/<name>; the bundled sample uses static:<path>.
+-- ============================================================================
+create table if not exists floor_maps (
+  id               uuid primary key default gen_random_uuid(),
+  public_token     text not null unique,
+  title            text not null check (char_length(title) between 1 and 80),
+  image_key        text not null,
+  image_width      integer not null check (image_width between 1 and 8192),
+  image_height     integer not null check (image_height between 1 and 8192),
+  scale_px_per_m   numeric(10, 3) not null check (scale_px_per_m > 0),
+  layout           jsonb not null default '{}'::jsonb,
+  published_layout jsonb,
+  published_scale  numeric(10, 3),
+  published_at     timestamptz,
+  created_by       text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);

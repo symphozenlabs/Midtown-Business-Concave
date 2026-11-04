@@ -34,6 +34,11 @@ export const variables = defineEnvVars({
 		schema: optional,
 		description: 'Sender on a domain verified in Resend, e.g. Midtown Business Conclave <tickets@yourdomain.com>'
 	},
+	ANTHROPIC_API_KEY: {
+		schema: optional,
+		description:
+			'Optional Claude API key (platform.claude.com → API keys) for "Analyse with AI" on floor maps: reads walls, stalls and labels from an uploaded plan. Without it the editor detects walls in the browser instead.'
+	},
 	PASS_SECRET: {
 		schema: optional,
 		description:

@@ -10,7 +10,7 @@
 
 	// Inertial scrolling belongs to the public site. Organiser, handler and pass pages
 	// scroll natively, so popups and long tables behave like any other web page.
-	const APP_PAGES = /^\/(admin|handler|login|pass|me|certificate)(\/|$)/;
+	const APP_PAGES = /^\/(admin|handler|login|pass|me|certificate|map)(\/|$)/;
 	const smooth = $derived(!APP_PAGES.test(page.url.pathname));
 
 	$effect(() => {

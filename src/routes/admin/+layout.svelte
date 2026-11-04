@@ -2,7 +2,7 @@
 	import '#lib/ops/ops.css';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
-	import { Activity, IndianRupee, KeyRound, LayoutDashboard, LogOut, SlidersHorizontal, Users } from '@lucide/svelte';
+	import { Activity, IndianRupee, KeyRound, LayoutDashboard, LogOut, Map as MapIcon, SlidersHorizontal, Users } from '@lucide/svelte';
 
 	let { data, children } = $props();
 
@@ -11,6 +11,7 @@
 		{ href: '/admin/handlers', label: 'Handlers', icon: Users },
 		{ href: '/admin/event-setup', label: 'Event setup', icon: SlidersHorizontal },
 		{ href: '/admin/activity', label: 'Activity', icon: Activity },
+		{ href: '/admin/floor-maps', label: 'Floor maps', icon: MapIcon },
 		{ href: '/admin/payments', label: 'Payments', icon: IndianRupee }
 	];
 

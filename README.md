@@ -93,6 +93,44 @@ means reissuing every pass. Run [db/schema.sql](db/schema.sql) again to add the 
 To try the desks locally without touching the live database, point `DATABASE_URL` at a local Neon HTTP proxy
 (e.g. `postgresql://user:pass@localhost:4444/db`); `db.ts` sends local hosts to `http://localhost:4444/sql`.
 
+## Floor maps: plan → 3D → QR
+
+`/admin/floor-maps` turns a floor plan image into a 3D map that visitors open by scanning a QR. No sign-in is needed to view it.
+
+1. **Upload** a plan (PNG, JPG, WebP, SVG or iPhone HEIC). The browser shrinks it to at most 4096 px (the largest
+   texture phones accept) and the server checks the bytes before storing it in R2 under `floor-maps/<id>/`.
+   **Add sample stall map** creates a ready-made 32-stall hall (`static/floor-maps/sample-stall-floor-plan.svg`,
+   traced in [src/lib/floor-map/sample.ts](src/lib/floor-map/sample.ts)) to try everything without uploading.
+2. **Analyse (automatic).** Right after upload the plan is analysed and saved as a draft, so the walls already stand
+   in 3D: full-height, open-topped (no roof), with door gaps left open. With `ANTHROPIC_API_KEY` set, Claude reads a copy
+   (at most 2576 px) and returns walls, rooms, each stall with its printed number, entrances and exits, and the scale
+   ([floor-map-ai.ts](src/lib/server/floor-map-ai.ts)). Without a key, or if the AI call fails, the browser finds long,
+   thick, straight walls (short pieces between doorways too) and drops strokes outside the building (scale bar,
+   legend). Rooms are segmented from the plan's pixels: open space is eroded until doorways close (the depth that
+   separates the most rooms is picked automatically), each room grows back to its own walls, and the outside,
+   corridors and corridor pieces cut off at doors are left out ([detect.ts](src/lib/floor-map/detect.ts)). **Detect walls & rooms** and **Find
+   rooms** (after fixing walls by hand) run it again; rooms already named or described keep their text.
+3. **Edit** in the 2D editor ([FloorMapEditor.svelte](src/lib/components/floor-map/FloorMapEditor.svelte)): walls,
+   rectangles or any-shape areas (stalls are numbered A1, A2… automatically), markers, and
+   **Calibrate** (click two points, type the real distance). Snap to a 0.5 m grid and 45° angles, undo/redo, duplicate,
+   arrow-key nudging. The 3D preview beside it updates live.
+4. **Publish.** Drafts are never public: publishing copies the draft to `published_layout`, which is all
+   `/map/<token>` serves. **Unpublish** makes the QR show "not available". The token never changes, so printed QRs keep
+   working through edits.
+5. **QR**: download a print poster (PNG), or the bare QR as PNG or SVG.
+
+**Room descriptions.** Every room, area and stall has a description (up to 600 characters), edited in the
+**Rooms & descriptions** panel or below the editor when a zone is selected. Visitors who scan the QR first see the
+plan, an **Explore in 3D** button and a card for each room with its description; tapping a card opens the 3D view,
+flies to that room, highlights it and shows the description. Tapping a room in 3D shows it too.
+
+The viewer ([FloorMap3D.svelte](src/lib/components/floor-map/FloorMap3D.svelte), Three.js) turns the venue slowly until
+someone touches it. Drag to rotate, pinch or scroll to zoom towards the pointer, two fingers or right-drag to move
+(the view cannot be dragged off the floor); buttons rotate 45° at a time, zoom in and out, pause the turning and reset
+the view. Tapping a room title (or the room) shows its description. It renders only while something moves, caps the
+pixel ratio at 2, releases GPU memory when closed, and shows the flat plan where WebGL is unavailable. The `floor_maps` table is in [db/schema.sql](db/schema.sql), and is also
+created on first use.
+
 ## Run locally
 
 ```sh
