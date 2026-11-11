@@ -129,7 +129,7 @@
 			{/each}
 		</ul>
 
-		<div class="cta" use:reveal={200}>
+		<div class="cta" id="become-sponsor" use:reveal={200}>
 			<p>Not sure which fits? Tell us about your brand and we will suggest one.</p>
 			<button type="button" class="btn btn-gold big" onclick={() => open(tier)}>
 				<Handshake size={20} aria-hidden="true" /> Become a sponsor
