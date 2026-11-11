@@ -34,7 +34,7 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 - `/admin/payments` has three tabs. **Delegate pass** sets the event fee and UPI ID (**Generate QR** saves
   both and regenerates the QR and payment link the registration form uses); it shows the current QR and the
   `upi://pay` link mobile users tap, and can read the payee out of an uploaded QR image (a Google Pay or
-  PhonePe screenshot, for example). **Stalls** lists stall types, each with its own name, size in metres,
+  PhonePe screenshot, for example). **Stalls** lists stall types, each with its own name, size in feet,
   price and number available; **Memberships** lists plans with a price, how long they last and their
   benefits. Both are added and edited in a popup, can be closed for sale, and each has its own payment QR and
   link whose note names the item. They are paid to the delegate-pass UPI account unless given their own.

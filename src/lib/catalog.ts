@@ -13,8 +13,9 @@ export interface PayeeOverride {
 export interface StallType extends PayeeOverride {
 	id: string;
 	name: string;
-	widthM: number;
-	depthM: number;
+	/** Stall footprint in feet. */
+	widthFt: number;
+	depthFt: number;
 	priceRupees: number;
 	/** How many stalls of this type can be sold. */
 	quantity: number;
@@ -43,24 +44,40 @@ export const VALIDITY_OPTIONS: { value: number | null; label: string }[] = [
 	{ value: null, label: 'Lifetime' }
 ];
 
-/** Common stall footprints in metres, offered as a starting point. */
-export const STALL_SIZES: { widthM: number; depthM: number }[] = [
-	{ widthM: 2, depthM: 2 },
-	{ widthM: 3, depthM: 2 },
-	{ widthM: 3, depthM: 3 },
-	{ widthM: 4, depthM: 3 },
-	{ widthM: 6, depthM: 3 },
-	{ widthM: 6, depthM: 6 }
+/** Common stall footprints in feet, offered as a starting point. */
+export const STALL_SIZES: { widthFt: number; depthFt: number }[] = [
+	{ widthFt: 6, depthFt: 6 },
+	{ widthFt: 8, depthFt: 8 },
+	{ widthFt: 10, depthFt: 8 },
+	{ widthFt: 10, depthFt: 10 },
+	{ widthFt: 12, depthFt: 10 },
+	{ widthFt: 20, depthFt: 10 }
 ];
 
-const metres = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
+export const STALL_MAX_FEET = 300;
 
-export function sizeLabel(s: Pick<StallType, 'widthM' | 'depthM'>) {
-	return `${metres(s.widthM)} m × ${metres(s.depthM)} m`;
+/** Feet to the nearest half foot. */
+export const roundFeet = (n: number) => Math.round(n * 2) / 2;
+
+/**
+ * A stall type as stored. Sizes used to be saved in metres (widthM, depthM);
+ * those are converted to feet when read, so older saved stall types keep working.
+ */
+export function stallFromStored(raw: StallType & { widthM?: number; depthM?: number }): StallType {
+	const { widthM, depthM, ...rest } = raw;
+	const toFeet = (ft: unknown, m: unknown) =>
+		typeof ft === 'number' ? ft : typeof m === 'number' ? roundFeet(m * 3.28084) : 6;
+	return { ...rest, widthFt: toFeet(raw.widthFt, widthM), depthFt: toFeet(raw.depthFt, depthM) };
 }
 
-export function areaLabel(s: Pick<StallType, 'widthM' | 'depthM'>) {
-	return `${metres(s.widthM * s.depthM)} m²`;
+const feet = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
+
+export function sizeLabel(s: Pick<StallType, 'widthFt' | 'depthFt'>) {
+	return `${feet(s.widthFt)} ft × ${feet(s.depthFt)} ft`;
+}
+
+export function areaLabel(s: Pick<StallType, 'widthFt' | 'depthFt'>) {
+	return `${feet(s.widthFt * s.depthFt)} sq ft`;
 }
 
 export function validityLabel(months: number | null) {
