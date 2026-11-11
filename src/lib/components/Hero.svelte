@@ -48,7 +48,6 @@
 				<img src="/poster/me.webp" alt="Midtown Events" width="2036" height="652" class="me" />
 			</div>
 		</div>
-		<a href="#register" class="btn btn-gold small">Register</a>
 	</div>
 
 	<div class="container content">
@@ -167,11 +166,6 @@
 		width: 1px;
 		height: clamp(26px, 4.8svh, 38px);
 		background: linear-gradient(180deg, rgb(240 190 100 / 0), rgb(240 190 100 / 0.9), rgb(240 190 100 / 0));
-	}
-
-	.small {
-		min-height: 40px;
-		padding-inline: var(--space-4);
 	}
 
 	.content {
@@ -381,7 +375,7 @@
 			font-size: 10px;
 		}
 
-		/* The logos shrink with the screen so they never run under the Register button. */
+		/* The logos shrink with the screen so they always fit the top bar. */
 		.organisers,
 		.logos {
 			min-width: 0;
@@ -402,11 +396,6 @@
 
 		.me {
 			flex: 0 1 106px;
-		}
-
-		.small {
-			flex: none;
-			padding-inline: var(--space-3);
 		}
 
 		.lead {
