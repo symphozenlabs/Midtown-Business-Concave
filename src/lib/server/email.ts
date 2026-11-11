@@ -21,7 +21,7 @@ function toBase64(bytes: Uint8Array) {
 	return btoa(binary);
 }
 
-const escape = (s: string) =>
+export const escape = (s: string) =>
 	s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /* ---------- delivery status ---------- */
@@ -58,7 +58,7 @@ export async function fetchEmailEvent(id: string): Promise<string> {
 }
 
 /** Sends one email and returns Resend's id for it. */
-async function send(to: string, subject: string, html: string, text: string, attachments: Attachment[] = []): Promise<string> {
+export async function send(to: string, subject: string, html: string, text: string, attachments: Attachment[] = []): Promise<string> {
 	if (!isEmailConfigured) {
 		if (dev) {
 			console.info(
@@ -89,12 +89,12 @@ async function send(to: string, subject: string, html: string, text: string, att
 }
 
 /** The schedule as set on the dashboard, formatted for the footer of every email. */
-async function schedule(): Promise<EventLabels> {
+export async function schedule(): Promise<EventLabels> {
 	return eventLabels(await getEventSettings());
 }
 
 /** Email layout: navy and gold like the poster, with inline styles for mail clients. */
-function layout(title: string, body: string, when: EventLabels) {
+export function layout(title: string, body: string, when: EventLabels) {
 	return `<!doctype html><html><body style="margin:0;background:#0b1430;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#101a3a;border:1px solid #6b5426;border-radius:14px;">

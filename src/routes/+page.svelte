@@ -3,6 +3,8 @@
 	import Hero from '#lib/components/Hero.svelte';
 	import StoryMap from '#lib/components/StoryMap.svelte';
 	import RegistrationSection from '#lib/components/RegistrationSection.svelte';
+	import StallBooking from '#lib/components/StallBooking.svelte';
+	import Sponsorship from '#lib/components/Sponsorship.svelte';
 	import Sponsors from '#lib/components/Sponsors.svelte';
 	import SiteFooter from '#lib/components/SiteFooter.svelte';
 </script>
@@ -26,6 +28,8 @@
 	<StoryMap />
 	<Sponsors />
 	<RegistrationSection />
+	<StallBooking />
+	<Sponsorship />
 </main>
 <SiteFooter />
 
