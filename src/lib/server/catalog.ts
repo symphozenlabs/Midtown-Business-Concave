@@ -1,5 +1,5 @@
 import { dev } from '$app/env';
-import { sameName, type MembershipPlan, type StallType } from '#lib/catalog.ts';
+import { STALL_MAX_FEET, roundFeet, sameName, stallFromStored, type MembershipPlan, type StallType } from '#lib/catalog.ts';
 import { isValidVpa } from '#lib/payment.ts';
 import { isDatabaseConfigured, sql } from './db.ts';
 
@@ -31,7 +31,8 @@ async function write<T>(key: 'stalls' | 'memberships', list: T[], by: string) {
 		on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by`;
 }
 
-export const listStalls = () => read<StallType>('stalls');
+/** Older stall types were saved in metres; they come back in feet. */
+export const listStalls = async () => (await read<StallType>('stalls')).map(stallFromStored);
 export const listMemberships = () => read<MembershipPlan>('memberships');
 
 /* ---------- reading the forms ---------- */
@@ -69,9 +70,11 @@ export function readStall(form: FormData, existing: StallType[]): { stall: Stall
 	const errors: Errors = {};
 	const id = text(form, 'id') || null;
 	const name = readName(form, errors, existing, id);
-	const widthM = Number(text(form, 'widthM'));
-	const depthM = Number(text(form, 'depthM'));
-	if (!(widthM > 0 && widthM <= 100) || !(depthM > 0 && depthM <= 100)) errors.size = 'Enter the width and depth in metres (up to 100).';
+	const widthFt = Number(text(form, 'widthFt'));
+	const depthFt = Number(text(form, 'depthFt'));
+	if (!(widthFt > 0 && widthFt <= STALL_MAX_FEET) || !(depthFt > 0 && depthFt <= STALL_MAX_FEET)) {
+		errors.size = `Enter the width and depth in feet (up to ${STALL_MAX_FEET}).`;
+	}
 	const priceRupees = readPrice(form, errors);
 	const quantity = Number(text(form, 'quantity'));
 	if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000) errors.quantity = 'Enter how many stalls, 1 to 1000.';
@@ -82,8 +85,8 @@ export function readStall(form: FormData, existing: StallType[]): { stall: Stall
 		stall: {
 			id: before?.id ?? crypto.randomUUID(),
 			name,
-			widthM: Math.round(widthM * 10) / 10,
-			depthM: Math.round(depthM * 10) / 10,
+			widthFt: roundFeet(widthFt),
+			depthFt: roundFeet(depthFt),
 			priceRupees,
 			quantity,
 			description,

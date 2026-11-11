@@ -146,8 +146,8 @@
 	let saving = $state(false);
 	let draft = $state({
 		name: '',
-		widthM: '3',
-		depthM: '3',
+		widthFt: '6',
+		depthFt: '6',
 		priceRupees: '',
 		quantity: '10',
 		description: '',
@@ -162,8 +162,8 @@
 		draft = {
 			...draft,
 			name: stall?.name ?? '',
-			widthM: String(stall?.widthM ?? 3),
-			depthM: String(stall?.depthM ?? 3),
+			widthFt: String(stall?.widthFt ?? 6),
+			depthFt: String(stall?.depthFt ?? 6),
 			priceRupees: stall ? String(stall.priceRupees) : '',
 			quantity: String(stall?.quantity ?? 10),
 			description: stall?.description ?? '',
@@ -205,12 +205,12 @@
 		return list.some((x) => x.id !== editor!.id && sameName(x.name, draft.name));
 	});
 
-	const presetValue = $derived(`${Number(draft.widthM)}x${Number(draft.depthM)}`);
+	const presetValue = $derived(`${Number(draft.widthFt)}x${Number(draft.depthFt)}`);
 	function choosePreset(value: string) {
 		if (!value) return;
 		const [w, d] = value.split('x');
-		draft.widthM = w;
-		draft.depthM = d;
+		draft.widthFt = w;
+		draft.depthFt = d;
 	}
 
 	const saveItem: SubmitFunction = () => {
@@ -613,7 +613,7 @@
 							</ul>
 						{:else}
 							<div class="ops-empty">
-								<p>No stalls yet. Add each size you sell, for example <b>Standard 3 m × 3 m</b> or <b>Premium corner 6 m × 3 m</b>.</p>
+								<p>No stalls yet. Add each size you sell, for example <b>Standard 6 ft × 6 ft</b> or <b>Premium corner 10 ft × 10 ft</b>.</p>
 							</div>
 						{/if}
 					</section>
@@ -749,13 +749,13 @@
 				<div class="size-row">
 					<label class="ops-label">
 						Size
-						<select value={STALL_SIZES.some((s) => `${s.widthM}x${s.depthM}` === presetValue) ? presetValue : ''} onchange={(e) => choosePreset(e.currentTarget.value)}>
+						<select value={STALL_SIZES.some((s) => `${s.widthFt}x${s.depthFt}` === presetValue) ? presetValue : ''} onchange={(e) => choosePreset(e.currentTarget.value)}>
 							<option value="">Custom size</option>
-							{#each STALL_SIZES as s (`${s.widthM}x${s.depthM}`)}<option value="{s.widthM}x{s.depthM}">{sizeLabel(s)}</option>{/each}
+							{#each STALL_SIZES as s (`${s.widthFt}x${s.depthFt}`)}<option value="{s.widthFt}x{s.depthFt}">{sizeLabel(s)}</option>{/each}
 						</select>
 					</label>
-					<label class="ops-label">Width (m)<input name="widthM" type="number" inputmode="decimal" min="0.5" max="100" step="0.5" bind:value={draft.widthM} required /></label>
-					<label class="ops-label">Depth (m)<input name="depthM" type="number" inputmode="decimal" min="0.5" max="100" step="0.5" bind:value={draft.depthM} required /></label>
+					<label class="ops-label">Width (ft)<input name="widthFt" type="number" inputmode="decimal" min="1" max="300" step="0.5" bind:value={draft.widthFt} required /></label>
+					<label class="ops-label">Depth (ft)<input name="depthFt" type="number" inputmode="decimal" min="1" max="300" step="0.5" bind:value={draft.depthFt} required /></label>
 				</div>
 				{#if dialogErrorFor(scope, 'size')}<small class="ops-field-error">{dialogErrorFor(scope, 'size')}</small>{/if}
 				<div class="pair">
