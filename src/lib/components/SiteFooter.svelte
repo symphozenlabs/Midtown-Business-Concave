@@ -20,6 +20,9 @@
 	</div>
 	<div class="container legal">
 		<p>© 2026 {EVENT.presenter}. All rights reserved.</p>
+		<p class="powered">
+			Powered by <a href="https://www.symphozen.com" target="_blank" rel="noopener">SymphoZen Labs</a>
+		</p>
 	</div>
 </footer>
 
@@ -78,8 +81,25 @@
 	}
 
 	.legal {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: var(--space-2) var(--space-6);
 		padding-block: var(--space-6);
 		border-top: 1px solid var(--rule-inverse);
 		font: var(--text-caption);
+	}
+
+	.powered a {
+		color: var(--gold);
+		font-weight: 600;
+		text-decoration: none;
+		text-underline-offset: 3px;
+	}
+
+	.powered a:hover,
+	.powered a:focus-visible {
+		color: var(--gold-bright);
+		text-decoration: underline;
 	}
 </style>

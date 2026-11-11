@@ -17,6 +17,7 @@ import {
 	syncVoucherHolders,
 	voucherUsage
 } from '#lib/server/store.ts';
+import { prepareBookings, stallVoucherUsage } from '#lib/server/bookings.ts';
 import { listVouchers, readVoucher, removeVoucher, saveVoucher, setVoucherActive } from '#lib/server/vouchers.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -34,13 +35,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const requested = url.searchParams.get('tab');
 	const tab: PaymentsTab = TABS.find((t) => t === requested) ?? 'pass';
 	if (!isStoreAvailable) return { available: false as const, tab };
-	const [payment, stalls, memberships, vouchers, usage] = await Promise.all([
+	// Adds the stall bookings table and the SEFMEMBER promo the first time.
+	await prepareBookings();
+	const [payment, stalls, memberships, vouchers, passUsage, stallUsage] = await Promise.all([
 		getPaymentSettings(),
 		listStalls(),
 		listMemberships(),
 		listVouchers(),
-		voucherUsage()
+		voucherUsage(),
+		stallVoucherUsage()
 	]);
+	// Stall vouchers are used by stall bookings; the rest by delegate registrations.
+	const usage = { ...passUsage, ...stallUsage };
 	return { available: true as const, tab, payment, link: linkFor(payment), stalls, memberships, vouchers, usage };
 };
 

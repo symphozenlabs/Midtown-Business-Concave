@@ -2,7 +2,7 @@
 	import '#lib/ops/ops.css';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
-	import { Activity, IndianRupee, KeyRound, LayoutDashboard, LogOut, SlidersHorizontal, Users } from '@lucide/svelte';
+	import { Activity, Handshake, IndianRupee, KeyRound, LayoutDashboard, LogOut, SlidersHorizontal, Store, Users } from '@lucide/svelte';
 
 	let { data, children } = $props();
 
@@ -11,7 +11,9 @@
 		{ href: '/admin/handlers', label: 'Handlers', icon: Users },
 		{ href: '/admin/event-setup', label: 'Event setup', icon: SlidersHorizontal },
 		{ href: '/admin/activity', label: 'Activity', icon: Activity },
-		{ href: '/admin/payments', label: 'Payments', icon: IndianRupee }
+		{ href: '/admin/payments', label: 'Payments', icon: IndianRupee },
+		{ href: '/admin/stalls', label: 'Stalls', icon: Store },
+		{ href: '/admin/sponsors', label: 'Sponsors', icon: Handshake }
 	];
 
 	const current = (href: string) =>
@@ -172,7 +174,8 @@
 
 	/* Tablets and phones: brand and Sign out on one row, every page visible below
 	   (no sideways-scrolling nav). Not sticky, so it does not take the screen. */
-	@media (max-width: 960px) {
+	/* Below this width the seven pages no longer fit beside the brand, so they get a row of their own. */
+	@media (max-width: 1680px) {
 		.topbar {
 			position: static;
 			flex-wrap: wrap;

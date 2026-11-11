@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowDown, CalendarDays, Clock, MapPin } from '@lucide/svelte';
+	import { CalendarDays, Clock, Handshake, MapPin, Store, Ticket } from '@lucide/svelte';
 	import { EVENT } from '#lib/event.ts';
 	import { eventLabels } from '#lib/event-settings.ts';
 	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
@@ -77,10 +77,21 @@
 			</dl>
 
 			<div class="cta rise" style="--d: 320ms">
-				<a href="#register" class="btn btn-gold">
-					Register as a delegate <ArrowDown size={18} aria-hidden="true" />
-				</a>
 				<Countdown />
+				<div class="register-as">
+					<span class="register-title" id="register-as">Register as</span>
+					<nav class="roles" aria-labelledby="register-as">
+						<a href="#register" class="btn btn-gold">
+							<Ticket size={18} aria-hidden="true" /> Delegate
+						</a>
+						<a href="#book-stall" class="btn btn-ghost-gold">
+							<Store size={18} aria-hidden="true" /> Exhibitor
+						</a>
+						<a href="#become-sponsor" class="btn btn-ghost-gold">
+							<Handshake size={18} aria-hidden="true" /> Sponsor
+						</a>
+					</nav>
+				</div>
 			</div>
 		</div>
 
@@ -248,10 +259,46 @@
 	}
 
 	.cta {
+		display: grid;
+		justify-items: start;
+		gap: var(--gap);
+	}
+
+	.register-as {
+		display: grid;
+		gap: var(--space-3);
+	}
+
+	.register-title {
+		font: var(--text-eyebrow);
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--gold);
+	}
+
+	.roles {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--space-4) var(--space-8);
+		gap: var(--space-3);
+	}
+
+	.roles .btn {
+		min-width: 150px;
+		justify-content: center;
+	}
+
+	.btn-ghost-gold {
+		border: 1px solid var(--gold);
+		background: rgb(227 176 75 / 0.06);
+		color: var(--on-ink);
+	}
+
+	.btn-ghost-gold:hover {
+		background: rgb(227 176 75 / 0.16);
+	}
+
+	.btn-ghost-gold :global(svg) {
+		color: var(--gold);
 	}
 
 	.cta :global(.value) {
@@ -401,12 +448,25 @@
 			display: inline;
 		}
 
-		.cta {
+		.cta,
+		.register-as {
 			width: 100%;
 		}
 
-		.cta .btn {
-			width: 100%;
+		.roles {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: var(--space-2);
+		}
+
+		.roles .btn {
+			min-width: 0;
+			padding-inline: var(--space-2);
+			font-size: 14px;
+		}
+
+		.roles .btn :global(svg) {
+			display: none;
 		}
 	}
 </style>

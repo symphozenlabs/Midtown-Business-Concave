@@ -389,3 +389,54 @@ create table if not exists audit_logs (
   created_at  timestamptz not null default now()
 );
 create index if not exists audit_logs_time_idx on audit_logs (created_at desc);
+
+-- Stall bookings from the website (src/lib/server/bookings.ts creates these on first use too).
+--   pending_payment → payment_submitted (UPI transaction ID entered) → paid (organiser allots the stall) or rejected
+-- preferred_stall is the exhibitor's wish; allotted_stall is the organisers' decision.
+create table if not exists stall_bookings (
+  id               uuid primary key default gen_random_uuid(),
+  code             text not null unique,
+  full_name        text not null check (char_length(full_name) between 2 and 60),
+  business_name    text not null check (char_length(business_name) between 2 and 80),
+  email            text not null check (char_length(email) <= 120),
+  phone            text not null check (phone ~ '^\+91[6-9][0-9]{9}$'),
+  preferred_stall  int check (preferred_stall between 1 and 39),
+  allotted_stall   int check (allotted_stall between 1 and 39),
+  stall_type       text not null,
+  price_rupees     numeric(10, 2) not null,
+  voucher_code     text,
+  discount_rupees  numeric(10, 2) not null default 0,
+  amount_rupees    numeric(10, 2) not null,
+  payee_vpa        text not null,
+  payee_name       text not null,
+  status           text not null default 'pending_payment'
+                   check (status in ('pending_payment', 'payment_submitted', 'paid', 'rejected')),
+  upi_txn_id       text check (upi_txn_id is null or upi_txn_id ~ '^[0-9]{12}$'),
+  payment_submitted_at timestamptz,
+  reviewed_at      timestamptz,
+  reviewed_by      text,
+  rejection_reason text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+create unique index if not exists stall_bookings_upi_txn_id_key on stall_bookings (upi_txn_id) where upi_txn_id is not null;
+create index if not exists stall_bookings_voucher_idx on stall_bookings (voucher_code) where voucher_code is not null;
+
+-- "Become a sponsor" requests; the organisers follow up from /admin/sponsors.
+create table if not exists sponsor_requests (
+  id            uuid primary key default gen_random_uuid(),
+  contact_name  text not null check (char_length(contact_name) between 2 and 60),
+  company_name  text not null check (char_length(company_name) between 2 and 80),
+  email         text not null check (char_length(email) <= 120),
+  phone         text not null check (phone ~ '^\+91[6-9][0-9]{9}$'),
+  tier          text not null,
+  message       text check (char_length(message) <= 600),
+  status        text not null default 'new' check (status in ('new', 'contacted', 'confirmed', 'declined')),
+  admin_note    text check (char_length(admin_note) <= 300),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  updated_by    text
+);
+
+-- The SEFMEMBER promo code (25% off stalls) is added to the "vouchers" setting the first
+-- time the site needs it; organisers can edit or close it under Payments → Stalls.

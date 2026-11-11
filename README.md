@@ -42,6 +42,23 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 - `/admin/event-setup` sets the event date and time (shown in the hero, countdown and ticket emails), and the
   gates (unique names), halls and sessions, meals and certificate rules.
 
+## Stall booking and sponsors
+
+- **Book a stall** (homepage, after delegate registration): name, business name, email, mobile, a preferred
+  stall number picked from the floor layout (`static/floor/stall-layout.jpg`; the layout has no stalls 25 and 35),
+  and an optional promo code. The note says the stall number is only a preference. The exhibitor then pays by UPI
+  and enters the transaction ID, as delegates do. Bookings are numbered `STL-XXXXXX`.
+- **Price**: the stall types open for sale under `/admin/payments` → Stalls; with none set up, a standard
+  6 ft × 6 ft stall at ₹7,500.
+- **Promo code SEFMEMBER** (25% off stalls) is added to the vouchers the first time the site needs it, and is
+  edited, limited or closed under `/admin/payments` → Stalls like any other voucher.
+- `/admin/stalls` lists bookings: confirm a payment and allot the final stall (emails the exhibitor), change the
+  allotted stall, or reject with a note. A stall can be allotted to one confirmed booking only.
+- **Sponsorship** section with the three packages from the poster and a **Become a sponsor** form. Each request
+  gets a thank-you email and appears at `/admin/sponsors`, where organisers set its status and a private note.
+- Tables `stall_bookings` and `sponsor_requests` are created automatically on first use (also in
+  [db/schema.sql](db/schema.sql)).
+
 ## Event day: one QR, six desks
 
 Every paid delegate has **one QR pass** (`/pass/<token>`, nothing personal in it). It works at six kinds of desk,

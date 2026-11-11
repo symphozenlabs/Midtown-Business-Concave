@@ -442,8 +442,10 @@
 				<p>No vouchers yet. Add one such as <b>EARLYBIRD</b> for 20% off, or a fixed amount off for sponsors and partners.</p>
 			</div>
 		{/if}
-		{#if tabScope !== 'pass'}
-			<p class="ops-hint">These codes are kept ready for when {SCOPE_NOUN[tabScope]}s are sold online. Today only delegate-pass vouchers can be redeemed, on the registration payment step.</p>
+		{#if tabScope === 'stall'}
+			<p class="ops-hint">Exhibitors enter these codes in the Promo code box when they book a stall on the website. Uses count bookings that are not rejected.</p>
+		{:else if tabScope !== 'pass'}
+			<p class="ops-hint">These codes are kept ready for when {SCOPE_NOUN[tabScope]}s are sold online. Today only delegate-pass and stall vouchers can be redeemed.</p>
 		{/if}
 	</section>
 {/snippet}
@@ -687,6 +689,12 @@
 							<div><dt>Stalls available</dt><dd>{totalStalls}</dd></div>
 							<div><dt>Value if all sell</dt><dd>{formatRupees(stallValue)}</dd></div>
 						</dl>
+						{#if !stalls.some((s) => s.active)}
+							<p class="ops-hint">
+								With no stall type on sale, the website sells a Standard stall (6 ft × 6 ft) at ₹7,500. Add a stall type to
+								change the price; bookings are managed under <a href="/admin/stalls">Stalls</a>.
+							</p>
+						{/if}
 					{:else}
 						<dl class="facts">
 							<div><dt>Plans on sale</dt><dd>{memberships.filter((m) => m.active).length} of {memberships.length}</dd></div>
