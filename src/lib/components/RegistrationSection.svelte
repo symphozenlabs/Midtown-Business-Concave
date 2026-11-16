@@ -50,6 +50,7 @@
 	import CityPicker from './CityPicker.svelte';
 	import PaymentPanel from './PaymentPanel.svelte';
 	import PosterCard from './PosterCard.svelte';
+	import AgendaButton from './AgendaButton.svelte';
 	import StepRoute from './StepRoute.svelte';
 	import TicketSent from './TicketSent.svelte';
 
@@ -388,6 +389,7 @@
 					Five short steps, about three minutes. Your “I am attending” poster builds itself as you go. Once your
 					payment is confirmed, we email it to you as your ticket.
 				</p>
+				{#if narrow}<div class="agenda-inline"><AgendaButton /></div>{/if}
 			</header>
 
 			<div class="panel" bind:this={panel} use:reveal={80}>
@@ -737,6 +739,7 @@
 							<span class="bar" aria-hidden="true"><span style="transform: scaleX({completeness / 100})"></span></span>
 						</div>
 					{/if}
+					<AgendaButton block />
 				</div>
 			</aside>
 		{/if}
@@ -780,6 +783,15 @@
 	.lead {
 		font: var(--text-lead);
 		color: var(--text-supporting);
+	}
+
+	.agenda-inline {
+		display: grid;
+		justify-items: start;
+	}
+
+	.agenda-inline:empty {
+		display: none;
 	}
 
 	.panel {

@@ -1,33 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { MapPin, Mic } from '@lucide/svelte';
-	import { agenda, loadAgenda, type AgendaItem } from '#lib/agenda.svelte.ts';
-	import { EVENT_TIME_ZONE } from '#lib/event-settings.ts';
+	import { agenda, agendaClock as clock, agendaSlots, loadAgenda } from '#lib/agenda.svelte.ts';
 	import { reveal } from '#lib/actions/reveal.ts';
 
 	onMount(() => {
 		loadAgenda();
 	});
 
-	const fmt = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: EVENT_TIME_ZONE });
-
-	/** "9.30 am", "12 pm": the site's own way of writing times. */
-	function clock(iso: string) {
-		const parts = Object.fromEntries(fmt.formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
-		const period = (parts.dayPeriod ?? '').toLowerCase().replace(/\./g, '');
-		return parts.minute === '00' ? `${parts.hour} ${period}` : `${parts.hour}.${parts.minute} ${period}`;
-	}
-
-	/** Sessions that start together (parallel tracks) share one slot on the timeline. */
-	const slots = $derived.by(() => {
-		const bySlot = new Map<string, AgendaItem[]>();
-		for (const item of agenda.items) {
-			const list = bySlot.get(item.startsAt) ?? [];
-			list.push(item);
-			bySlot.set(item.startsAt, list);
-		}
-		return [...bySlot.entries()].sort(([a], [b]) => Date.parse(a) - Date.parse(b));
-	});
+	const slots = $derived(agendaSlots(agenda.items));
 
 	// Hall names only help when there is more than one.
 	const manyHalls = $derived(new Set(agenda.items.map((i) => i.hall)).size > 1);
