@@ -2,6 +2,7 @@
 	import { EVENT } from '#lib/event.ts';
 	import Hero from '#lib/components/Hero.svelte';
 	import StoryMap from '#lib/components/StoryMap.svelte';
+	import Agenda from '#lib/components/Agenda.svelte';
 	import RegistrationSection from '#lib/components/RegistrationSection.svelte';
 	import StallBooking from '#lib/components/StallBooking.svelte';
 	import Sponsorship from '#lib/components/Sponsorship.svelte';
@@ -26,6 +27,7 @@
 <Hero />
 <main>
 	<StoryMap />
+	<Agenda />
 	<Sponsors />
 	<RegistrationSection />
 	<StallBooking />

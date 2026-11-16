@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { CalendarDays, Clock, Handshake, MapPin, Store, Ticket } from '@lucide/svelte';
+	import { CalendarDays, Clock, Handshake, ListOrdered, MapPin, Store, Ticket } from '@lucide/svelte';
+	import { agenda, loadAgenda } from '#lib/agenda.svelte.ts';
 	import { EVENT } from '#lib/event.ts';
 	import { eventLabels } from '#lib/event-settings.ts';
 	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
@@ -14,6 +15,7 @@
 	// Centre the backdrop's sunburst exactly on the logo, whatever the layout.
 	onMount(() => {
 		loadSiteConfig();
+		loadAgenda();
 		const align = () => {
 			const h = hero.getBoundingClientRect();
 			const l = logo.getBoundingClientRect();
@@ -76,7 +78,12 @@
 			</dl>
 
 			<div class="cta rise" style="--d: 320ms">
-				<Countdown />
+				<div class="countdown-row">
+					<Countdown />
+					{#if agenda.items.length}
+						<a class="agenda-link" href="#agenda"><ListOrdered size={16} aria-hidden="true" /> View agenda</a>
+					{/if}
+				</div>
 				<div class="register-as">
 					<span class="register-title" id="register-as">Register as</span>
 					<nav class="roles" aria-labelledby="register-as">
@@ -256,6 +263,30 @@
 		display: grid;
 		justify-items: start;
 		gap: var(--gap);
+	}
+
+	.countdown-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-6);
+	}
+
+	.agenda-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		color: var(--gold);
+		font: var(--text-ui);
+		font-size: 15px;
+		text-decoration: underline;
+		text-decoration-color: rgb(227 176 75 / 0.4);
+		text-underline-offset: 4px;
+	}
+
+	.agenda-link:hover {
+		color: var(--gold-bright);
+		text-decoration-color: currentColor;
 	}
 
 	.register-as {

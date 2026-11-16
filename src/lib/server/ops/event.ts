@@ -60,7 +60,14 @@ export interface ConferenceSession {
 	startsAt: string;
 	endsAt: string;
 	countsForAttendance: boolean;
+	/** Optional, shown on the website agenda. */
+	speaker: string | null;
+	description: string | null;
+	/** False keeps a session off the public agenda (it still works at the hall desks). */
+	showOnAgenda: boolean;
 }
+
+export const SESSION_LIMITS = { hall: 60, title: 120, speaker: 120, description: 300 } as const;
 
 export type MealEligibility = 'paid' | 'checked_in';
 
@@ -151,19 +158,61 @@ function sessionFrom(r: Record<string, any>): ConferenceSession {
 		title: r.title,
 		startsAt: iso(r.starts_at)!,
 		endsAt: iso(r.ends_at)!,
-		countsForAttendance: r.counts_for_attendance
+		countsForAttendance: r.counts_for_attendance,
+		speaker: r.speaker ?? null,
+		description: r.description ?? null,
+		showOnAgenda: r.show_on_agenda ?? true
 	};
 }
 
+let agendaColumns: Promise<void> | null = null;
+
+/**
+ * The agenda fields on sessions, added once per server instance if db/schema.sql
+ * has not been rerun yet (same statements as the schema, so safe to repeat).
+ */
+function ensureAgendaColumns(): Promise<void> {
+	agendaColumns ??= (async () => {
+		await sql().query('alter table conference_sessions add column if not exists speaker text');
+		await sql().query('alter table conference_sessions add column if not exists description text');
+		await sql().query('alter table conference_sessions add column if not exists show_on_agenda boolean not null default true');
+	})().catch((e) => {
+		agendaColumns = null;
+		throw e;
+	});
+	return agendaColumns;
+}
+
 export async function listSessions(eventId: string): Promise<ConferenceSession[]> {
-	const rows = await sql()`select * from conference_sessions where event_id = ${eventId} order by starts_at, hall`;
+	await ensureAgendaColumns();
+	// Sessions that start together keep the order the organisers added them in.
+	const rows = await sql()`select * from conference_sessions where event_id = ${eventId} order by starts_at, created_at`;
 	return rows.map(sessionFrom);
 }
 
+/** What the website agenda shows: sessions marked for it, in time order. */
+export async function listAgenda(eventId: string): Promise<ConferenceSession[]> {
+	return (await listSessions(eventId)).filter((s) => s.showOnAgenda);
+}
+
 export async function addSession(eventId: string, s: Omit<ConferenceSession, 'id'>) {
+	await ensureAgendaColumns();
 	await sql()`
-		insert into conference_sessions (event_id, hall, title, starts_at, ends_at, counts_for_attendance)
-		values (${eventId}, ${s.hall}, ${s.title}, ${s.startsAt}, ${s.endsAt}, ${s.countsForAttendance})`;
+		insert into conference_sessions (event_id, hall, title, starts_at, ends_at, counts_for_attendance, speaker, description, show_on_agenda)
+		values (${eventId}, ${s.hall}, ${s.title}, ${s.startsAt}, ${s.endsAt}, ${s.countsForAttendance},
+			${s.speaker}, ${s.description}, ${s.showOnAgenda})`;
+}
+
+/** Edits a session in place; its attendance records stay attached. Returns false if it no longer exists. */
+export async function updateSession(eventId: string, id: string, s: Omit<ConferenceSession, 'id'>): Promise<boolean> {
+	await ensureAgendaColumns();
+	const rows = await sql()`
+		update conference_sessions set hall = ${s.hall}, title = ${s.title}, starts_at = ${s.startsAt}, ends_at = ${s.endsAt},
+			counts_for_attendance = ${s.countsForAttendance}, speaker = ${s.speaker}, description = ${s.description},
+			show_on_agenda = ${s.showOnAgenda}
+		where event_id = ${eventId} and id = ${id}
+		returning id`;
+	return rows.length > 0;
 }
 
 export async function deleteSession(eventId: string, id: string) {

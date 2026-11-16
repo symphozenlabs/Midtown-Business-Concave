@@ -176,6 +176,11 @@ create table if not exists conference_sessions (
   check (ends_at > starts_at)
 );
 create index if not exists conference_sessions_event_idx on conference_sessions (event_id, starts_at);
+-- Website agenda: optional speaker and description; show_on_agenda = false keeps a
+-- session off the public agenda while it still works at the hall desks.
+alter table conference_sessions add column if not exists speaker text;
+alter table conference_sessions add column if not exists description text;
+alter table conference_sessions add column if not exists show_on_agenda boolean not null default true;
 
 create table if not exists meal_categories (
   id                  uuid primary key default gen_random_uuid(),

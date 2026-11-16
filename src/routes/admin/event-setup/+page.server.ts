@@ -19,6 +19,9 @@ import {
 	saveEventRules,
 	setMealActive,
 	shiftScheduleDays,
+	updateSession,
+	SESSION_LIMITS,
+	type ConferenceSession,
 	type MealEligibility
 } from '#lib/server/ops/event.ts';
 import { accessPath, isPassConfigured, markPassEmailed, passUrl, reissuePass } from '#lib/server/ops/passes.ts';
@@ -55,6 +58,39 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** A date and a clock time in India as an instant. */
 const at = (date: string, time: string) => (DATE.test(date) && TIME.test(time) ? `${date}T${time}:00+05:30` : null);
+const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/** The add and edit session forms share their fields. */
+function readSessionForm(form: FormData):
+	| { ok: true; session: Omit<ConferenceSession, 'id'> }
+	| { ok: false; message: string } {
+	// An existing hall from the dropdown, or the name typed for a new one.
+	const hall = oneLine(text(form, 'hall') || text(form, 'newHall'));
+	const title = oneLine(text(form, 'title'));
+	const speaker = oneLine(text(form, 'speaker'));
+	const description = text(form, 'description').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+	const startsAt = at(text(form, 'date'), text(form, 'start'));
+	const endsAt = at(text(form, 'date'), text(form, 'end'));
+	if (!hall || title.length < 2) return { ok: false, message: 'Enter the hall and the session title.' };
+	if (hall.length > SESSION_LIMITS.hall) return { ok: false, message: `Keep the hall name under ${SESSION_LIMITS.hall} characters.` };
+	if (title.length > SESSION_LIMITS.title) return { ok: false, message: `Keep the title under ${SESSION_LIMITS.title} characters.` };
+	if (speaker.length > SESSION_LIMITS.speaker) return { ok: false, message: `Keep the speaker under ${SESSION_LIMITS.speaker} characters.` };
+	if (description.length > SESSION_LIMITS.description) return { ok: false, message: `Keep the description under ${SESSION_LIMITS.description} characters.` };
+	if (!startsAt || !endsAt || endsAt <= startsAt) return { ok: false, message: 'Enter a start time before the end time.' };
+	return {
+		ok: true,
+		session: {
+			hall,
+			title,
+			startsAt,
+			endsAt,
+			countsForAttendance: form.get('counts') === 'on',
+			speaker: speaker || null,
+			description: description || null,
+			showOnAgenda: form.get('agenda') === 'on'
+		}
+	};
+}
 
 export const actions: Actions = {
 	/** When the event happens, in Indian time: shown on the site, the countdown and the emails. */
@@ -152,18 +188,28 @@ export const actions: Actions = {
 
 	addSession: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { scope: 'sessions', message: 'Sign in again.' });
-		const form = await request.formData();
-		// An existing hall from the dropdown, or the name typed for a new one.
-		const hall = (text(form, 'hall') || text(form, 'newHall')).replace(/\s+/g, ' ').slice(0, 60);
-		const title = text(form, 'title').slice(0, 120);
-		const startsAt = at(text(form, 'date'), text(form, 'start'));
-		const endsAt = at(text(form, 'date'), text(form, 'end'));
-		if (!hall || title.length < 2) return fail(400, { scope: 'sessions', message: 'Enter the hall and the session title.' });
-		if (!startsAt || !endsAt || endsAt <= startsAt) return fail(400, { scope: 'sessions', message: 'Enter a start time before the end time.' });
+		const read = readSessionForm(await request.formData());
+		if (!read.ok) return fail(400, { scope: 'sessions', message: read.message });
+		const s = read.session;
 		const event = await getDefaultEvent();
-		await addSession(event.id, { hall, title, startsAt, endsAt, countsForAttendance: form.get('counts') === 'on' });
-		await audit({ eventId: event.id, actorType: 'admin', actor: locals.admin.email, action: 'session.add', details: { hall, title, startsAt, endsAt } });
-		return { scope: 'sessions', success: `Added ${title} in ${hall}.` };
+		await addSession(event.id, s);
+		await audit({ eventId: event.id, actorType: 'admin', actor: locals.admin.email, action: 'session.add', details: { hall: s.hall, title: s.title, startsAt: s.startsAt, endsAt: s.endsAt } });
+		return { scope: 'sessions', success: `Added ${s.title} in ${s.hall}.` };
+	},
+
+	/** Changes a session in place; attendance already recorded for it stays attached. */
+	updateSession: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { scope: 'sessions', message: 'Sign in again.' });
+		const form = await request.formData();
+		const id = idOf(form);
+		if (!id) return fail(400, { scope: 'sessions', message: 'Choose a session.' });
+		const read = readSessionForm(form);
+		if (!read.ok) return fail(400, { scope: 'sessions', message: read.message });
+		const s = read.session;
+		const event = await getDefaultEvent();
+		if (!(await updateSession(event.id, id, s))) return fail(404, { scope: 'sessions', message: 'That session no longer exists.' });
+		await audit({ eventId: event.id, actorType: 'admin', actor: locals.admin.email, action: 'session.update', targetType: 'session', targetId: id, details: { hall: s.hall, title: s.title, startsAt: s.startsAt, endsAt: s.endsAt } });
+		return { scope: 'sessions', success: `Saved ${s.title}.` };
 	},
 
 	deleteSession: async ({ request, locals }) => {

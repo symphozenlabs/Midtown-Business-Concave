@@ -59,6 +59,19 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 - Tables `stall_bookings` and `sponsor_requests` are created automatically on first use (also in
   [db/schema.sql](db/schema.sql)).
 
+## Agenda
+
+- The homepage **Agenda** (between the story map and Sponsors & partners) is built from **Event setup → Halls and
+  sessions**, so organisers change it without code. Each session has a hall, title, start and end time, and an
+  optional speaker and short description. Sessions that start together are shown side by side (parallel tracks),
+  in the order they were added.
+- **Show on the website agenda** (on by default) hides a session from the website without removing it from the hall
+  desks. Unticking **Counts towards the attendance %** marks openings, tea and lunch: they are shown more quietly.
+- The hero's **View agenda** link and the section appear only when there is at least one session to show. The site
+  reads the agenda from `/api/agenda` (cached for about 30 seconds).
+- The speaker, description and show-on-agenda columns are added to `conference_sessions` automatically on first use
+  (also in [db/schema.sql](db/schema.sql)).
+
 ## Event day: one QR, six desks
 
 Every paid delegate has **one QR pass** (`/pass/<token>`, nothing personal in it). It works at six kinds of desk,
