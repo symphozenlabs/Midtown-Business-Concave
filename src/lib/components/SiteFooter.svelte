@@ -10,7 +10,7 @@
 		</div>
 
 		<ul class="partners">
-			{#each EVENT.partners as partner (partner.role)}
+			{#each EVENT.partners as partner (partner.name)}
 				<li>
 					<span class="role">{partner.role}</span>
 					<span class="partner">{partner.name}</span>
