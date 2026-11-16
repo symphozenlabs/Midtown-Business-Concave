@@ -6,7 +6,9 @@
 		CalendarDays,
 		CircleAlert,
 		DoorOpen,
+		Globe,
 		LoaderCircle,
+		Pencil,
 		Plus,
 		Presentation,
 		QrCode,
@@ -18,6 +20,7 @@
 	import { sameName } from '#lib/catalog.ts';
 	import { DEFAULT_EVENT, eventLabels, fromEventFormFields, toEventFormFields } from '#lib/event-settings.ts';
 	import OpsDialog from '#lib/components/ops/OpsDialog.svelte';
+	import type { ConferenceSession } from '#lib/server/ops/event.ts';
 
 	let { data, form } = $props();
 
@@ -77,8 +80,31 @@
 	// Sessions on more than one day show their date as well as the time.
 	const multiDay = $derived(data.available && new Set(data.sessions.map((s) => dayOf(s.startsAt))).size > 1);
 
-	function openSession() {
-		hallChoice = halls[0] ?? NEW_HALL;
+	type Session = ConferenceSession;
+
+	// Times are entered and shown in Indian time, whatever the organiser's device says.
+	const istDate = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Kolkata' });
+	const istTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Kolkata' });
+
+	/** The session being edited; null while adding a new one. */
+	let editing = $state<Session | null>(null);
+	let sessionDraft = $state({ title: '', speaker: '', description: '', date: '', start: '', end: '', counts: true, agenda: true });
+
+	function openSession(s: Session | null = null) {
+		editing = s;
+		hallChoice = s?.hall ?? halls[0] ?? NEW_HALL;
+		sessionDraft = s
+			? {
+					title: s.title,
+					speaker: s.speaker ?? '',
+					description: s.description ?? '',
+					date: istDate.format(new Date(s.startsAt)),
+					start: istTime.format(new Date(s.startsAt)),
+					end: istTime.format(new Date(s.endsAt)),
+					counts: s.countsForAttendance,
+					agenda: s.showOnAgenda
+				}
+			: { title: '', speaker: '', description: '', date: data.available ? data.eventDate : '', start: '', end: '', counts: true, agenda: true };
 		sessionOpen = true;
 	}
 
@@ -201,10 +227,10 @@
 						<span class="ops-heading-icon"><Presentation size={16} aria-hidden="true" /></span>
 						<div>
 							<h2 id="sessions-title">Halls and sessions</h2>
-							<p class="ops-hint">Hall handlers record attendance against these.</p>
+							<p class="ops-hint">Hall handlers record attendance against these, and the website agenda shows them.</p>
 						</div>
 					</div>
-					<button type="button" class="btn btn-primary ops-btn-sm" onclick={openSession}>
+					<button type="button" class="btn btn-primary ops-btn-sm" onclick={() => openSession()}>
 						<Plus size={15} aria-hidden="true" /> Add session
 					</button>
 				</div>
@@ -219,17 +245,24 @@
 								{#each data.sessions as s (s.id)}
 									<tr>
 										<td><span class="hall">{s.hall}</span></td>
-										<td class="lead"><strong>{s.title}</strong></td>
+										<td class="lead">
+											<strong>{s.title}</strong>
+											{#if s.speaker}<span class="ops-muted"> · {s.speaker}</span>{/if}
+											{#if s.showOnAgenda}<span class="on-agenda" title="Shown on the website agenda"><Globe size={12} aria-hidden="true" /> Agenda</span>{/if}
+										</td>
 										<td class="nowrap" data-label="Time">
 											{#if multiDay}<span class="ops-muted">{dayOf(s.startsAt)} ·</span>{/if}
 											{clock(s.startsAt)} – {clock(s.endsAt)}
 										</td>
 										<td data-label="Attendance %">{s.countsForAttendance ? 'Counts' : 'Not counted'}</td>
 										<td class="row-end end">
-											<form method="post" action="?/deleteSession" use:enhance>
-												<input type="hidden" name="id" value={s.id} />
-												<button class="btn btn-ghost ops-btn-sm" type="submit" aria-label="Remove {s.title}"><Trash size={14} aria-hidden="true" /></button>
-											</form>
+											<div class="ops-actions">
+												<button class="btn btn-ghost ops-btn-sm" type="button" aria-label="Edit {s.title}" onclick={() => openSession(s)}><Pencil size={14} aria-hidden="true" /></button>
+												<form method="post" action="?/deleteSession" use:enhance>
+													<input type="hidden" name="id" value={s.id} />
+													<button class="btn btn-ghost ops-btn-sm" type="submit" aria-label="Remove {s.title}"><Trash size={14} aria-hidden="true" /></button>
+												</form>
+											</div>
 										</td>
 									</tr>
 								{/each}
@@ -384,9 +417,14 @@
 		</div>
 	</div>
 
-	<OpsDialog bind:open={sessionOpen} title="Add a session" description="One per hall and time slot.">
-		<form method="post" action="?/addSession" class="ops-form" use:enhance={closeOnSuccess(() => (sessionOpen = false))}>
+	<OpsDialog
+		bind:open={sessionOpen}
+		title={editing ? 'Edit session' : 'Add a session'}
+		description="One per hall and time slot. Everything here except the attendance setting shows on the website agenda."
+	>
+		<form method="post" action={editing ? '?/updateSession' : '?/addSession'} class="ops-form" use:enhance={closeOnSuccess(() => (sessionOpen = false))}>
 			{@render dialogError('sessions')}
+			{#if editing}<input type="hidden" name="id" value={editing.id} />{/if}
 			<div class="pair">
 				<label class="ops-label">
 					Hall
@@ -399,16 +437,23 @@
 					<label class="ops-label">New hall name<input name="newHall" maxlength="60" placeholder="Hall A" required autocomplete="off" /></label>
 				{/if}
 			</div>
-			<label class="ops-label">Session title<input name="title" maxlength="120" placeholder="Business Leadership" required autocomplete="off" /></label>
+			<label class="ops-label">Session title<input name="title" maxlength="120" placeholder="Business Leadership" required autocomplete="off" bind:value={sessionDraft.title} /></label>
+			<label class="ops-label">Speaker <small>(optional)</small><input name="speaker" maxlength="120" placeholder="Name, company" autocomplete="off" bind:value={sessionDraft.speaker} /></label>
+			<label class="ops-label">Short description <small>(optional)</small><textarea name="description" maxlength="300" rows="2" placeholder="One or two lines about the session" bind:value={sessionDraft.description}></textarea></label>
 			<div class="triple">
-				<label class="ops-label">Date<input type="date" name="date" value={data.eventDate} required /></label>
-				<label class="ops-label">Starts<input type="time" name="start" required /></label>
-				<label class="ops-label">Ends<input type="time" name="end" required /></label>
+				<label class="ops-label">Date<input type="date" name="date" required bind:value={sessionDraft.date} /></label>
+				<label class="ops-label">Starts<input type="time" name="start" required bind:value={sessionDraft.start} /></label>
+				<label class="ops-label">Ends<input type="time" name="end" required bind:value={sessionDraft.end} /></label>
 			</div>
-			<label class="ops-check"><input type="checkbox" name="counts" checked /> Counts towards the attendance % for certificates</label>
+			<label class="ops-check"><input type="checkbox" name="agenda" bind:checked={sessionDraft.agenda} /> Show on the website agenda</label>
+			<label class="ops-check"><input type="checkbox" name="counts" bind:checked={sessionDraft.counts} /> Counts towards the attendance % for certificates (untick for breaks, lunch and the opening)</label>
 			<div class="ops-dialog-actions">
 				<button type="button" class="btn btn-ghost ops-btn-sm" onclick={() => (sessionOpen = false)}>Cancel</button>
-				<button class="btn btn-primary ops-btn-sm" type="submit"><Plus size={15} aria-hidden="true" /> Add session</button>
+				{#if editing}
+					<button class="btn btn-primary ops-btn-sm" type="submit"><Save size={15} aria-hidden="true" /> Save session</button>
+				{:else}
+					<button class="btn btn-primary ops-btn-sm" type="submit"><Plus size={15} aria-hidden="true" /> Add session</button>
+				{/if}
 			</div>
 		</form>
 	</OpsDialog>
@@ -457,6 +502,20 @@
 {/if}
 
 <style>
+	.on-agenda {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		margin-left: var(--space-2);
+		padding: 1px 6px;
+		border-radius: 999px;
+		background: var(--gold-tint);
+		color: var(--gold-ink);
+		font-size: 11px;
+		font-weight: 600;
+		vertical-align: middle;
+	}
+
 	.hall {
 		display: inline-block;
 		padding: 2px 8px;
