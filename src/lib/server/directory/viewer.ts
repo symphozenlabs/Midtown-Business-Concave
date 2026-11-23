@@ -42,3 +42,12 @@ export async function directoryViewer(cookies: Cookies): Promise<Viewer> {
 		settings
 	};
 }
+
+/**
+ * Just the signed-in delegate, for the frequent poll: one query instead of the full
+ * viewer check. A reissued pass still fails here.
+ */
+export async function directorySession(cookies: Cookies): Promise<{ registrationId: string; eventId: string } | null> {
+	if (!(await directoryReady())) return null;
+	return readParticipant(cookies.get(PARTICIPANT_COOKIE));
+}

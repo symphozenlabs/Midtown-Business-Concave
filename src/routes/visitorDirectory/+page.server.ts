@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { DIRECTORY_PATH } from '#lib/directory/rules.ts';
 import { background } from '#lib/server/background.ts';
+import { listConversations, purgeIfDue } from '#lib/server/directory/messages.ts';
 import { listPeople } from '#lib/server/directory/people.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
 import { sendSignInEmail } from '#lib/server/email.ts';
@@ -15,13 +16,20 @@ export const prerender = false;
 export const load: PageServerLoad = async (event) => {
 	event.depends('directory:list');
 	const viewer = await directoryViewer(event.cookies);
+	if (viewer.state === 'closed') {
+		const settings = viewer.settings;
+		background(event, () => purgeIfDue(settings));
+	}
 	if (viewer.state !== 'open') return { state: viewer.state };
 
-	const people = await listPeople(viewer.me.id);
+	const [people, conversations] = await Promise.all([listPeople(viewer.me.id), listConversations(viewer.eventId, viewer.me.id)]);
 	return {
 		state: viewer.state,
 		me: { id: viewer.me.id, fullName: viewer.me.fullName, flags: viewer.me.flags },
-		people
+		people,
+		conversations,
+		unread: conversations.filter((c) => c.unread).length,
+		latest: conversations[0]?.lastAt ?? null
 	};
 };
 

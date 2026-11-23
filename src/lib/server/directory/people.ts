@@ -1,4 +1,5 @@
 import { sql } from '../db.ts';
+import { audit } from '../ops/event.ts';
 
 /** A delegate's own choices and the organiser's overrides. No row means all false. */
 export interface MemberFlags {
@@ -65,4 +66,15 @@ export function personFrom(r: Record<string, any>): DirectoryPerson {
 		companyName: r.company_name,
 		takesMessages: Boolean(r.takes_messages)
 	};
+}
+
+/** The blocked person isn't told; to them it reads like messages turned off. */
+export async function block(eventId: string, me: string, other: string): Promise<void> {
+	await sql()`insert into directory_blocks (blocker_id, blocked_id) values (${me}, ${other}) on conflict do nothing`;
+	await audit({ eventId, actorType: 'participant', actor: me, action: 'directory.block', targetType: 'registration', targetId: other });
+}
+
+export async function unblock(eventId: string, me: string, other: string): Promise<void> {
+	await sql()`delete from directory_blocks where blocker_id = ${me} and blocked_id = ${other}`;
+	await audit({ eventId, actorType: 'participant', actor: me, action: 'directory.unblock', targetType: 'registration', targetId: other });
 }

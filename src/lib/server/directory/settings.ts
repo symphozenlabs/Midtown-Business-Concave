@@ -22,11 +22,20 @@ export async function directoryReady(): Promise<boolean> {
 	return tablesReady;
 }
 
+// Every directory request reads these; 30 seconds of staleness is fine.
+const SETTINGS_TTL_MS = 30_000;
+let cached: { value: DirectorySettings; at: number } | null = null;
+
 /** Closing time, daily email cap and the push switch, with defaults for anything unset. */
 export async function getDirectorySettings(): Promise<DirectorySettings> {
-	return parseDirectorySettings(await readSetting('directory'));
+	if (cached && Date.now() - cached.at < SETTINGS_TTL_MS) return cached.value;
+	const value = parseDirectorySettings(await readSetting('directory'));
+	cached = { value, at: Date.now() };
+	return value;
 }
 
 export async function saveDirectorySettings(s: DirectorySettings, by: string): Promise<void> {
-	await writeSetting('directory', parseDirectorySettings(s), by);
+	const value = parseDirectorySettings(s);
+	await writeSetting('directory', value, by);
+	cached = { value, at: Date.now() };
 }
