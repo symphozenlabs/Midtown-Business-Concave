@@ -1,5 +1,6 @@
 import { json, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
+import { DIRECTORY_PATH, canonicalDirectoryPath } from '#lib/directory/rules.ts';
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 import { SESSION_COOKIE as HANDLER_COOKIE, readHandlerSession } from '#lib/server/ops/handlers.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
@@ -9,6 +10,10 @@ const HANDLER_PUBLIC = ['/handler/login', '/handler/forgot', '/handler/reset'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+
+	// The visitor card prints /visitorDirectory; any other casing of it still lands there.
+	const directory = canonicalDirectoryPath(pathname);
+	if (directory) redirect(308, directory + event.url.search);
 
 	// Organiser sign-in lives at /login and Configuration became Payments; old bookmarks still work.
 	if (pathname === '/admin/login') redirect(308, '/login');
@@ -44,7 +49,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event);
-	if (isLogin || pathname.startsWith('/admin') || pathname.startsWith('/api/') || isHandlerPage || pathname.startsWith('/me') || pathname.startsWith('/pass/')) {
+	if (isLogin || pathname.startsWith('/admin') || pathname.startsWith('/api/') || isHandlerPage || pathname.startsWith('/me') || pathname.startsWith('/pass/') || pathname.startsWith(DIRECTORY_PATH)) {
 		response.headers.set('cache-control', 'no-store');
 		response.headers.set('x-robots-tag', 'noindex');
 	}

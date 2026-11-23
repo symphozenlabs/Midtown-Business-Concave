@@ -202,9 +202,21 @@ export async function passesToSend(limit: number): Promise<{ ids: string[]; tota
 export const PARTICIPANT_COOKIE = 'mbc_me';
 const PARTICIPANT_DAYS = 30;
 
-/** /me/<code>.<signature>: emailed to the participant only, never printed in the QR. */
-export async function accessPath(code: string, registrationId: string, version: number) {
-	return `/me/${code}.${await sign('me', registrationId, version)}`;
+/**
+ * /me/<code>.<signature>: emailed to the participant only, never printed in the QR.
+ * `next` is a same-site path to open after signing in, e.g. a directory conversation.
+ */
+export async function accessPath(code: string, registrationId: string, version: number, next?: string) {
+	const path = `/me/${code}.${await sign('me', registrationId, version)}`;
+	return next ? `${path}?next=${encodeURIComponent(next)}` : path;
+}
+
+/** A link that signs the delegate in on whatever phone opens it, then shows `next`. Null when passes are off. */
+export async function signInLink(reg: { id: string; code: string }, origin: string, next: string): Promise<string | null> {
+	if (!isPassConfigured || !(await opsReady())) return null;
+	const event = await getDefaultEvent();
+	const pass = await ensurePass(event.id, reg.id);
+	return origin + (await accessPath(reg.code, reg.id, pass.version, next));
 }
 
 /** Checks a "My pass" link against the participant's current pass version. */

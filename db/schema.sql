@@ -445,3 +445,78 @@ create table if not exists sponsor_requests (
 
 -- The SEFMEMBER promo code (25% off stalls) is added to the "vouchers" setting the first
 -- time the site needs it; organisers can edit or close it under Payments → Stalls.
+
+-- ============================================================================
+-- Visitors directory (/visitorDirectory): paid delegates find each other and
+-- exchange text messages on the site. Pairs are stored once (a_id < b_id), as in
+-- participant_connections. Closing time, daily email cap and the push switch are
+-- the "directory" row in settings.
+-- ============================================================================
+
+-- The delegate's own choices, and the organiser's overrides (the delegate cannot
+-- undo those). No row means all false.
+create table if not exists directory_members (
+  registration_id    uuid primary key references registrations (id) on delete cascade,
+  hidden             boolean not null default false,
+  messages_off       boolean not null default false,
+  admin_hidden       boolean not null default false,
+  admin_messages_off boolean not null default false,
+  updated_at         timestamptz not null default now()
+);
+
+create table if not exists directory_blocks (
+  blocker_id uuid not null references registrations (id) on delete cascade,
+  blocked_id uuid not null references registrations (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+create index if not exists directory_blocks_blocked_idx on directory_blocks (blocked_id);
+
+-- One conversation per pair. <side>_read_at: when that side last opened it.
+-- <side>_emailed_at: when that side was last sent a backup email for it; no new
+-- email goes while that is later than their read_at.
+create table if not exists directory_conversations (
+  id              uuid primary key default gen_random_uuid(),
+  event_id        uuid not null references events (id) on delete cascade,
+  a_id            uuid not null references registrations (id) on delete cascade,
+  b_id            uuid not null references registrations (id) on delete cascade,
+  started_by      uuid not null references registrations (id) on delete cascade,
+  last_sender_id  uuid references registrations (id) on delete set null,
+  last_message_at timestamptz not null default now(),
+  a_read_at       timestamptz,
+  b_read_at       timestamptz,
+  a_emailed_at    timestamptz,
+  b_emailed_at    timestamptz,
+  created_at      timestamptz not null default now(),
+  check (a_id < b_id),
+  unique (event_id, a_id, b_id)
+);
+create index if not exists directory_conversations_b_idx on directory_conversations (event_id, b_id);
+create index if not exists directory_conversations_started_idx on directory_conversations (started_by, created_at);
+
+create table if not exists directory_messages (
+  id              bigint generated always as identity primary key,
+  conversation_id uuid not null references directory_conversations (id) on delete cascade,
+  sender_id       uuid not null references registrations (id) on delete cascade,
+  body            text not null check (char_length(body) between 1 and 1000),
+  created_at      timestamptz not null default now()
+);
+create index if not exists directory_messages_conversation_idx on directory_messages (conversation_id, id);
+
+-- Backup emails sent per India date, for the daily cap.
+create table if not exists directory_email_days (
+  day  date primary key,
+  sent int not null default 0
+);
+
+-- Browsers that turned on notifications; removed when the push service answers 404 or 410.
+create table if not exists push_subscriptions (
+  id              uuid primary key default gen_random_uuid(),
+  registration_id uuid not null references registrations (id) on delete cascade,
+  endpoint        text not null unique,
+  p256dh          text not null,
+  auth            text not null,
+  created_at      timestamptz not null default now()
+);
+create index if not exists push_subscriptions_registration_idx on push_subscriptions (registration_id);

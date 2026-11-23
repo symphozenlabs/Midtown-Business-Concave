@@ -8,6 +8,7 @@
 		DoorOpen,
 		Globe,
 		LoaderCircle,
+		MessagesSquare,
 		Pencil,
 		Plus,
 		Presentation,
@@ -414,6 +415,41 @@
 					<div><button class="btn btn-primary ops-btn-sm" type="submit"><Save size={15} aria-hidden="true" /> Save rules</button></div>
 				</form>
 			</section>
+
+			{#if data.directory}
+				<section class="ops-panel" aria-labelledby="directory-title">
+					<div class="ops-heading">
+						<span class="ops-heading-icon"><MessagesSquare size={16} aria-hidden="true" /></span>
+						<div>
+							<h2 id="directory-title">Visitors directory</h2>
+							<p class="ops-hint">/visitorDirectory, the QR on the back of the visitor card.</p>
+						</div>
+					</div>
+					{@render notice('directory')}
+					<form method="post" action="?/saveDirectory" class="ops-form compact" use:enhance={() => async ({ update }) => update({ reset: false })}>
+						<fieldset class="group">
+							<legend>Closes at the end of (India time)</legend>
+							<label class="ops-label">Date <input type="date" name="closeDate" value={data.directory.closeDate} required /></label>
+							<label class="ops-label">Time <input type="time" name="closeTime" value={data.directory.closeTime} required /></label>
+						</fieldset>
+						<label class="ops-label">
+							Backup emails per day
+							<input type="number" name="emailCap" min="0" max="1000" step="1" value={data.directory.emailCapPerDay} required />
+							<small>Resend’s free plan allows 100 emails a day in total, including tickets and pass links.</small>
+						</label>
+						<label class="ops-check">
+							<input type="checkbox" name="push" checked={data.directory.pushEnabled} disabled={!data.directory.pushConfigured} />
+							<span>
+								Push notifications
+								<small class="ops-muted">
+									{data.directory.pushConfigured ? 'Shows “Turn on notifications” to delegates.' : 'Needs the VAPID keys (see README).'}
+								</small>
+							</span>
+						</label>
+						<div><button class="btn btn-primary ops-btn-sm" type="submit"><Save size={15} aria-hidden="true" /> Save directory settings</button></div>
+					</form>
+				</section>
+			{/if}
 		</div>
 	</div>
 

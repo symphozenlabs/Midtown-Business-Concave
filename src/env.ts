@@ -34,6 +34,18 @@ export const variables = defineEnvVars({
 		schema: optional,
 		description: 'Sender on a domain verified in Resend, e.g. Midtown Business Conclave <tickets@yourdomain.com>'
 	},
+	VAPID_PUBLIC_KEY: {
+		schema: optional,
+		description: 'Visitors directory push notifications: public key from `npx web-push generate-vapid-keys`'
+	},
+	VAPID_PRIVATE_KEY: {
+		schema: optional,
+		description: 'Visitors directory push notifications: private key from the same command. Keep it secret.'
+	},
+	VAPID_SUBJECT: {
+		schema: optional,
+		description: 'Contact for the push services, a mailto: address or the site URL, e.g. https://conclave.midtownevents.in'
+	},
 	PASS_SECRET: {
 		schema: optional,
 		description:
