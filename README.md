@@ -123,6 +123,43 @@ means reissuing every pass. Run [db/schema.sql](db/schema.sql) again to add the 
 To try the desks locally without touching the live database, point `DATABASE_URL` at a local Neon HTTP proxy
 (e.g. `postgresql://user:pass@localhost:4444/db`); `db.ts` sends local hosts to `http://localhost:4444/sql`.
 
+## Visitors directory
+
+The QR on the back of the printed visitor card opens **`/visitorDirectory`** (any other casing redirects there; the
+address must never change). Paid delegates signed in on that phone see everyone else who is listed (name,
+designation and company only, A–Z, with search) and can message them on the site. Phone numbers and emails never
+appear in the directory, its emails or its notifications.
+
+- **Signing in.** It uses the same "Open my pass" sign-in as `/me`. A phone that isn't signed in shows **Email me my
+  pass link**, which sends a sign-in link that returns to the directory (it never says whether an address is
+  registered).
+- **Messages.** One text-only conversation per pair (1–1000 characters, links not clickable). A delegate can send 3
+  messages until the other person replies, and start 30 new conversations a day. Phones check for news every 10
+  seconds in an open conversation (30 seconds when quiet or on other screens) and never while the page is hidden.
+- **Alerts.** The recipient gets a backup email ("Name sent you a message", never the text), at most one per
+  conversation until they have read it, up to the daily cap. With push switched on, they also get a notification
+  ("New message from Name" / "Tap to read and reply") on browsers where they tapped **Turn on notifications**; on
+  iPhone that works only from the Home Screen icon, and the page shows the steps.
+- **Delegates' controls** on `/me`: *Show me in the directory*, *Let delegates message me* (off also stops them
+  sending and makes their conversations read-only), and their blocked list. **Block** is in each conversation's menu;
+  the blocked person isn't told.
+- **Organiser's controls.** On the dashboard, a paid registration's details have **Hide from directory** and **Stop
+  messaging**, for complaints at the venue. They override the delegate's own settings. **Organisers can't read
+  messages.** Under **Event setup → Visitors directory**: the closing time (default the end of 12 December 2026, India
+  time), backup emails per day (default 50; Resend's free plan allows 100 emails a day in total, including tickets and
+  pass links) and the push switch. After closing, the directory says it has closed; messages are deleted 30 days later
+  by the first request after that date.
+
+Before launch, rerun [db/schema.sql](db/schema.sql) on the live database (it adds the `directory_*` and
+`push_subscriptions` tables; until then the page says the directory opens soon). For push notifications, generate keys
+once with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a
+`mailto:` address or the site URL) in Vercel; then the push switch in Event setup can be turned on.
+
+**Testing** happens on a separate, empty Neon project with made-up delegates, never with fake delegates in the live
+database (they would appear in the real directory and the ticket queue). Run `db/schema.sql` there, then
+[db/directory-test-seed.sql](db/directory-test-seed.sql), which refuses to run on a database with real registrations.
+`npm test` runs the directory's rules (Vitest).
+
 ## Run locally
 
 ```sh
