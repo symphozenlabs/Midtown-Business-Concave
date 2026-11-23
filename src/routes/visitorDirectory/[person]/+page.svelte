@@ -64,6 +64,8 @@
 				const state = (await res.json()) as { messages?: ChatMessage[] };
 				if (!state.messages?.length) return false;
 				extra = [...extra, ...state.messages];
+				// Their reply can lift a limit ("once they reply"): fetch the current state.
+				if (data.state === 'open' && data.blocker && state.messages.some((m) => !m.mine)) await invalidateAll();
 				return true;
 			}
 		});
