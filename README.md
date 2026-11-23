@@ -61,6 +61,10 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 
 ## Agenda
 
+- **Business awards** at `/awards` (served as **awards.midtownevents.in** once that domain is added to the Vercel project):
+  a poster page and a free **Apply for Business Awards** form using the SEF industries plus **Others**. Applications land in
+  **Admin → Awards**, where organisers filter, shortlist, mark winners, add notes, download a CSV, and open or close applications.
+  Table `award_applications` is created automatically on first use (also in `db/schema.sql`).
 - The homepage **Agenda** (between the story map and Sponsors & partners) is built from **Event setup → Halls and
   sessions**, so organisers change it without code. Each session has a hall, title, start and end time, and an
   optional speaker and short description. Sessions that start together are shown side by side (parallel tracks),
