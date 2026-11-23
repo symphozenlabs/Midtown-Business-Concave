@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
-	import { Award, BadgeCheck, CircleAlert, Mail, Phone, ScanQrCode, UserRoundCheck, X } from '@lucide/svelte';
+	import { Award, BadgeCheck, CircleAlert, Mail, MessagesSquare, Phone, ScanQrCode, UserRoundCheck, X } from '@lucide/svelte';
+	import { BLOCKER_TEXT } from '#lib/directory/rules.ts';
 	import PassQr from '#lib/components/ops/PassQr.svelte';
 	import PublicShell from '#lib/components/ops/PublicShell.svelte';
 	import QrScanner from '#lib/components/ops/QrScanner.svelte';
@@ -91,6 +92,53 @@
 				</button>
 			{/if}
 		</section>
+
+		{#if data.directory}
+			{@const dir = data.directory}
+			<section class="ops-card" aria-labelledby="directory-title">
+				<h2 id="directory-title" class="section-title">Visitors directory</h2>
+				<a class="ops-big-btn secondary" href="/visitorDirectory">
+					<MessagesSquare size={22} aria-hidden="true" />
+					Open the visitors directory{dir.unread ? ` (${dir.unread} unread)` : ''}
+				</a>
+				<form method="post" action="?/directorySettings" use:enhance class="dir-settings">
+					<label class="ops-check">
+						<input type="checkbox" name="listed" checked={!dir.flags.hidden && !dir.flags.adminHidden} disabled={dir.flags.adminHidden} />
+						Show me in the directory
+					</label>
+					{#if dir.flags.adminHidden}
+						<p class="ops-muted">The organisers have turned this off for your pass. Speak to the registration desk.</p>
+					{/if}
+					<label class="ops-check">
+						<input type="checkbox" name="messages" checked={!dir.flags.messagesOff && !dir.flags.adminMessagesOff} disabled={dir.flags.adminMessagesOff} />
+						Let delegates message me
+					</label>
+					{#if dir.flags.adminMessagesOff}
+						<p class="ops-muted">{BLOCKER_TEXT['admin-off']}</p>
+					{:else}
+						<p class="ops-muted">Turning this off also stops you sending, and makes your conversations read-only.</p>
+					{/if}
+					<button class="btn btn-secondary" type="submit">Save</button>
+				</form>
+				{#if dir.blocked.length}
+					<h3 class="sub-title">People you blocked</h3>
+					<ul class="people">
+						{#each dir.blocked as b (b.id)}
+							<li>
+								<div>
+									<strong>{b.fullName}</strong>
+									<span>{b.companyName}</span>
+								</div>
+								<form method="post" action="?/unblockPerson" use:enhance>
+									<input type="hidden" name="other" value={b.id} />
+									<button class="btn btn-ghost ops-btn-sm" type="submit">Unblock</button>
+								</form>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+		{/if}
 
 		{#if incoming.length}
 			<section class="ops-card" aria-labelledby="requests-title">
@@ -231,6 +279,15 @@
 		overflow-wrap: anywhere;
 	}
 
+	.dir-settings {
+		display: grid;
+		gap: var(--space-1);
+		justify-items: start;
+	}
+	.sub-title {
+		font: 600 15px/1.3 var(--font-sans);
+		color: var(--charcoal);
+	}
 	.signout {
 		display: flex;
 		justify-content: center;

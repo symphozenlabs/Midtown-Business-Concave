@@ -78,3 +78,22 @@ export async function unblock(eventId: string, me: string, other: string): Promi
 	await sql()`delete from directory_blocks where blocker_id = ${me} and blocked_id = ${other}`;
 	await audit({ eventId, actorType: 'participant', actor: me, action: 'directory.unblock', targetType: 'registration', targetId: other });
 }
+
+/** The delegate's own switches on My pass. The organiser's overrides are separate columns. */
+export async function setOwnFlags(eventId: string, me: string, flags: { hidden: boolean; messagesOff: boolean }): Promise<void> {
+	await sql()`
+		insert into directory_members (registration_id, hidden, messages_off)
+		values (${me}, ${flags.hidden}, ${flags.messagesOff})
+		on conflict (registration_id) do update set hidden = excluded.hidden, messages_off = excluded.messages_off, updated_at = now()`;
+	await audit({ eventId, actorType: 'participant', actor: me, action: 'directory.settings', targetType: 'registration', targetId: me, details: flags });
+}
+
+/** People I've blocked, newest first. */
+export async function listBlocked(me: string): Promise<{ id: string; fullName: string; companyName: string }[]> {
+	const rows = await sql()`
+		select r.id, r.full_name, r.company_name
+		from directory_blocks b join registrations r on r.id = b.blocked_id
+		where b.blocker_id = ${me}
+		order by b.created_at desc`;
+	return rows.map((r) => ({ id: r.id, fullName: r.full_name, companyName: r.company_name }));
+}
