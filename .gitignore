@@ -15,3 +15,6 @@ node_modules
 
 # Local-only one-off email page (renders and sends a sample ticket without the database)
 /src/routes/dev-one-off-email
+
+# Brainstorming companion files (local only)
+.superpowers/
