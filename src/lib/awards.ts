@@ -1,18 +1,103 @@
 import { normalisePhone } from './registration.ts';
 
-/** The award categories, plus "Others" with the applicant's own wording. */
-export const AWARD_CATEGORIES = [
-	{ id: 'textiles', name: 'Textiles', hint: 'Looms, dyeing & handloom exporters' },
-	{ id: 'steel', name: 'Steel', hint: 'Rolling mills, fabrication & foundries' },
-	{ id: 'sago', name: 'Sago', hint: 'Tapioca processors of the Sagoserve belt' },
-	{ id: 'technology', name: 'Technology', hint: 'IT services, SaaS & digital studios' },
-	{ id: 'healthcare', name: 'Healthcare', hint: 'Hospitals, diagnostics & pharma' },
-	{ id: 'infrastructure', name: 'Infrastructure', hint: 'Builders, realty & logistics' },
-	{ id: 'jewellery', name: 'Jewellery', hint: 'Gold & silver smiths, makers & showrooms' },
-	{ id: 'others', name: 'Others', hint: 'Enter your own business category' }
+/** The award categories, in the organisers' order. "Others" lets applicants write their own. */
+const CATEGORY_NAMES = [
+	'Chartered Accountant (CA)',
+	'Tax Consultant',
+	'Company Secretary',
+	'Auditor',
+	'Financial Advisor',
+	'Insurance Consultant',
+	'Banking & Loan Consultant',
+	'Legal Advisor / Advocate',
+	'Business Consultant',
+	'HR & Recruitment Consultant',
+	'Real Estate Agent',
+	'Property Developer / Builder',
+	'Civil Contractor',
+	'Architect',
+	'Interior Designer',
+	'Structural Engineer',
+	'Building Materials Supplier',
+	'Electrical Contractor',
+	'Plumbing Contractor',
+	'Modular Kitchen & Furniture',
+	'Digital Marketing Agency',
+	'Social Media Marketing',
+	'Branding & Graphic Design',
+	'Website Development',
+	'Software Development',
+	'IT Solutions & Networking',
+	'AI & Automation Solutions',
+	'Photography & Videography',
+	'Printing & Advertising',
+	'Event Management',
+	'Textile & Garments',
+	'Automobile Manufacturing',
+	'Automobile Spare Parts',
+	'Industrial Machinery',
+	'Electrical & Electronics',
+	'Food Manufacturing',
+	'Packaging Industry',
+	'Wholesale & Distribution',
+	'Import & Export',
+	'FMCG Products',
+	'Jewellery & Gold',
+	'Fashion & Boutique',
+	'Beauty & Cosmetics',
+	'Salon & Spa',
+	'Furniture & Home Decor',
+	'Mobile & Electronics Retail',
+	'Supermarket & Grocery',
+	'Gift & Customized Products',
+	'Restaurant & Catering',
+	'Bakery & Confectionery',
+	'Hotels & Resorts',
+	'Travel & Tourism',
+	'Event Catering',
+	'Cafe & Beverages',
+	'Hospitals & Clinics',
+	'Pharmaceuticals',
+	'Dental Care',
+	'Fitness & Wellness',
+	'Educational Institutions',
+	'Training & Skill Development',
+	'Agriculture & Organic Farming',
+	'Logistics & Transportation',
+	'Courier Services',
+	'Automobile Dealers',
+	'Car Rentals',
+	'Pest Control',
+	'Security Services',
+	'Housekeeping Services',
+	'Solar Energy Solutions',
+	'Water Treatment',
+	'Waste Management',
+	'NGO & Social Enterprises',
+	'Business Coaching',
+	'Insurance & Wealth Management',
+	'Sports & Recreation'
 ] as const;
 
-export type AwardCategoryId = (typeof AWARD_CATEGORIES)[number]['id'];
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+export const AWARD_CATEGORIES: { id: string; name: string }[] = [
+	...CATEGORY_NAMES.map((name) => ({ id: slug(name), name })),
+	{ id: 'others', name: 'Others (write your own)' }
+];
+
+/** The first list's categories, so applications already received keep a readable label. */
+const EARLIER_CATEGORIES: Record<string, string> = {
+	textiles: 'Textiles',
+	steel: 'Steel',
+	sago: 'Sago',
+	technology: 'Technology',
+	healthcare: 'Healthcare',
+	infrastructure: 'Infrastructure',
+	jewellery: 'Jewellery'
+};
+
+export type AwardCategoryId = string;
 
 export const TEAM_SIZES = ['1–10', '11–50', '51–200', '200+'] as const;
 
@@ -76,7 +161,7 @@ export function normaliseWebsite(raw: string): string | null {
 
 export function awardCategoryLabel(id: string, other: string | null | undefined) {
 	if (id === 'others') return other?.trim() ? `Others: ${other.trim()}` : 'Others';
-	return AWARD_CATEGORIES.find((c) => c.id === id)?.name ?? id;
+	return AWARD_CATEGORIES.find((c) => c.id === id)?.name ?? EARLIER_CATEGORIES[id] ?? id;
 }
 
 export function validateAwardApplication(input: AwardApplicationInput, thisYear = new Date().getFullYear()): AwardErrors {

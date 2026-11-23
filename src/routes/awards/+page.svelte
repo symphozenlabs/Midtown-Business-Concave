@@ -14,6 +14,8 @@
 		{ role: 'Technology Partner', name: 'SymphoZen Labs', src: '/poster/symphozen-labs.webp' }
 	];
 
+	const LISTED_CATEGORIES = AWARD_CATEGORIES.filter((c) => c.id !== 'others');
+
 	let view = $state<'poster' | 'form' | 'done'>('poster');
 	let open = $state(true);
 
@@ -211,11 +213,13 @@
 			<section class="below" aria-labelledby="categories-title">
 				<span class="eyebrow">Award categories</span>
 				<h2 id="categories-title">Every industry has its <em>leaders</em></h2>
-				<ul class="cats">
-					{#each AWARD_CATEGORIES as c (c.id)}
-						<li><strong>{c.name}</strong><span>{c.id === 'others' ? 'Your business category, in your words' : c.hint}</span></li>
-					{/each}
-				</ul>
+				<p class="cats-lead">Open to {LISTED_CATEGORIES.length} business categories, or write your own when you apply.</p>
+				<details class="cats-more">
+					<summary>View all categories</summary>
+					<ul class="cats">
+						{#each LISTED_CATEGORIES as c (c.id)}<li>{c.name}</li>{/each}
+					</ul>
+				</details>
 			</section>
 
 			<section class="below" aria-labelledby="partners-title">
@@ -255,21 +259,17 @@
 					<legend><b>2</b> Your business</legend>
 					<TextField id="businessName" label="Business name" required bind:value={businessName} error={errors.businessName} autocomplete="organization" maxlength={AWARD_LIMITS.businessName} oninput={() => recheck('businessName')} />
 
-					<div class="group" class:group-error={!!errors.categoryId} role="radiogroup" aria-labelledby="category-label">
-						<span class="group-label" id="category-label">Business category <span class="req" aria-hidden="true">*</span></span>
-						<div class="chips">
-							{#each AWARD_CATEGORIES as c (c.id)}
-								<label class="chip" class:on={categoryId === c.id}>
-									<input type="radio" name="categoryId" value={c.id} bind:group={categoryId} onchange={() => recheck('categoryId')} />
-									{c.name}
-								</label>
-							{/each}
-						</div>
+					<div class="group">
+						<label class="group-label" for="categoryId">Business category <span class="req" aria-hidden="true">*</span></label>
+						<select id="categoryId" bind:value={categoryId} aria-invalid={errors.categoryId ? 'true' : undefined} onchange={() => recheck('categoryId')}>
+							<option value="" disabled>Choose your category</option>
+							{#each AWARD_CATEGORIES as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+						</select>
 						{#if errors.categoryId}<p class="err"><CircleAlert size={16} aria-hidden="true" />{errors.categoryId}</p>{/if}
 					</div>
 
 					{#if categoryId === 'others'}
-						<TextField id="otherCategory" label="Your business category" required bind:value={otherCategory} error={errors.otherCategory} placeholder="e.g. Food processing" maxlength={AWARD_LIMITS.otherCategory} oninput={() => recheck('otherCategory')} />
+						<TextField id="otherCategory" label="Write your category" required bind:value={otherCategory} error={errors.otherCategory} placeholder="e.g. Food processing" maxlength={AWARD_LIMITS.otherCategory} oninput={() => recheck('otherCategory')} />
 					{/if}
 
 					<div class="row">
@@ -605,34 +605,40 @@
 		color: var(--on-ink);
 	}
 
+	.cats-lead {
+		max-width: 560px;
+		color: var(--on-ink-soft);
+	}
+
+	.cats-more {
+		width: 100%;
+		margin-top: var(--space-2);
+	}
+
+	.cats-more summary {
+		width: fit-content;
+		margin-inline: auto;
+		padding: 10px 20px;
+		border-radius: var(--radius-sm);
+		box-shadow: inset 0 0 0 1px var(--gold-line);
+		color: var(--gold-bright);
+		font: var(--text-ui);
+		cursor: pointer;
+	}
+
 	.cats {
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: var(--space-3);
-		width: 100%;
+		gap: var(--space-2) var(--space-4);
 		margin: var(--space-4) 0 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.cats li {
-		display: grid;
-		align-content: start;
-		gap: 4px;
 		padding: var(--space-4);
 		border-radius: var(--radius-sm);
 		background: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.025));
 		box-shadow: inset 0 0 0 1px rgb(240 196 112 / 0.22);
+		list-style: none;
 		text-align: left;
-	}
-
-	.cats strong {
-		font-weight: 600;
-		color: var(--on-ink);
-	}
-
-	.cats span {
 		font: var(--text-caption);
+		color: var(--on-ink);
 	}
 
 	.logos {
@@ -777,45 +783,6 @@
 		margin-left: 6px;
 		font: var(--text-caption);
 		color: var(--text-supporting);
-	}
-
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-	}
-
-	.chip {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		min-height: 44px;
-		padding: 0 var(--space-4);
-		border: 1px solid var(--rule-strong, #b9b5a6);
-		border-radius: 999px;
-		color: var(--charcoal);
-		font: var(--text-ui);
-		font-size: 15px;
-		cursor: pointer;
-	}
-
-	.chip input {
-		position: absolute;
-		opacity: 0;
-		inset: 0;
-		margin: 0;
-		cursor: pointer;
-	}
-
-	.chip.on {
-		border-color: var(--gold-ink);
-		background: var(--gold-tint);
-		box-shadow: inset 0 0 0 1px var(--gold-ink);
-	}
-
-	.chip:focus-within {
-		outline: 2px solid var(--focus-ring);
-		outline-offset: 2px;
 	}
 
 	select {
