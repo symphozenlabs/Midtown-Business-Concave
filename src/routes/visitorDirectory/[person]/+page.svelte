@@ -17,6 +17,14 @@
 	let extra = $state<ChatMessage[]>([]);
 	let body = $state('');
 	let sending = $state(false);
+	/** One key per draft: a resent post of the same draft is stored once. */
+	const newKey = () =>
+		typeof crypto.randomUUID === 'function'
+			? crypto.randomUUID()
+			: '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) =>
+					(Number(c) ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (Number(c) / 4)))).toString(16)
+				);
+	let draftKey = $state(newKey());
 	let error = $state('');
 	let composeForm: HTMLFormElement | undefined = $state();
 
@@ -56,6 +64,8 @@
 				const state = (await res.json()) as { messages?: ChatMessage[] };
 				if (!state.messages?.length) return false;
 				extra = [...extra, ...state.messages];
+				// Their reply can lift a limit ("once they reply"): fetch the current state.
+				if (data.state === 'open' && data.blocker && state.messages.some((m) => !m.mine)) await invalidateAll();
 				return true;
 			}
 		});
@@ -64,7 +74,7 @@
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
-			composeForm?.requestSubmit();
+			if (!sending) composeForm?.requestSubmit();
 		}
 	}
 </script>
@@ -148,6 +158,7 @@
 							sending = false;
 							if (result.type === 'success') {
 								body = '';
+								draftKey = newKey();
 								// Show it at once; the reload that follows brings the rest.
 								const sent = result.data?.message as ChatMessage | undefined;
 								if (sent) extra = [...extra, sent];
@@ -164,6 +175,7 @@
 						};
 					}}
 				>
+					<input type="hidden" name="key" value={draftKey} />
 					<label class="visually-hidden" for="message-body">Message to {data.person.fullName}</label>
 					<textarea
 						id="message-body"

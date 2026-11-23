@@ -1,17 +1,18 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { BLOCKER_TEXT, MESSAGE_MAX, cleanBody, isDuplicateSend, messageBlocker } from '#lib/directory/rules.ts';
 import { background } from '#lib/server/background.ts';
-import { loadThread, markRead, messagesIn, sendMessage } from '#lib/server/directory/messages.ts';
+import { loadThread, markRead, messageByKey, messagesIn, sendMessage } from '#lib/server/directory/messages.ts';
 import { notifyRecipient } from '#lib/server/directory/notify.ts';
 import { block, unblock } from '#lib/server/directory/people.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
+import { uniqueViolation } from '#lib/server/db.ts';
 import { allow } from '#lib/server/rate-limit.ts';
-import { publicOrigin } from '#lib/server/site.ts';
+import { directoryOrigin } from '#lib/server/site.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 export const prerender = false;
 
-const isUuid = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
+const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 export const load: PageServerLoad = async ({ cookies, params }) => {
 	const viewer = await directoryViewer(cookies);
@@ -50,17 +51,35 @@ export const actions: Actions = {
 		const { viewer, other } = p;
 		if (!allow(`dirsend:${viewer.me.id}`, 20, 60_000)) return fail(429, { message: 'You’re sending quickly. Wait a moment and try again.' });
 
-		const body = cleanBody(String((await event.request.formData()).get('body') ?? ''));
+		const form = await event.request.formData();
+		const body = cleanBody(String(form.get('body') ?? ''));
 		if (!body) return fail(400, { message: `Write a message of up to ${MESSAGE_MAX} characters.` });
+		const rawKey = String(form.get('key') ?? '');
+		const key = isUuid(rawKey) ? rawKey.toLowerCase() : null;
+
+		// A resent post (patchy Wi-Fi, a second tap) carries the same draft key: it was
+		// already sent, so report success before any limit could refuse it.
+		if (key) {
+			const already = await messageByKey(viewer.me.id, key);
+			if (already) return { sent: true, message: already };
+		}
 
 		const thread = await loadThread(viewer.eventId, viewer.me, other, false);
 		const blocker = messageBlocker(thread.facts);
 		if (blocker) return fail(409, { message: BLOCKER_TEXT[blocker] });
-		// A double tap or a retried post on patchy Wi-Fi: the message is already there.
-		if (isDuplicateSend(thread.myLast, body, new Date())) return { sent: true };
+		// Without a key (no JavaScript): the same text again within 10 seconds is a repeat.
+		if (!key && isDuplicateSend(thread.myLast, body, new Date())) return { sent: true };
 
-		const sent = await sendMessage(viewer.eventId, viewer.me.id, other, body);
-		const origin = publicOrigin(event.url);
+		let sent: Awaited<ReturnType<typeof sendMessage>>;
+		try {
+			sent = await sendMessage(viewer.eventId, viewer.me.id, other, body, key);
+		} catch (e) {
+			// Two overlapping posts of one draft: the other one stored it.
+			const already = key && uniqueViolation(e) ? await messageByKey(viewer.me.id, key) : null;
+			if (already) return { sent: true, message: already };
+			throw e;
+		}
+		const origin = directoryOrigin(event.url);
 		background(event, () =>
 			notifyRecipient({
 				origin,

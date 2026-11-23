@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	BLOCKER_TEXT, DEFAULT_DIRECTORY_SETTINGS, canonicalDirectoryPath, cleanBody, indiaDay, isClosed, isDuplicateSend,
-	matchesSearch, messageBlocker, parseDirectorySettings, pollDelay, purgeDue, safeNext, shouldEmail, type MessageFacts
+	matchesSearch, messageBlocker, parseDirectorySettings, pollDelay, purgeCheckDue, purgeDue, safeNext, shouldEmail, type MessageFacts
 } from './rules.ts';
 
 const person = { paid: true, hidden: false, adminHidden: false, messagesOff: false, adminMessagesOff: false };
@@ -70,12 +70,19 @@ describe('isDuplicateSend', () => {
 
 describe('shouldEmail', () => {
 	const t = (s: string) => new Date(`2026-11-28T${s}:00Z`);
-	it('emails the first time', () => expect(shouldEmail({ emailedAt: null, readAt: null })).toBe(true));
+	const now = t('12:00');
+	it('emails the first time', () => expect(shouldEmail({ emailedAt: null, readAt: null }, now)).toBe(true));
 	it('waits while an emailed message is unread', () => {
-		expect(shouldEmail({ emailedAt: t('10:00'), readAt: null })).toBe(false);
-		expect(shouldEmail({ emailedAt: t('10:00'), readAt: t('09:00') })).toBe(false);
+		expect(shouldEmail({ emailedAt: t('10:00'), readAt: null }, now)).toBe(false);
+		expect(shouldEmail({ emailedAt: t('10:00'), readAt: t('09:00') }, now)).toBe(false);
 	});
-	it('emails again once they have read it', () => expect(shouldEmail({ emailedAt: t('10:00'), readAt: t('10:05') })).toBe(true));
+	it('emails again once they have read it', () => expect(shouldEmail({ emailedAt: t('10:00'), readAt: t('10:05') }, now)).toBe(true));
+	it('skips the email while they have the conversation open', () => {
+		expect(shouldEmail({ emailedAt: null, readAt: new Date(now.getTime() - 60_000) }, now)).toBe(false);
+		expect(shouldEmail({ emailedAt: t('10:00'), readAt: new Date(now.getTime() - 30_000) }, now)).toBe(false);
+	});
+	it('emails once they have been away for two minutes', () =>
+		expect(shouldEmail({ emailedAt: t('10:00'), readAt: new Date(now.getTime() - 120_000) }, now)).toBe(true));
 });
 
 describe('dates', () => {
@@ -92,6 +99,15 @@ describe('dates', () => {
 		const closes = DEFAULT_DIRECTORY_SETTINGS.closesAt;
 		expect(purgeDue(new Date('2027-01-11T18:29:00Z'), closes)).toBe(false);
 		expect(purgeDue(new Date('2027-01-11T18:31:00Z'), closes)).toBe(true);
+	});
+});
+
+describe('purgeCheckDue', () => {
+	const now = Date.parse('2027-01-12T10:00:00Z');
+	it('checks on the first request a server handles', () => expect(purgeCheckDue(null, now)).toBe(true));
+	it('then at most once an hour', () => {
+		expect(purgeCheckDue(now - 59 * 60_000, now)).toBe(false);
+		expect(purgeCheckDue(now - 60 * 60_000, now)).toBe(true);
 	});
 });
 

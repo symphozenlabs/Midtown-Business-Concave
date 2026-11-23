@@ -101,7 +101,7 @@
 					<MessagesSquare size={22} aria-hidden="true" />
 					Open the visitors directory{dir.unread ? ` (${dir.unread} unread)` : ''}
 				</a>
-				<form method="post" action="?/directorySettings" use:enhance class="dir-settings">
+				<form method="post" action="?/directorySettings" use:enhance={() => async ({ update }) => update({ reset: false })} class="dir-settings">
 					<label class="ops-check">
 						<input type="checkbox" name="listed" checked={!dir.flags.hidden && !dir.flags.adminHidden} disabled={dir.flags.adminHidden} />
 						Show me in the directory

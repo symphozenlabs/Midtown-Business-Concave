@@ -52,7 +52,10 @@ export async function pushTo(registrationId: string, payload: PushPayload): Prom
 	const wp = await webPush();
 	const body = JSON.stringify(payload);
 	const results = await Promise.allSettled(
-		subs.map((s) => wp.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { TTL: 3600, urgency: 'high' }))
+		subs.map((s) =>
+			// A push service that stops answering mustn't hold the function open.
+			wp.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { TTL: 3600, urgency: 'high', timeout: 10_000 })
+		)
 	);
 	let delivered = 0;
 	for (const [i, r] of results.entries()) {

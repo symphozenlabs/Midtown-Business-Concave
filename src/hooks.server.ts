@@ -4,6 +4,7 @@ import { DIRECTORY_PATH, canonicalDirectoryPath } from '#lib/directory/rules.ts'
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 import { SESSION_COOKIE as HANDLER_COOKIE, readHandlerSession } from '#lib/server/ops/handlers.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
+import { checkDirectoryPurge } from '#lib/server/directory/purge-check.ts';
 
 /** Handler pages anyone may open: signing in and resetting a forgotten password. */
 const HANDLER_PUBLIC = ['/handler/login', '/handler/forgot', '/handler/reset'];
@@ -14,6 +15,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// The visitor card prints /visitorDirectory; any other casing of it still lands there.
 	const directory = canonicalDirectoryPath(pathname);
 	if (directory) redirect(308, directory + event.url.search);
+
+	checkDirectoryPurge(event);
 
 	// Organiser sign-in lives at /login and Configuration became Payments; old bookmarks still work.
 	if (pathname === '/admin/login') redirect(308, '/login');
