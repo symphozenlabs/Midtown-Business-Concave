@@ -94,7 +94,7 @@ export async function schedule(): Promise<EventLabels> {
 }
 
 /** Email layout: navy and gold like the poster, with inline styles for mail clients. */
-export function layout(title: string, body: string, when: EventLabels) {
+export function layout(title: string, body: string, when: EventLabels, organisedBy = `${EVENT.presenter} and Midtown Events`) {
 	return `<!doctype html><html><body style="margin:0;background:#0b1430;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#101a3a;border:1px solid #6b5426;border-radius:14px;">
@@ -104,7 +104,7 @@ export function layout(title: string, body: string, when: EventLabels) {
 </td></tr>
 <tr><td style="padding:8px 28px 28px;color:#e9dfc9;font-size:15px;line-height:1.6;">${body}</td></tr>
 <tr><td style="padding:16px 28px;border-top:1px solid #2a3558;color:#a69c8a;font-size:12px;line-height:1.6;text-align:center;">
-${escape(when.dateLabel)} · ${escape(when.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(EVENT.presenter)} and Midtown Events
+${escape(when.dateLabel)} · ${escape(when.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(organisedBy)}
 </td></tr></table></td></tr></table></body></html>`;
 }
 

@@ -1,6 +1,6 @@
 import { normalisePhone } from './registration.ts';
 
-/** The industries on sef.midtownevents.in, plus "Others" with the applicant's own wording. */
+/** The award categories, plus "Others" with the applicant's own wording. */
 export const AWARD_CATEGORIES = [
 	{ id: 'textiles', name: 'Textiles', hint: 'Looms, dyeing & handloom exporters' },
 	{ id: 'steel', name: 'Steel', hint: 'Rolling mills, fabrication & foundries' },

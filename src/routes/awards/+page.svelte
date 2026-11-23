@@ -166,7 +166,7 @@
 	<meta name="description" content="Apply for the Midtown Business Awards 2026, presented at the {EVENT.name} in {EVENT.venue} on {EVENT.dateLabel}. Free to apply." />
 	<meta property="og:title" content="Midtown Business Awards 2026" />
 	<meta property="og:description" content="Honouring the businesses that make Tamil Nadu grow. Free to apply." />
-	<meta property="og:image" content="/poster/sample.webp" />
+	<meta property="og:image" content="/poster/mbc.webp" />
 	<meta property="og:type" content="website" />
 </svelte:head>
 
@@ -178,9 +178,7 @@
 				<span class="corner bl" aria-hidden="true"></span><span class="corner br" aria-hidden="true"></span>
 
 				<div class="presenters">
-					<div><span>Organised by</span><img src="/poster/sef.webp" alt="Salem Entrepreneurs Forum" /></div>
-					<i aria-hidden="true"></i>
-					<div><span>Event partner</span><img src="/poster/me.webp" alt="Midtown Events" /></div>
+					<div><span>Presented by</span><img src="/poster/me.webp" alt="Midtown Events" /></div>
 				</div>
 
 				<div class="arch" aria-hidden="true">
@@ -188,7 +186,7 @@
 					<span class="medal"><Trophy size={64} strokeWidth={1.25} /></span>
 				</div>
 
-				<p class="kicker">Midtown Events presents</p>
+				<p class="kicker">Midtown Business Conclave</p>
 				<h1>Midtown Business <em>Awards</em> <span>2026</span></h1>
 				<p class="tagline">Honouring the entrepreneurs and businesses who make Tamil Nadu grow.</p>
 
@@ -436,16 +434,10 @@
 	}
 
 	.presenters img {
-		height: 42px;
+		height: 52px;
 		width: auto;
-		max-width: 130px;
+		max-width: 180px;
 		object-fit: contain;
-	}
-
-	.presenters i {
-		width: 1px;
-		height: 44px;
-		background: var(--gold-line);
 	}
 
 	.arch {
