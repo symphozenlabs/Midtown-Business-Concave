@@ -3,10 +3,10 @@ import { DIRECTORY_PATH } from '#lib/directory/rules.ts';
 import { background } from '#lib/server/background.ts';
 import { listConversations, purgeIfDue } from '#lib/server/directory/messages.ts';
 import { listPeople } from '#lib/server/directory/people.ts';
+import { allowSignInLink } from '#lib/server/directory/sign-in-limit.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
 import { sendSignInEmail } from '#lib/server/email.ts';
 import { signInLink } from '#lib/server/ops/passes.ts';
-import { allow } from '#lib/server/rate-limit.ts';
 import { publicOrigin } from '#lib/server/site.ts';
 import { findByEmail } from '#lib/server/store.ts';
 import { isPushConfigured, vapidPublicKey } from '#lib/server/push.ts';
@@ -40,7 +40,7 @@ export const actions: Actions = {
 	sendLink: async (event) => {
 		const email = String((await event.request.formData()).get('email') ?? '').trim().slice(0, 120);
 		if (!/^[^\s@]+@[^\s@]+$/.test(email)) return fail(400, { email, message: 'Enter the email you registered with.' });
-		if (!allow(`dirlink:ip:${event.getClientAddress()}`, 10, 600_000) || !allow(`dirlink:email:${email.toLowerCase()}`, 3, 1_800_000)) {
+		if (!allowSignInLink(event.getClientAddress(), email)) {
 			return fail(429, { email, message: 'Too many requests. Try again in a few minutes.' });
 		}
 		const origin = publicOrigin(event.url);
