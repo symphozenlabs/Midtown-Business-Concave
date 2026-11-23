@@ -1,16 +1,25 @@
 import { json, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
+import { SITE_URL } from '#lib/event.ts';
 import { DIRECTORY_PATH, canonicalDirectoryPath } from '#lib/directory/rules.ts';
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 import { SESSION_COOKIE as HANDLER_COOKIE, readHandlerSession } from '#lib/server/ops/handlers.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
 import { checkDirectoryPurge } from '#lib/server/directory/purge-check.ts';
 
+const AWARDS_HOST = 'awards.midtownevents.in';
+
 /** Handler pages anyone may open: signing in and resetting a forgotten password. */
 const HANDLER_PUBLIC = ['/handler/login', '/handler/forgot', '/handler/reset'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+
+	// awards.midtownevents.in only serves the awards form; everything else stays on the conclave site.
+	if (event.url.hostname === AWARDS_HOST && pathname !== '/awards' && pathname !== '/api/awards' && !pathname.startsWith('/_app/')) {
+		if (pathname === '/') redirect(307, '/awards');
+		redirect(307, `${SITE_URL}${pathname}${event.url.search}`, { external: true });
+	}
 
 	// The visitor card prints /visitorDirectory; any other casing of it still lands there.
 	const directory = canonicalDirectoryPath(pathname);

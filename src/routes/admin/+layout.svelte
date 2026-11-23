@@ -2,7 +2,7 @@
 	import '#lib/ops/ops.css';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
-	import { Activity, Handshake, IndianRupee, KeyRound, LayoutDashboard, LogOut, SlidersHorizontal, Store, Users } from '@lucide/svelte';
+	import { Activity, Handshake, IndianRupee, KeyRound, LayoutDashboard, LogOut, SlidersHorizontal, Store, Trophy, Users } from '@lucide/svelte';
 
 	let { data, children } = $props();
 
@@ -13,7 +13,8 @@
 		{ href: '/admin/activity', label: 'Activity', icon: Activity },
 		{ href: '/admin/payments', label: 'Payments', icon: IndianRupee },
 		{ href: '/admin/stalls', label: 'Stalls', icon: Store },
-		{ href: '/admin/sponsors', label: 'Sponsors', icon: Handshake }
+		{ href: '/admin/sponsors', label: 'Sponsors', icon: Handshake },
+		{ href: '/admin/awards', label: 'Awards', icon: Trophy }
 	];
 
 	const current = (href: string) =>

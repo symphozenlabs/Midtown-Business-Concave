@@ -1,6 +1,7 @@
 import { EVENT } from '#lib/event.ts';
 import { formatRupees } from '#lib/payment.ts';
 import { SPONSOR_TIERS } from '#lib/stall-booking.ts';
+import type { AwardApplication } from './awards.ts';
 import type { SponsorRequest, StallBooking } from './bookings.ts';
 import { escape, layout, schedule, send } from './email.ts';
 
@@ -93,4 +94,22 @@ export async function sendSponsorAckEmail(r: SponsorRequest) {
 We have received ${r.companyName}'s request for the ${tierLabel} sponsorship at the ${EVENT.name}.
 The organising team will call or email you shortly to take it forward.`;
 	return send(r.email, `Sponsorship request received · ${EVENT.name} 2026`, html, text);
+}
+
+/** Sent when a business applies at awards.midtownevents.in. */
+export async function sendAwardAckEmail(a: AwardApplication) {
+	const when = await schedule();
+	const html = layout(
+		`Thank you for applying, ${escape(first(a.fullName))}.`,
+		`<p style="margin:0 0 12px;">We have received ${escape(a.businessName)}'s application for the ${gold('Midtown Business Awards 2026')} in the ${escape(a.categoryLabel)} category.</p>
+<p style="margin:0 0 12px;">Your application number is ${gold(a.code)}.</p>
+<p style="margin:0;">The organising team will review it and contact you if you are shortlisted.</p>`,
+		when
+	);
+	const text = `Thank you for applying, ${first(a.fullName)}.
+
+We have received ${a.businessName}'s application for the Midtown Business Awards 2026 in the ${a.categoryLabel} category.
+Your application number is ${a.code}.
+The organising team will review it and contact you if you are shortlisted.`;
+	return send(a.email, `Award application received · ${a.code}`, html, text);
 }

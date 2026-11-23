@@ -524,3 +524,32 @@ create table if not exists push_subscriptions (
   created_at      timestamptz not null default now()
 );
 create index if not exists push_subscriptions_registration_idx on push_subscriptions (registration_id);
+
+-- Business award applications from awards.midtownevents.in (Admin → Awards). Also created
+-- automatically on first use. The Open/Closed switch is the "awards" row in settings.
+create table if not exists award_applications (
+  id              uuid primary key default gen_random_uuid(),
+  code            text not null unique,
+  full_name       text not null check (char_length(full_name) between 2 and 60),
+  designation     text not null check (char_length(designation) between 2 and 60),
+  email           text not null check (char_length(email) <= 120),
+  phone           text not null check (phone ~ '^\+91[6-9][0-9]{9}$'),
+  city            text not null check (char_length(city) between 2 and 60),
+  business_name   text not null check (char_length(business_name) between 2 and 100),
+  category_id     text not null,
+  other_category  text check (char_length(other_category) <= 60),
+  year_started    int not null check (year_started between 1850 and 2100),
+  team_size       text not null,
+  website         text check (char_length(website) <= 260),
+  about           text not null check (char_length(about) <= 600),
+  achievements    text not null check (char_length(achievements) <= 1000),
+  logo_key        text,
+  status          text not null default 'new' check (status in ('new', 'shortlisted', 'winner', 'rejected')),
+  admin_note      text check (char_length(admin_note) <= 300),
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  updated_by      text
+);
+create unique index if not exists award_applications_once_key
+  on award_applications (phone, lower(business_name), category_id, lower(coalesce(other_category, '')));
+create index if not exists award_applications_created_idx on award_applications (created_at desc);
