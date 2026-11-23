@@ -1,18 +1,9 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { ArrowLeft, ArrowRight, CalendarDays, CircleAlert, CircleCheck, Clock, ImageUp, LoaderCircle, MapPin, Send, Trophy, X } from '@lucide/svelte';
+	import { ArrowLeft, ArrowRight, CalendarDays, CircleAlert, CircleCheck, Clock, ImageUp, LoaderCircle, MapPin, Phone, Send, Trophy, X } from '@lucide/svelte';
 	import TextField from '#lib/components/TextField.svelte';
-	import { AWARD_CATEGORIES, AWARD_LIMITS, MAX_LOGO_BYTES, TEAM_SIZES, validateAwardApplication, type AwardErrors, type AwardField } from '#lib/awards.ts';
-	import { EVENT, SITE_URL } from '#lib/event.ts';
+	import { AWARDS_EVENT, AWARD_CATEGORIES, AWARD_LIMITS, MAX_LOGO_BYTES, TEAM_SIZES, validateAwardApplication, type AwardErrors, type AwardField } from '#lib/awards.ts';
 	import { formatPhone } from '#lib/registration.ts';
-
-	const PARTNERS = [
-		{ role: 'AI Technology Partner', name: 'ITK', src: '/poster/itk.webp' },
-		{ role: 'Associate Sponsor', name: 'Namma Office', src: '/poster/namma-office.webp' },
-		{ role: 'Associate Sponsor', name: 'SolarQube Energy', src: '/poster/solarqube.webp' },
-		{ role: 'Startup Ecosystem Partner', name: 'StartupTN', src: '/poster/startuptn.webp' },
-		{ role: 'Technology Partner', name: 'SymphoZen Labs', src: '/poster/symphozen-labs.webp' }
-	];
 
 	const LISTED_CATEGORIES = AWARD_CATEGORIES.filter((c) => c.id !== 'others');
 
@@ -164,51 +155,48 @@
 </script>
 
 <svelte:head>
-	<title>Midtown Business Awards 2026 · Apply</title>
-	<meta name="description" content="Apply for the Midtown Business Awards 2026, presented at the {EVENT.name} in {EVENT.venue} on {EVENT.dateLabel}. Free to apply." />
-	<meta property="og:title" content="Midtown Business Awards 2026" />
-	<meta property="og:description" content="Honouring the businesses that make Tamil Nadu grow. Free to apply." />
-	<meta property="og:image" content="/poster/mbc.webp" />
+	<title>{AWARDS_EVENT.name} · Apply</title>
+	<meta name="description" content="Nominate your company for the {AWARDS_EVENT.name}, presented by the {AWARDS_EVENT.presenter}. {AWARDS_EVENT.date}, {AWARDS_EVENT.time}, {AWARDS_EVENT.venue}. Free to apply." />
+	<meta property="og:title" content={AWARDS_EVENT.name} />
+	<meta property="og:description" content="Nominate your company now. {AWARDS_EVENT.date}, {AWARDS_EVENT.time}, {AWARDS_EVENT.venue}." />
+	<meta property="og:image" content="https://awards.midtownevents.in{AWARDS_EVENT.poster}" />
 	<meta property="og:type" content="website" />
 </svelte:head>
 
 <div class="page on-ink">
 	{#if view === 'poster'}
 		<main class="stage">
-			<article class="poster">
-				<span class="corner tl" aria-hidden="true"></span><span class="corner tr" aria-hidden="true"></span>
-				<span class="corner bl" aria-hidden="true"></span><span class="corner br" aria-hidden="true"></span>
+			<section class="hero">
+				<img
+					class="poster-img"
+					src={AWARDS_EVENT.poster}
+					width="1199"
+					height="1312"
+					fetchpriority="high"
+					alt="{AWARDS_EVENT.presenter} presents the {AWARDS_EVENT.name}. November 28th, 4 pm onwards, {AWARDS_EVENT.venue}. Nominate your company now. Enquiries {AWARDS_EVENT.phone}."
+				/>
+				<div class="intro">
+					<p class="kicker">{AWARDS_EVENT.presenter} presents</p>
+					<h1>Salem Entrepreneurs <em>Awards</em></h1>
+					<p class="tagline">Nominate your company and be recognised among the entrepreneurs who make Salem grow.</p>
 
-				<div class="presenters">
-					<div><span>Presented by</span><img src="/poster/me.webp" alt="Midtown Events" /></div>
+					<ul class="facts">
+						<li><CalendarDays size={18} aria-hidden="true" /><span><small>Date</small>{AWARDS_EVENT.date}</span></li>
+						<li><Clock size={18} aria-hidden="true" /><span><small>Time</small>{AWARDS_EVENT.time}</span></li>
+						<li><MapPin size={18} aria-hidden="true" /><span><small>Venue</small>{AWARDS_EVENT.venue}</span></li>
+						<li><Phone size={18} aria-hidden="true" /><span><small>Enquiries</small><a href="tel:+91{AWARDS_EVENT.phone}">{AWARDS_EVENT.phone}</a></span></li>
+					</ul>
+
+					{#if open}
+						<button type="button" class="cta" onclick={apply}>
+							<Trophy size={20} aria-hidden="true" /> Apply for Business Awards <ArrowRight size={18} aria-hidden="true" />
+						</button>
+						<p class="free">Free to apply · Takes about five minutes</p>
+					{:else}
+						<p class="closed" role="status">Applications for the awards are now closed. Thank you for your interest.</p>
+					{/if}
 				</div>
-
-				<div class="arch" aria-hidden="true">
-					<span class="rays"></span>
-					<span class="medal"><Trophy size={64} strokeWidth={1.25} /></span>
-				</div>
-
-				<p class="kicker">Midtown Business Conclave</p>
-				<h1>Midtown Business <em>Awards</em> <span>2026</span></h1>
-				<p class="tagline">Honouring the entrepreneurs and businesses who make Tamil Nadu grow.</p>
-
-				<ul class="facts">
-					<li><CalendarDays size={18} aria-hidden="true" /><span><small>Date</small>{EVENT.compactDate}</span></li>
-					<li><Clock size={18} aria-hidden="true" /><span><small>Time</small>{EVENT.compactTime}</span></li>
-					<li><MapPin size={18} aria-hidden="true" /><span><small>Venue</small>{EVENT.venue}</span></li>
-				</ul>
-
-				{#if open}
-					<button type="button" class="cta" onclick={apply}>
-						<Trophy size={20} aria-hidden="true" /> Apply for Business Awards <ArrowRight size={18} aria-hidden="true" />
-					</button>
-					<p class="free">Free to apply · Takes about five minutes</p>
-				{:else}
-					<p class="closed" role="status">Applications for the awards are now closed. Thank you for your interest.</p>
-				{/if}
-
-				<p class="at">Presented at the <a href={SITE_URL}>{EVENT.name}</a></p>
-			</article>
+			</section>
 
 			<section class="below" aria-labelledby="categories-title">
 				<span class="eyebrow">Award categories</span>
@@ -221,22 +209,12 @@
 					</ul>
 				</details>
 			</section>
-
-			<section class="below" aria-labelledby="partners-title">
-				<span class="eyebrow">Sponsors &amp; partners</span>
-				<h2 id="partners-title">The partners behind the <em>conclave</em></h2>
-				<ul class="logos">
-					{#each PARTNERS as p (p.name)}
-						<li><span>{p.role}</span><div class="plate"><img src={p.src} alt={p.name} loading="lazy" /></div></li>
-					{/each}
-				</ul>
-			</section>
 		</main>
 	{:else if view === 'form'}
 		<main class="form-stage">
 			<button type="button" class="back" onclick={backToPoster}><ArrowLeft size={18} aria-hidden="true" /> Back</button>
 			<header class="form-head">
-				<span class="eyebrow">Midtown Business Awards 2026</span>
+				<span class="eyebrow">{AWARDS_EVENT.name}</span>
 				<h1 id="apply-title" tabindex="-1">Apply for Business Awards</h1>
 				<p>Tell us about you and your business. Fields marked * are required.</p>
 			</header>
@@ -331,13 +309,13 @@
 				<p>Thank you, {fullName.trim().split(/\s+/)[0]}. Your application number is</p>
 				<strong class="code">{code}</strong>
 				<p>We've sent a confirmation to <b>{sentTo}</b>. The organising team will contact you if you are shortlisted.</p>
-				<a class="btn btn-primary" href={SITE_URL}>Visit the Conclave website</a>
+				<p>Questions? Call <a href="tel:+91{AWARDS_EVENT.phone}">{AWARDS_EVENT.phone}</a></p>
 			</div>
 		</main>
 	{/if}
 
 	<footer class="foot">
-		<span>© 2026 Midtown Events</span>
+		<span>© 2026 {AWARDS_EVENT.presenter}</span>
 		<span>Powered by <a href="https://www.symphozen.com" target="_blank" rel="noopener">SymphoZen Labs</a></span>
 	</footer>
 </div>
@@ -361,127 +339,44 @@
 		padding: clamp(16px, 4vw, 48px) 16px clamp(48px, 7vw, 80px);
 	}
 
-	/* The poster ------------------------------------------------------------ */
-	.poster {
-		position: relative;
+	/* The real poster beside the details; stacked on phones. */
+	.hero {
 		display: grid;
-		justify-items: center;
-		gap: var(--space-4);
-		width: min(100%, 620px);
-		padding: clamp(28px, 6vw, 52px) clamp(20px, 5vw, 48px);
-		border-radius: 18px;
-		text-align: center;
-		background:
-			radial-gradient(70% 34% at 50% 25%, rgb(255 190 90 / 0.28), transparent 72%),
-			linear-gradient(180deg, #0b1430, #050812);
-		isolation: isolate;
-		overflow: hidden;
-		box-shadow:
-			inset 0 0 0 1px var(--gold-line),
-			inset 0 0 0 7px #070c1c,
-			inset 0 0 0 8px rgb(227 176 75 / 0.6),
-			0 40px 90px rgb(0 0 0 / 0.6);
-	}
-
-	/* A soft gold sunburst behind the trophy, echoing the conclave's hero. */
-	.poster::before {
-		content: '';
-		position: absolute;
-		top: 214px;
-		left: 50%;
-		z-index: -1;
-		width: 760px;
-		height: 760px;
-		border-radius: 50%;
-		transform: translate(-50%, -50%);
-		background: repeating-conic-gradient(rgb(245 207 119 / 0.09) 0 3deg, transparent 3deg 12deg);
-		box-shadow:
-			inset 0 0 0 1px rgb(227 176 75 / 0.14),
-			inset 0 0 0 34px rgb(5 8 18 / 0.18);
-		-webkit-mask-image: radial-gradient(circle, #000 18%, transparent 68%);
-		mask-image: radial-gradient(circle, #000 18%, transparent 68%);
-	}
-
-	.corner {
-		position: absolute;
-		width: 26px;
-		height: 26px;
-		border: 2px solid var(--gold);
-	}
-	.tl { top: 16px; left: 16px; border-right: 0; border-bottom: 0; }
-	.tr { top: 16px; right: 16px; border-left: 0; border-bottom: 0; }
-	.bl { bottom: 16px; left: 16px; border-right: 0; border-top: 0; }
-	.br { bottom: 16px; right: 16px; border-left: 0; border-top: 0; }
-
-	.presenters {
-		display: flex;
+		grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+		gap: clamp(28px, 5vw, 64px);
 		align-items: center;
-		justify-content: center;
-		gap: var(--space-4);
+		width: min(100%, 1120px);
 	}
 
-	.presenters div {
-		display: grid;
-		justify-items: center;
-		gap: 6px;
-	}
-
-	.presenters span {
-		font-size: 10px;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: var(--on-ink-soft);
-	}
-
-	.presenters img {
-		height: 52px;
-		width: auto;
-		max-width: 180px;
-		object-fit: contain;
-	}
-
-	.arch {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: 148px;
-		height: 172px;
-		margin-top: var(--space-2);
-		border-radius: 74px 74px 10px 10px;
-		background: linear-gradient(180deg, #f5cf77, #a8741f 62%, #5e3e10);
+	.poster-img {
+		display: block;
+		width: 100%;
+		height: auto;
+		border-radius: 14px;
 		box-shadow:
-			0 0 0 2px #070c1c,
-			0 0 0 3px var(--gold),
-			0 0 54px rgb(255 180 80 / 0.5);
-		overflow: hidden;
+			0 0 0 1px var(--gold-line),
+			0 34px 80px rgb(0 0 0 / 0.6);
 	}
 
-	.rays {
-		position: absolute;
-		inset: -40%;
-		background: repeating-conic-gradient(from 0deg at 50% 50%, rgb(255 255 255 / 0.2) 0 8deg, transparent 8deg 22deg);
-	}
-
-	.medal {
-		position: relative;
-		color: #2a1b05;
-		filter: drop-shadow(0 2px 0 rgb(255 240 200 / 0.6));
+	.intro {
+		display: grid;
+		justify-items: start;
+		gap: var(--space-4);
 	}
 
 	.kicker {
-		margin-top: var(--space-2);
 		font: var(--text-eyebrow);
-		letter-spacing: 0.2em;
+		letter-spacing: 0.16em;
 		text-transform: uppercase;
 		color: var(--gold);
 	}
 
-	.poster h1 {
-		font: 500 clamp(36px, 8vw, 60px) / 1.04 var(--font-display);
+	.intro h1 {
+		font: 500 clamp(38px, 5vw, 62px) / 1.05 var(--font-display);
 		color: var(--on-ink);
 	}
 
-	.poster h1 em,
+	.intro h1 em,
 	.below h2 em {
 		font-style: italic;
 		background: linear-gradient(100deg, var(--gold-bright), var(--gold) 45%, var(--gold-deep));
@@ -491,41 +386,32 @@
 		padding-right: 0.06em;
 	}
 
-	.poster h1 span {
-		display: block;
-		margin-top: 6px;
-		font-size: 0.62em;
-		color: var(--gold-bright);
-	}
-
 	.tagline {
-		max-width: 420px;
+		font: var(--text-lead);
 		color: var(--on-ink-soft);
 	}
 
 	.facts {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
 		width: 100%;
-		margin: var(--space-2) 0 0;
+		margin: 0;
 		padding: 0;
 		list-style: none;
-		border-block: 1px solid var(--gold-line);
+		border-top: 1px solid var(--gold-line);
 	}
 
 	.facts li {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		padding: 12px 6px;
+		gap: var(--space-3);
+		padding: 11px 2px;
+		border-bottom: 1px solid var(--gold-line);
 		color: var(--on-ink);
-		font-size: 13px;
-		text-align: left;
+		font-size: 15px;
 	}
 
-	.facts li + li {
-		border-left: 1px solid var(--gold-line);
+	.facts a {
+		color: var(--gold-bright);
 	}
 
 	.facts :global(svg) {
@@ -577,14 +463,6 @@
 		border: 1px solid var(--gold-line);
 		border-radius: var(--radius-sm);
 		color: var(--on-ink);
-	}
-
-	.at {
-		font: var(--text-caption);
-	}
-
-	.at a {
-		color: var(--gold-bright);
 	}
 
 	/* Below the poster ------------------------------------------------------ */
@@ -639,44 +517,6 @@
 		text-align: left;
 		font: var(--text-caption);
 		color: var(--on-ink);
-	}
-
-	.logos {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		gap: var(--space-4);
-		margin: var(--space-4) 0 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.logos li {
-		display: grid;
-		justify-items: center;
-		gap: var(--space-2);
-		width: 184px;
-	}
-
-	.logos span {
-		font-size: 11px;
-		color: var(--gold);
-	}
-
-	.plate {
-		display: grid;
-		place-items: center;
-		width: 100%;
-		height: 84px;
-		padding: 12px;
-		border-radius: var(--radius-sm);
-		background: #fff;
-	}
-
-	.plate img {
-		max-width: 100%;
-		max-height: 58px;
-		object-fit: contain;
 	}
 
 	/* The form --------------------------------------------------------------- */
@@ -947,6 +787,11 @@
 	}
 
 	@media (max-width: 860px) {
+		.hero {
+			grid-template-columns: minmax(0, 1fr);
+			max-width: 560px;
+		}
+
 		.cats {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
@@ -957,26 +802,7 @@
 			grid-template-columns: minmax(0, 1fr);
 		}
 
-		.facts {
-			grid-template-columns: minmax(0, 1fr);
-		}
-
-		.facts li {
-			justify-content: flex-start;
-			padding-inline: var(--space-3);
-		}
-
-		.facts li + li {
-			border-left: 0;
-			border-top: 1px solid var(--gold-line);
-		}
-
-		/* Keeps the last line clear of the bottom corner marks. */
-		.poster {
-			padding-bottom: 56px;
-		}
-
-		.poster .cta {
+		.intro .cta {
 			width: 100%;
 			padding-inline: var(--space-3);
 			font-size: 16px;
@@ -986,8 +812,5 @@
 			grid-template-columns: minmax(0, 1fr);
 		}
 
-		.logos li {
-			width: calc(50% - var(--space-2));
-		}
 	}
 </style>

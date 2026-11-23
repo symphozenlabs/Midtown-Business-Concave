@@ -1,5 +1,16 @@
 import { normalisePhone } from './registration.ts';
 
+/** The awards are the Salem Entrepreneurs Forum's own event, separate from the conclave's schedule. */
+export const AWARDS_EVENT = {
+	name: 'Salem Entrepreneurs Awards',
+	presenter: 'Salem Entrepreneurs Forum',
+	date: 'Sat, 28 Nov 2026',
+	time: '4 pm onwards',
+	venue: 'Kongu SRV School Auditorium, Salem',
+	phone: '9363536239',
+	poster: '/poster/salem-entrepreneurs-awards.jpg'
+} as const;
+
 /** The award categories, in the organisers' order. "Others" lets applicants write their own. */
 const CATEGORY_NAMES = [
 	'Chartered Accountant (CA)',
