@@ -1,9 +1,12 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { BLOCKER_TEXT, MESSAGE_MAX, cleanBody, isDuplicateSend, messageBlocker } from '#lib/directory/rules.ts';
+import { background } from '#lib/server/background.ts';
 import { loadThread, markRead, messagesIn, sendMessage } from '#lib/server/directory/messages.ts';
+import { notifyRecipient } from '#lib/server/directory/notify.ts';
 import { block, unblock } from '#lib/server/directory/people.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
 import { allow } from '#lib/server/rate-limit.ts';
+import { publicOrigin } from '#lib/server/site.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 export const prerender = false;
@@ -57,6 +60,17 @@ export const actions: Actions = {
 		if (isDuplicateSend(thread.myLast, body, new Date())) return { sent: true };
 
 		const sent = await sendMessage(viewer.eventId, viewer.me.id, other, body);
+		const origin = publicOrigin(event.url);
+		background(event, () =>
+			notifyRecipient({
+				origin,
+				sender: viewer.me,
+				recipientId: other,
+				conversationId: sent.conversationId,
+				emailDue: sent.emailDue,
+				settings: viewer.settings
+			})
+		);
 		return { sent: true, message: sent.message };
 	},
 

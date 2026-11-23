@@ -113,7 +113,11 @@ export function isDuplicateSend(last: { body: string; at: string } | null, body:
 	return now.getTime() - Date.parse(last.at) <= DUPLICATE_WINDOW_MS;
 }
 
-/** One backup email per conversation until the recipient has opened it. */
+/**
+ * One backup email per conversation until the recipient has opened it. sendMessage()
+ * applies this same rule inside its database statement, so it holds under concurrent
+ * sends; keep the two in step.
+ */
 export function shouldEmail(s: { emailedAt: Date | null; readAt: Date | null }): boolean {
 	if (!s.emailedAt) return true;
 	return s.readAt !== null && s.readAt.getTime() >= s.emailedAt.getTime();

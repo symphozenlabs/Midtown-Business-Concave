@@ -1,4 +1,4 @@
-import { indiaDay, purgeDue, shouldEmail, type DirectorySettings, type MessageFacts } from '#lib/directory/rules.ts';
+import { indiaDay, purgeDue, type DirectorySettings, type MessageFacts } from '#lib/directory/rules.ts';
 import { sql } from '../db.ts';
 import { audit } from '../ops/event.ts';
 import { flagsFrom, type DirectoryPerson } from './people.ts';
@@ -86,7 +86,11 @@ export async function loadThread(eventId: string, me: Member, otherId: string, c
 
 /**
  * Stores a message, creating the conversation on the first one, and marks it read for
- * the sender. emailDue: whether the recipient may get a backup email for it.
+ * the sender. emailDue: this message claimed the recipient's backup email. The claim
+ * (recipient's emailed_at = now) is made in the same statement as the message, so two
+ * quick messages can't both claim one; it follows shouldEmail() in rules.ts: due when
+ * never emailed, or when they have read the conversation since the last email.
+ * notify.ts releases the claim if the email doesn't go.
  */
 export async function sendMessage(
 	eventId: string,
@@ -97,29 +101,37 @@ export async function sendMessage(
 	const { a, b, meIsA } = pair(me, otherId);
 	const rows = await sql()`
 		with c as (
-			insert into directory_conversations (event_id, a_id, b_id, started_by, last_sender_id, last_message_at, a_read_at, b_read_at)
+			insert into directory_conversations
+				(event_id, a_id, b_id, started_by, last_sender_id, last_message_at, a_read_at, b_read_at, a_emailed_at, b_emailed_at)
 			values (${eventId}, ${a}, ${b}, ${me}, ${me}, now(),
-				case when ${meIsA}::boolean then now() end, case when ${meIsA}::boolean then null else now() end)
+				case when ${meIsA}::boolean then now() end, case when ${meIsA}::boolean then null else now() end,
+				case when ${meIsA}::boolean then null else now() end, case when ${meIsA}::boolean then now() end)
 			on conflict (event_id, a_id, b_id) do update set
 				last_sender_id = excluded.last_sender_id,
 				last_message_at = now(),
 				a_read_at = case when ${meIsA}::boolean then now() else directory_conversations.a_read_at end,
-				b_read_at = case when ${meIsA}::boolean then directory_conversations.b_read_at else now() end
-			returning id, a_read_at, b_read_at, a_emailed_at, b_emailed_at
+				b_read_at = case when ${meIsA}::boolean then directory_conversations.b_read_at else now() end,
+				a_emailed_at = case
+					when not ${meIsA}::boolean and (directory_conversations.a_emailed_at is null
+						or directory_conversations.a_read_at >= directory_conversations.a_emailed_at) then now()
+					else directory_conversations.a_emailed_at end,
+				b_emailed_at = case
+					when ${meIsA}::boolean and (directory_conversations.b_emailed_at is null
+						or directory_conversations.b_read_at >= directory_conversations.b_emailed_at) then now()
+					else directory_conversations.b_emailed_at end
+			returning id, (case when ${meIsA}::boolean then b_emailed_at else a_emailed_at end) = now() as email_due
 		), m as (
 			insert into directory_messages (conversation_id, sender_id, body)
 			select id, ${me}, ${body} from c
 			returning id, created_at, conversation_id
 		)
-		select m.id, m.created_at, m.conversation_id, c.a_read_at, c.b_read_at, c.a_emailed_at, c.b_emailed_at
+		select m.id, m.created_at, m.conversation_id, c.email_due
 		from m join c on c.id = m.conversation_id`;
 	const r = rows[0];
-	const date = (v: unknown) => (v ? new Date(v as string) : null);
-	const recipient = meIsA ? { emailedAt: date(r.b_emailed_at), readAt: date(r.b_read_at) } : { emailedAt: date(r.a_emailed_at), readAt: date(r.a_read_at) };
 	return {
 		message: { id: Number(r.id), mine: true, body, at: iso(r.created_at) },
 		conversationId: r.conversation_id,
-		emailDue: shouldEmail(recipient)
+		emailDue: Boolean(r.email_due)
 	};
 }
 
@@ -208,4 +220,13 @@ export async function purgeIfDue(settings: DirectorySettings): Promise<void> {
 		sql()`delete from directory_email_days`
 	]);
 	await audit({ actorType: 'system', actor: 'directory', action: 'directory.purge', details: { closesAt: settings.closesAt } });
+}
+
+/** The backup email claimed by sendMessage didn't go (cap reached or sending failed). */
+export async function releaseEmail(conversationId: string, recipientId: string): Promise<void> {
+	await sql()`
+		update directory_conversations set
+			a_emailed_at = case when a_id = ${recipientId} then null else a_emailed_at end,
+			b_emailed_at = case when b_id = ${recipientId} then null else b_emailed_at end
+		where id = ${conversationId}`;
 }
