@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { DIRECTORY_PATH } from '#lib/directory/rules.ts';
 import { background } from '#lib/server/background.ts';
-import { listConversations, purgeIfDue } from '#lib/server/directory/messages.ts';
+import { listConversations } from '#lib/server/directory/messages.ts';
 import { listPeople } from '#lib/server/directory/people.ts';
 import { allowSignInLink } from '#lib/server/directory/sign-in-limit.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
@@ -17,10 +17,6 @@ export const prerender = false;
 export const load: PageServerLoad = async (event) => {
 	event.depends('directory:list');
 	const viewer = await directoryViewer(event.cookies);
-	if (viewer.state === 'closed') {
-		const settings = viewer.settings;
-		background(event, () => purgeIfDue(settings));
-	}
 	if (viewer.state !== 'open') return { state: viewer.state };
 
 	const [people, conversations] = await Promise.all([listPeople(viewer.me.id), listConversations(viewer.eventId, viewer.me.id)]);

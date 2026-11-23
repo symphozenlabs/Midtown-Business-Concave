@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	BLOCKER_TEXT, DEFAULT_DIRECTORY_SETTINGS, canonicalDirectoryPath, cleanBody, indiaDay, isClosed, isDuplicateSend,
-	matchesSearch, messageBlocker, parseDirectorySettings, pollDelay, purgeDue, safeNext, shouldEmail, type MessageFacts
+	matchesSearch, messageBlocker, parseDirectorySettings, pollDelay, purgeCheckDue, purgeDue, safeNext, shouldEmail, type MessageFacts
 } from './rules.ts';
 
 const person = { paid: true, hidden: false, adminHidden: false, messagesOff: false, adminMessagesOff: false };
@@ -92,6 +92,15 @@ describe('dates', () => {
 		const closes = DEFAULT_DIRECTORY_SETTINGS.closesAt;
 		expect(purgeDue(new Date('2027-01-11T18:29:00Z'), closes)).toBe(false);
 		expect(purgeDue(new Date('2027-01-11T18:31:00Z'), closes)).toBe(true);
+	});
+});
+
+describe('purgeCheckDue', () => {
+	const now = Date.parse('2027-01-12T10:00:00Z');
+	it('checks on the first request a server handles', () => expect(purgeCheckDue(null, now)).toBe(true));
+	it('then at most once an hour', () => {
+		expect(purgeCheckDue(now - 59 * 60_000, now)).toBe(false);
+		expect(purgeCheckDue(now - 60 * 60_000, now)).toBe(true);
 	});
 });
 

@@ -140,6 +140,13 @@ export function purgeDue(now: Date, closesAt: string): boolean {
 	return now.getTime() > Date.parse(closesAt) + PURGE_AFTER_DAYS * 86_400_000;
 }
 
+const PURGE_CHECK_EVERY_MS = 60 * 60_000;
+
+/** The clean-up after closing is checked on any request, at most once an hour per server. */
+export function purgeCheckDue(lastCheck: number | null, now: number): boolean {
+	return lastCheck === null || now - lastCheck >= PURGE_CHECK_EVERY_MS;
+}
+
 /* ---------- links ---------- */
 
 /** A same-site path to return to after signing in, or null. */
