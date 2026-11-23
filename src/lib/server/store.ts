@@ -170,12 +170,12 @@ const byEmail = (email: string) => [...mem.rows.values()].find((r) => r.email.to
 
 /* ---------- settings ---------- */
 
-async function readSetting(key: string): Promise<unknown> {
+export async function readSetting(key: string): Promise<unknown> {
 	const rows = await sql()`select value from settings where key = ${key}`;
 	return rows[0]?.value;
 }
 
-async function writeSetting(key: string, value: unknown, by: string) {
+export async function writeSetting(key: string, value: unknown, by: string) {
 	await sql()`
 		insert into settings (key, value, updated_at, updated_by)
 		values (${key}, ${JSON.stringify(value)}::jsonb, now(), ${by})
