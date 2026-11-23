@@ -28,6 +28,7 @@
   "dependencies": {
     "@lucide/svelte": "^1.65.0",
     "@neondatabase/serverless": "^1.2.0",
+    "@vercel/functions": "^3.11.3",
     "aws4fetch": "^1.0.20",
     "heic-to": "1.6.6",
     "jsqr": "^1.4.0",

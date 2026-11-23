@@ -231,6 +231,30 @@ ${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
 	return send(reg.email, `Your event pass · ${EVENT.name} 2026 · ${reg.code}`, html, text, cardAttachments(reg, null, back, pass));
 }
 
+/** Gold call-to-action button, as in the pass email. */
+const button = (href: string, label: string) =>
+	`<a href="${escape(href)}" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#e3b04b;color:#171916;font-weight:bold;text-decoration:none;">${escape(label)}</a>`;
+
+/** "Email me my pass link" on the visitors directory: signs this phone in and opens the directory. */
+export async function sendSignInEmail(reg: Registration, link: string): Promise<string> {
+	const when = await schedule();
+	const html = layout(
+		'Open the visitors directory',
+		`<p style="margin:0 0 16px;">Tap the button on the phone you want to use. It signs you in to your pass and the visitors directory.</p>
+<p style="margin:0 0 16px;">${button(link, 'Open the visitors directory')}</p>
+<p style="margin:0;font-size:12px;color:#a69c8a;">Keep this link to yourself: it signs you in to your pass.</p>`,
+		when
+	);
+	const text = `Open the visitors directory
+
+Tap the link on the phone you want to use. It signs you in to your pass and the visitors directory.
+
+${link}
+
+Keep this link to yourself: it signs you in to your pass.`;
+	return send(reg.email, `Your link to the visitors directory · ${EVENT.name}`, html, text);
+}
+
 /** A one-time link for an event handler who forgot their password. */
 export async function sendHandlerResetEmail(to: string, name: string, link: string) {
 	const when = await schedule();
