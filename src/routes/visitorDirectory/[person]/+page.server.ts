@@ -7,7 +7,7 @@ import { block, unblock } from '#lib/server/directory/people.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
 import { uniqueViolation } from '#lib/server/db.ts';
 import { allow } from '#lib/server/rate-limit.ts';
-import { publicOrigin } from '#lib/server/site.ts';
+import { directoryOrigin } from '#lib/server/site.ts';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 export const prerender = false;
@@ -79,7 +79,7 @@ export const actions: Actions = {
 			if (already) return { sent: true, message: already };
 			throw e;
 		}
-		const origin = publicOrigin(event.url);
+		const origin = directoryOrigin(event.url);
 		background(event, () =>
 			notifyRecipient({
 				origin,

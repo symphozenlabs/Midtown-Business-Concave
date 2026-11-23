@@ -7,7 +7,7 @@ import { allowSignInLink } from '#lib/server/directory/sign-in-limit.ts';
 import { directoryViewer } from '#lib/server/directory/viewer.ts';
 import { sendSignInEmail } from '#lib/server/email.ts';
 import { signInLink } from '#lib/server/ops/passes.ts';
-import { publicOrigin } from '#lib/server/site.ts';
+import { directoryOrigin } from '#lib/server/site.ts';
 import { findByEmail } from '#lib/server/store.ts';
 import { isPushConfigured, vapidPublicKey } from '#lib/server/push.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -39,7 +39,7 @@ export const actions: Actions = {
 		if (!allowSignInLink(event.getClientAddress(), email)) {
 			return fail(429, { email, message: 'Too many requests. Try again in a few minutes.' });
 		}
-		const origin = publicOrigin(event.url);
+		const origin = directoryOrigin(event.url);
 		// After the response, so the reply takes the same time whether or not the address is registered.
 		background(event, async () => {
 			const reg = await findByEmail(email);
