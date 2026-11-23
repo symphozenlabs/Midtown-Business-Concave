@@ -97,3 +97,30 @@ export async function listBlocked(me: string): Promise<{ id: string; fullName: s
 		order by b.created_at desc`;
 	return rows.map((r) => ({ id: r.id, fullName: r.full_name, companyName: r.company_name }));
 }
+
+/**
+ * The organiser's switches, for complaints at the venue. They override the delegate's
+ * own settings, which are kept and apply again once these are cleared.
+ */
+export async function setAdminFlags(
+	eventId: string,
+	registrationId: string,
+	flags: { adminHidden: boolean; adminMessagesOff: boolean },
+	by: string
+): Promise<void> {
+	await sql()`
+		insert into directory_members (registration_id, admin_hidden, admin_messages_off)
+		values (${registrationId}, ${flags.adminHidden}, ${flags.adminMessagesOff})
+		on conflict (registration_id) do update set
+			admin_hidden = excluded.admin_hidden, admin_messages_off = excluded.admin_messages_off, updated_at = now()`;
+	await audit({ eventId, actorType: 'admin', actor: by, action: 'directory.admin_flags', targetType: 'registration', targetId: registrationId, details: flags });
+}
+
+/** Organiser switches for the dashboard rows shown; rows with neither set are left out. */
+export async function adminFlagsFor(ids: string[]): Promise<Record<string, { adminHidden: boolean; adminMessagesOff: boolean }>> {
+	if (!ids.length) return {};
+	const rows = await sql()`
+		select registration_id, admin_hidden, admin_messages_off from directory_members
+		where registration_id = any(${ids}::uuid[]) and (admin_hidden or admin_messages_off)`;
+	return Object.fromEntries(rows.map((r) => [r.registration_id, { adminHidden: r.admin_hidden, adminMessagesOff: r.admin_messages_off }]));
+}

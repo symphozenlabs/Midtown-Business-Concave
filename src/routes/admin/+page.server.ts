@@ -13,6 +13,9 @@ import {
 } from '#lib/server/email.ts';
 import { deleteObject, getObject, isR2Configured } from '#lib/server/r2.ts';
 import { cardBacksToMake, markPassEmailed, passEmailFor, passesToSend } from '#lib/server/ops/passes.ts';
+import { adminFlagsFor, setAdminFlags } from '#lib/server/directory/people.ts';
+import { directoryReady } from '#lib/server/directory/settings.ts';
+import { getDefaultEvent } from '#lib/server/ops/event.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
@@ -121,9 +124,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		getEventSettings(),
 		getFrontsOutdated()
 	]);
+	const directoryFlags = (await directoryReady()) ? await adminFlagsFor(table.rows.map((r) => r.id)) : null;
 	return {
 		configured,
 		available: true as const,
+		directoryFlags,
 		stats,
 		passesToSend: passes.total,
 		filter: { status, q, email },
@@ -345,6 +350,19 @@ export const actions: Actions = {
 			return fail(502, { id, message: `The ticket email failed: ${emailFailure(e)}` });
 		}
 		return { id, success: `Sent the ticket to ${reg.email}.` };
+	},
+
+	/** Visitors directory switches for one delegate. Organisers can't read messages. */
+	directoryFlags: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		if (!(await directoryReady())) return fail(503, { message: 'Run db/schema.sql first: the visitors directory tables are missing.' });
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const reg = await getRegistration(id);
+		if (!reg) return fail(404, { id, message: 'This registration no longer exists.' });
+		const event = await getDefaultEvent();
+		await setAdminFlags(event.id, reg.id, { adminHidden: form.get('hide') === 'on', adminMessagesOff: form.get('stop') === 'on' }, locals.admin.email);
+		return { id, success: `Saved the visitors directory switches for ${reg.fullName}.` };
 	},
 
 	logout: async ({ cookies }) => {

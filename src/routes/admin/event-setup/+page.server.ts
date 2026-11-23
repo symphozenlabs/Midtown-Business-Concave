@@ -28,6 +28,7 @@ import { accessPath, isPassConfigured, markPassEmailed, passUrl, reissuePass } f
 import { qrPng } from '#lib/server/qr-png.ts';
 import { publicOrigin } from '#lib/server/site.ts';
 import { getEventSettings, getRegistration, isStoreAvailable, saveEventSettings, setFrontsOutdated } from '#lib/server/store.ts';
+import { directoryReady, getDirectorySettings, saveDirectorySettings } from '#lib/server/directory/settings.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -36,9 +37,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const schedule = isStoreAvailable ? await getEventSettings() : null;
 	if (!(await opsReady())) return { available: false as const, schedule };
 	const event = await getDefaultEvent();
-	const [gates, sessions, meals] = await Promise.all([listGates(event.id), listSessions(event.id), listMeals(event.id)]);
+	const [gates, sessions, meals, directory] = await Promise.all([
+		listGates(event.id),
+		listSessions(event.id),
+		listMeals(event.id),
+		directoryPanel()
+	]);
 	return {
 		available: true as const,
+		directory,
 		passesReady: isPassConfigured,
 		event,
 		gates,
@@ -48,6 +55,26 @@ export const load: PageServerLoad = async ({ locals }) => {
 		eventDate: schedule ? toEventFormFields(schedule).date : ''
 	};
 };
+
+// Set in Task 9, when the VAPID keys exist.
+const isPushConfigured = false;
+
+const istDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
+const istTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+
+/** The visitors directory panel: closing time in India, daily email cap, push switch. */
+async function directoryPanel() {
+	if (!(await directoryReady())) return null;
+	const s = await getDirectorySettings();
+	const closes = new Date(s.closesAt);
+	return {
+		closeDate: istDate.format(closes),
+		closeTime: istTime.format(closes),
+		emailCapPerDay: s.emailCapPerDay,
+		pushEnabled: s.pushEnabled,
+		pushConfigured: isPushConfigured
+	};
+}
 
 const text = (form: FormData, key: string) => String(form.get(key) ?? '').trim();
 const idOf = (form: FormData) => {
@@ -93,6 +120,26 @@ function readSessionForm(form: FormData):
 }
 
 export const actions: Actions = {
+	/** Visitors directory: when it closes (India time), backup emails per day, push on or off. */
+	saveDirectory: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { scope: 'directory', message: 'Sign in again.' });
+		if (!(await directoryReady())) return fail(503, { scope: 'directory', message: 'Run db/schema.sql first: the visitors directory tables are missing.' });
+		const form = await request.formData();
+		const date = text(form, 'closeDate');
+		const time = text(form, 'closeTime');
+		// Until the end of that minute.
+		const closesAt = DATE.test(date) && TIME.test(time) ? `${date}T${time}:59+05:30` : null;
+		if (!closesAt || Number.isNaN(Date.parse(closesAt))) return fail(400, { scope: 'directory', message: 'Choose the closing date and time.' });
+		const cap = Number(text(form, 'emailCap'));
+		if (!Number.isInteger(cap) || cap < 0 || cap > 1000) return fail(400, { scope: 'directory', message: 'Backup emails per day must be a whole number from 0 to 1000.' });
+		const pushEnabled = form.get('push') === 'on' && isPushConfigured;
+		const settings = { closesAt, emailCapPerDay: cap, pushEnabled };
+		await saveDirectorySettings(settings, locals.admin.email);
+		const event = await getDefaultEvent();
+		await audit({ eventId: event.id, actorType: 'admin', actor: locals.admin.email, action: 'directory.settings', details: settings });
+		return { scope: 'directory', success: 'Visitors directory settings saved.' };
+	},
+
 	/** When the event happens, in Indian time: shown on the site, the countdown and the emails. */
 	saveEvent: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { scope: 'schedule', message: 'Sign in again.' });

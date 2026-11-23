@@ -925,6 +925,18 @@
 														{/if}
 													</dl>
 
+													{#if r.status === 'paid' && data.directoryFlags}
+														{@const dir = data.directoryFlags[r.id]}
+														<form method="post" action={act('directoryFlags')} use:enhance={working(r.id)} class="dir-flags">
+															<input type="hidden" name="id" value={r.id} />
+															<strong>Visitors directory</strong>
+															<label><input type="checkbox" name="hide" checked={dir?.adminHidden ?? false} /> Hide from directory</label>
+															<label><input type="checkbox" name="stop" checked={dir?.adminMessagesOff ?? false} /> Stop messaging</label>
+															<button class="btn btn-secondary btn-sm" disabled={busy === r.id}>Save</button>
+															<small>For complaints at the venue. Organisers can’t read messages.</small>
+														</form>
+													{/if}
+
 													<div class="delete-zone">
 														{#if deleting === r.id}
 															<form method="post" action={act('delete')} use:enhance={working(r.id)} class="delete-confirm">
@@ -1869,6 +1881,36 @@
 
 	.regen-note.bad {
 		color: var(--danger);
+	}
+
+	.dir-flags {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-4);
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--rule);
+		font-size: 13px;
+		color: var(--charcoal);
+	}
+
+	.dir-flags label {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		cursor: pointer;
+	}
+
+	.dir-flags input[type='checkbox'] {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--gold-ink);
+	}
+
+	.dir-flags small {
+		flex-basis: 100%;
+		color: var(--text-supporting);
+		font-size: 12px;
 	}
 
 	.delete-zone {
