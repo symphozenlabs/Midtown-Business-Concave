@@ -32,10 +32,12 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
 
 /** Asks for permission, subscribes this browser and tells the server. */
 export async function turnOnPush(publicKey: string): Promise<PushState> {
-	const registration = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
+	// Ask first, straight from the tap: iPhone refuses the prompt once the tap's moment has
+	// passed, and registering the service worker on slow Wi-Fi can take that long.
 	const permission = await Notification.requestPermission();
 	if (permission === 'denied') return 'denied';
 	if (permission !== 'granted') return 'off';
+	const registration = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
 	await navigator.serviceWorker.ready;
 	const subscription =
 		(await registration.pushManager.getSubscription()) ??

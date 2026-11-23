@@ -30,10 +30,13 @@ self.addEventListener('notificationclick', (event) => {
 	const url = (event.notification.data && event.notification.data.url) || '/visitorDirectory';
 	event.waitUntil(
 		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
-			for (const w of windows) {
-				if ('focus' in w) {
-					return w.navigate(url).then((n) => (n || w).focus());
-				}
+			// Prefer a window already in the directory; any failure opens a fresh one.
+			const w = windows.find((c) => new URL(c.url).pathname.startsWith('/visitorDirectory')) || windows[0];
+			if (w && 'navigate' in w) {
+				return w
+					.navigate(url)
+					.then((n) => (n || w).focus())
+					.catch(() => self.clients.openWindow(url));
 			}
 			return self.clients.openWindow(url);
 		})

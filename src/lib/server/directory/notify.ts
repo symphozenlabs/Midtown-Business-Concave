@@ -35,17 +35,26 @@ export async function notifyRecipient(n: {
 	emailDue: boolean;
 	settings: DirectorySettings;
 }): Promise<void> {
-	if (n.settings.pushEnabled && isPushConfigured) {
-		try {
-			await pushTo(n.recipientId, {
-				title: `New message from ${n.sender.fullName}`,
-				body: 'Tap to read and reply',
-				url: `/visitorDirectory/${n.sender.id}`
-			});
-		} catch (e) {
-			console.error('[directory] push failed', e);
-		}
+	// Side by side: a slow push service never delays the email.
+	await Promise.all([pushRecipient(n), emailRecipient(n)]);
+}
+
+type Notice = Parameters<typeof notifyRecipient>[0];
+
+async function pushRecipient(n: Notice): Promise<void> {
+	if (!n.settings.pushEnabled || !isPushConfigured) return;
+	try {
+		await pushTo(n.recipientId, {
+			title: `New message from ${n.sender.fullName}`,
+			body: 'Tap to read and reply',
+			url: `/visitorDirectory/${n.sender.id}`
+		});
+	} catch (e) {
+		console.error('[directory] push failed', e);
 	}
+}
+
+async function emailRecipient(n: Notice): Promise<void> {
 	if (!n.emailDue) return;
 	let sent = false;
 	try {
