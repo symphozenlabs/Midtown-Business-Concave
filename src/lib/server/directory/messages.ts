@@ -96,7 +96,8 @@ export async function sendMessage(
 	eventId: string,
 	me: string,
 	otherId: string,
-	body: string
+	body: string,
+	clientKey: string | null = null
 ): Promise<{ message: ChatMessage; conversationId: string; emailDue: boolean }> {
 	const { a, b, meIsA } = pair(me, otherId);
 	const rows = await sql()`
@@ -121,8 +122,8 @@ export async function sendMessage(
 					else directory_conversations.b_emailed_at end
 			returning id, (case when ${meIsA}::boolean then b_emailed_at else a_emailed_at end) = now() as email_due
 		), m as (
-			insert into directory_messages (conversation_id, sender_id, body)
-			select id, ${me}, ${body} from c
+			insert into directory_messages (conversation_id, sender_id, body, client_key)
+			select id, ${me}, ${body}, ${clientKey}::uuid from c
 			returning id, created_at, conversation_id
 		)
 		select m.id, m.created_at, m.conversation_id, c.email_due
@@ -133,6 +134,13 @@ export async function sendMessage(
 		conversationId: r.conversation_id,
 		emailDue: Boolean(r.email_due)
 	};
+}
+
+/** The message I already sent with this draft key, if any (a resent post). */
+export async function messageByKey(me: string, clientKey: string): Promise<ChatMessage | null> {
+	const rows = await sql()`select id, body, created_at from directory_messages where sender_id = ${me} and client_key = ${clientKey}::uuid`;
+	const r = rows[0];
+	return r ? { id: Number(r.id), mine: true, body: r.body, at: iso(r.created_at) } : null;
 }
 
 /** Messages in one of my conversations, oldest first: the last 200, or those after `afterId`. */

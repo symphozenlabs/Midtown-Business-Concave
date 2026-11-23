@@ -503,6 +503,10 @@ create table if not exists directory_messages (
   created_at      timestamptz not null default now()
 );
 create index if not exists directory_messages_conversation_idx on directory_messages (conversation_id, id);
+-- Set by the sender's phone for each draft: a resent post (patchy Wi-Fi, a second tap)
+-- carries the same key and is stored once.
+alter table directory_messages add column if not exists client_key uuid;
+create unique index if not exists directory_messages_client_key on directory_messages (sender_id, client_key) where client_key is not null;
 
 -- Backup emails sent per India date, for the daily cap.
 create table if not exists directory_email_days (
