@@ -104,7 +104,8 @@ export async function sendAwardAckEmail(a: AwardApplication) {
 		`<p style="margin:0 0 12px;">We have received ${escape(a.businessName)}'s application for the ${gold('Midtown Business Awards 2026')} in the ${escape(a.categoryLabel)} category.</p>
 <p style="margin:0 0 12px;">Your application number is ${gold(a.code)}.</p>
 <p style="margin:0;">The organising team will review it and contact you if you are shortlisted.</p>`,
-		when
+		when,
+		'Midtown Events'
 	);
 	const text = `Thank you for applying, ${first(a.fullName)}.
 
