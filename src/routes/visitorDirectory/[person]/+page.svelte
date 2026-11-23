@@ -71,6 +71,8 @@
 
 <svelte:head>
 	<title>{data.state === 'open' ? `${data.person.fullName} · ` : ''}Visitors directory · Midtown Business Conclave</title>
+	<link rel="manifest" href="/visitor-directory.webmanifest" />
+	<link rel="apple-touch-icon" href="/icons/directory-180.png" />
 </svelte:head>
 
 <PublicShell subtitle="Visitors directory">

@@ -9,6 +9,7 @@ import { signInLink } from '#lib/server/ops/passes.ts';
 import { allow } from '#lib/server/rate-limit.ts';
 import { publicOrigin } from '#lib/server/site.ts';
 import { findByEmail } from '#lib/server/store.ts';
+import { isPushConfigured, vapidPublicKey } from '#lib/server/push.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const prerender = false;
@@ -29,7 +30,8 @@ export const load: PageServerLoad = async (event) => {
 		people,
 		conversations,
 		unread: conversations.filter((c) => c.unread).length,
-		latest: conversations[0]?.lastAt ?? null
+		latest: conversations[0]?.lastAt ?? null,
+		push: viewer.settings.pushEnabled && isPushConfigured && vapidPublicKey ? { publicKey: vapidPublicKey } : null
 	};
 };
 

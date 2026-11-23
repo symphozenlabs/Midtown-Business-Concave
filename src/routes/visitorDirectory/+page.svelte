@@ -4,6 +4,7 @@
 	import { CircleAlert, Search } from '@lucide/svelte';
 	import Avatar from '#lib/components/directory/Avatar.svelte';
 	import DirectoryState from '#lib/components/directory/DirectoryState.svelte';
+	import NotifyBanner from '#lib/components/directory/NotifyBanner.svelte';
 	import PersonRow from '#lib/components/directory/PersonRow.svelte';
 	import PublicShell from '#lib/components/ops/PublicShell.svelte';
 	import { startPolling } from '#lib/directory/poller.svelte.ts';
@@ -36,6 +37,8 @@
 
 <svelte:head>
 	<title>Visitors directory · Midtown Business Conclave</title>
+	<link rel="manifest" href="/visitor-directory.webmanifest" />
+	<link rel="apple-touch-icon" href="/icons/directory-180.png" />
 </svelte:head>
 
 <PublicShell subtitle="Visitors directory">
@@ -52,6 +55,10 @@
 				</a>
 			</nav>
 		</header>
+
+		{#if data.push}
+			<NotifyBanner publicKey={data.push.publicKey} />
+		{/if}
 
 		{#if data.me.flags.adminMessagesOff}
 			<div class="ops-banner warn" role="status"><CircleAlert size={18} aria-hidden="true" /><p>{BLOCKER_TEXT['admin-off']}</p></div>

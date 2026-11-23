@@ -2,6 +2,7 @@ import { indiaDay, type DirectorySettings } from '#lib/directory/rules.ts';
 import { sql } from '../db.ts';
 import { sendMessageEmail } from '../email.ts';
 import { signInLink } from '../ops/passes.ts';
+import { isPushConfigured, pushTo } from '../push.ts';
 import { getRegistration } from '../store.ts';
 import { releaseEmail } from './messages.ts';
 import type { Member } from './viewer.ts';
@@ -21,9 +22,10 @@ export async function takeEmailSlot(cap: number, now: Date = new Date()): Promis
 }
 
 /**
- * Tells the recipient about a new message: the backup email that sendMessage claimed,
- * when the day's cap allows. Runs after the response; never throws, as the message is
- * saved. An email that doesn't go releases the claim, so a later message can try again.
+ * Tells the recipient about a new message: a push when switched on, and the backup
+ * email that sendMessage claimed when the day's cap allows. Runs after the response;
+ * never throws, as the message is saved. An email that doesn't go releases the claim,
+ * so a later message can try again.
  */
 export async function notifyRecipient(n: {
 	origin: string;
@@ -33,6 +35,17 @@ export async function notifyRecipient(n: {
 	emailDue: boolean;
 	settings: DirectorySettings;
 }): Promise<void> {
+	if (n.settings.pushEnabled && isPushConfigured) {
+		try {
+			await pushTo(n.recipientId, {
+				title: `New message from ${n.sender.fullName}`,
+				body: 'Tap to read and reply',
+				url: `/visitorDirectory/${n.sender.id}`
+			});
+		} catch (e) {
+			console.error('[directory] push failed', e);
+		}
+	}
 	if (!n.emailDue) return;
 	let sent = false;
 	try {

@@ -29,6 +29,7 @@ import { qrPng } from '#lib/server/qr-png.ts';
 import { publicOrigin } from '#lib/server/site.ts';
 import { getEventSettings, getRegistration, isStoreAvailable, saveEventSettings, setFrontsOutdated } from '#lib/server/store.ts';
 import { directoryReady, getDirectorySettings, saveDirectorySettings } from '#lib/server/directory/settings.ts';
+import { isPushConfigured } from '#lib/server/push.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -55,9 +56,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		eventDate: schedule ? toEventFormFields(schedule).date : ''
 	};
 };
-
-// Set in Task 9, when the VAPID keys exist.
-const isPushConfigured = false;
 
 const istDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
 const istTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
