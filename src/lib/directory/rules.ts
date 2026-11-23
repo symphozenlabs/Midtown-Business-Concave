@@ -113,12 +113,17 @@ export function isDuplicateSend(last: { body: string; at: string } | null, body:
 	return now.getTime() - Date.parse(last.at) <= DUPLICATE_WINDOW_MS;
 }
 
+/** Someone who opened the conversation this recently is reading it on the site. */
+export const READING_NOW_MS = 2 * 60_000;
+
 /**
- * One backup email per conversation until the recipient has opened it. sendMessage()
- * applies this same rule inside its database statement, so it holds under concurrent
- * sends; keep the two in step.
+ * One backup email per conversation until the recipient has opened it, and none while
+ * they have it open (read in the last two minutes): a live chat mustn't fill their inbox
+ * or use up the day's cap. sendMessage() applies this same rule inside its database
+ * statement, so it holds under concurrent sends; keep the two in step.
  */
-export function shouldEmail(s: { emailedAt: Date | null; readAt: Date | null }): boolean {
+export function shouldEmail(s: { emailedAt: Date | null; readAt: Date | null }, now: Date): boolean {
+	if (s.readAt && now.getTime() - s.readAt.getTime() < READING_NOW_MS) return false;
 	if (!s.emailedAt) return true;
 	return s.readAt !== null && s.readAt.getTime() >= s.emailedAt.getTime();
 }

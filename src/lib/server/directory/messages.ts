@@ -89,7 +89,8 @@ export async function loadThread(eventId: string, me: Member, otherId: string, c
  * the sender. emailDue: this message claimed the recipient's backup email. The claim
  * (recipient's emailed_at = now) is made in the same statement as the message, so two
  * quick messages can't both claim one; it follows shouldEmail() in rules.ts: due when
- * never emailed, or when they have read the conversation since the last email.
+ * never emailed, or when they have read the conversation since the last email, and
+ * not while they have it open (read in the last two minutes).
  * notify.ts releases the claim if the email doesn't go.
  */
 export async function sendMessage(
@@ -113,12 +114,16 @@ export async function sendMessage(
 				a_read_at = case when ${meIsA}::boolean then now() else directory_conversations.a_read_at end,
 				b_read_at = case when ${meIsA}::boolean then directory_conversations.b_read_at else now() end,
 				a_emailed_at = case
-					when not ${meIsA}::boolean and (directory_conversations.a_emailed_at is null
-						or directory_conversations.a_read_at >= directory_conversations.a_emailed_at) then now()
+					when not ${meIsA}::boolean
+						and (directory_conversations.a_emailed_at is null
+							or directory_conversations.a_read_at >= directory_conversations.a_emailed_at)
+						and (directory_conversations.a_read_at is null or directory_conversations.a_read_at < now() - interval '2 minutes') then now()
 					else directory_conversations.a_emailed_at end,
 				b_emailed_at = case
-					when ${meIsA}::boolean and (directory_conversations.b_emailed_at is null
-						or directory_conversations.b_read_at >= directory_conversations.b_emailed_at) then now()
+					when ${meIsA}::boolean
+						and (directory_conversations.b_emailed_at is null
+							or directory_conversations.b_read_at >= directory_conversations.b_emailed_at)
+						and (directory_conversations.b_read_at is null or directory_conversations.b_read_at < now() - interval '2 minutes') then now()
 					else directory_conversations.b_emailed_at end
 			returning id, (case when ${meIsA}::boolean then b_emailed_at else a_emailed_at end) = now() as email_due
 		), m as (
