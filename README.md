@@ -61,7 +61,7 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 
 ## Agenda
 
-- **Business awards** at `/awards` (served as **awards.midtownevents.in** once that domain is added to the Vercel project):
+- **Salem Entrepreneurs Awards** (presented by the Salem Entrepreneurs Forum) at `/awards` (served as **awards.midtownevents.in** once that domain is added to the Vercel project):
   a poster page and a free **Apply for Business Awards** form with a dropdown of 75 business categories plus **Others**. Applications land in
   **Admin → Awards**, where organisers filter, shortlist, mark winners, add notes, download a CSV, and open or close applications.
   Table `award_applications` is created automatically on first use (also in `db/schema.sql`).

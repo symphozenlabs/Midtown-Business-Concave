@@ -94,17 +94,21 @@ export async function schedule(): Promise<EventLabels> {
 }
 
 /** Email layout: navy and gold like the poster, with inline styles for mail clients. */
-export function layout(title: string, body: string, when: EventLabels, organisedBy = `${EVENT.presenter} and Midtown Events`) {
+export function layout(title: string, body: string, when: EventLabels, brand?: { heading: string; footer: string }) {
+	const heading = brand?.heading ?? `${EVENT.name} 2026`;
+	const footer = brand
+		? escape(brand.footer)
+		: `${escape(when.dateLabel)} · ${escape(when.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(EVENT.presenter)} and Midtown Events`;
 	return `<!doctype html><html><body style="margin:0;background:#0b1430;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#101a3a;border:1px solid #6b5426;border-radius:14px;">
 <tr><td style="padding:28px 28px 8px;text-align:center;">
-<div style="font-size:11px;letter-spacing:4px;color:#e9b556;text-transform:uppercase;">${escape(EVENT.name)} 2026</div>
+<div style="font-size:11px;letter-spacing:4px;color:#e9b556;text-transform:uppercase;">${escape(heading)}</div>
 <h1 style="margin:14px 0 0;font-family:Georgia,serif;font-weight:normal;font-size:26px;line-height:1.3;color:#ffffff;">${title}</h1>
 </td></tr>
 <tr><td style="padding:8px 28px 28px;color:#e9dfc9;font-size:15px;line-height:1.6;">${body}</td></tr>
 <tr><td style="padding:16px 28px;border-top:1px solid #2a3558;color:#a69c8a;font-size:12px;line-height:1.6;text-align:center;">
-${escape(when.dateLabel)} · ${escape(when.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(organisedBy)}
+${footer}
 </td></tr></table></td></tr></table></body></html>`;
 }
 

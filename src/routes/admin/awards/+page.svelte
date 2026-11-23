@@ -37,12 +37,12 @@
 </script>
 
 <svelte:head>
-	<title>Awards · Admin · Midtown Business Conclave</title>
+	<title>Salem Entrepreneurs Awards · Admin</title>
 </svelte:head>
 
 <header class="ops-page-head">
 	<div>
-		<h1>Business awards</h1>
+		<h1>Salem Entrepreneurs Awards</h1>
 		<p class="ops-hint">Applications from <a href="https://awards.midtownevents.in" target="_blank" rel="noopener">awards.midtownevents.in</a>. Review them, shortlist, and mark the winners.</p>
 	</div>
 	{#if data.available}

@@ -1,3 +1,4 @@
+import { AWARDS_EVENT } from '#lib/awards.ts';
 import { EVENT } from '#lib/event.ts';
 import { formatRupees } from '#lib/payment.ts';
 import { SPONSOR_TIERS } from '#lib/stall-booking.ts';
@@ -101,15 +102,18 @@ export async function sendAwardAckEmail(a: AwardApplication) {
 	const when = await schedule();
 	const html = layout(
 		`Thank you for applying, ${escape(first(a.fullName))}.`,
-		`<p style="margin:0 0 12px;">We have received ${escape(a.businessName)}'s application for the ${gold('Midtown Business Awards 2026')} in the ${escape(a.categoryLabel)} category.</p>
+		`<p style="margin:0 0 12px;">We have received ${escape(a.businessName)}'s application for the ${gold(AWARDS_EVENT.name)} in the ${escape(a.categoryLabel)} category.</p>
 <p style="margin:0 0 12px;">Your application number is ${gold(a.code)}.</p>
 <p style="margin:0;">The organising team will review it and contact you if you are shortlisted.</p>`,
 		when,
-		'Midtown Events'
+		{
+			heading: AWARDS_EVENT.name,
+			footer: `${AWARDS_EVENT.date} · ${AWARDS_EVENT.time} · ${AWARDS_EVENT.venue} · Presented by ${AWARDS_EVENT.presenter} · Enquiries ${AWARDS_EVENT.phone}`
+		}
 	);
 	const text = `Thank you for applying, ${first(a.fullName)}.
 
-We have received ${a.businessName}'s application for the Midtown Business Awards 2026 in the ${a.categoryLabel} category.
+We have received ${a.businessName}'s application for the ${AWARDS_EVENT.name} in the ${a.categoryLabel} category.
 Your application number is ${a.code}.
 The organising team will review it and contact you if you are shortlisted.`;
 	return send(a.email, `Award application received · ${a.code}`, html, text);
