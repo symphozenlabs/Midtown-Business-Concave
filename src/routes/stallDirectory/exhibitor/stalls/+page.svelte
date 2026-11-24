@@ -8,4 +8,4 @@
 	<title>Stalls · Exhibitor · Midtown Business Conclave</title>
 </svelte:head>
 
-<StallBrowser exhibitors={data.exhibitors} mine={data.mine} canMessage={false} />
+<StallBrowser exhibitors={data.exhibitors} cards={data.cards} mine={data.mine} canMessage={false} />

@@ -32,6 +32,15 @@ export async function stallCardPath(b: { id: string; code: string }): Promise<st
 	return `/stallDirectory/card/${b.code}.${await sign('card', b.id)}`;
 }
 
+/** Every confirmed stall's contact-card link, by booking id: the directory's "Save contact" buttons. */
+export async function stallCardPaths(): Promise<Record<string, string>> {
+	if (!isStallCardAvailable) return {};
+	await prepareBookings();
+	const rows = await sql()`select id, code from stall_bookings where status = 'paid'`;
+	const entries = await Promise.all(rows.map(async (r) => [r.id as string, await stallCardPath({ id: r.id, code: r.code })] as const));
+	return Object.fromEntries(entries);
+}
+
 /** The QR to print or show at the stall, as a PNG. */
 export async function stallCardQr(origin: string, b: { id: string; code: string }): Promise<Uint8Array> {
 	return qrPng(origin + (await stallCardPath(b)));

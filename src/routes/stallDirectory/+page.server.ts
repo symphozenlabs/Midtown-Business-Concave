@@ -8,6 +8,7 @@ import { directoryViewer } from '#lib/server/directory/viewer.ts';
 import { sendSignInEmail } from '#lib/server/email.ts';
 import { signInLink } from '#lib/server/ops/passes.ts';
 import { directoryOrigin } from '#lib/server/site.ts';
+import { stallCardPaths } from '#lib/server/stall-directory/card.ts';
 import { readExhibitor } from '#lib/server/stall-directory/exhibitor.ts';
 import { delegateConversations, listExhibitors, stallDirectoryReady } from '#lib/server/stall-directory/store.ts';
 import { findByEmail } from '#lib/server/store.ts';
@@ -18,7 +19,7 @@ export const prerender = false;
 /** Public: anyone sees the stalls and the floor map. A signed-in delegate also gets their messages. */
 export const load: PageServerLoad = async (event) => {
 	event.depends('stall-directory:list');
-	const [exhibitors, messaging] = await Promise.all([listExhibitors(), stallDirectoryReady()]);
+	const [exhibitors, messaging, cards] = await Promise.all([listExhibitors(), stallDirectoryReady(), stallCardPaths()]);
 
 	let delegate: { fullName: string } | null = null;
 	let conversations: Awaited<ReturnType<typeof delegateConversations>> = [];
@@ -45,6 +46,8 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		exhibitors,
+		/** Each stall's contact card ("Save contact"), by booking id. */
+		cards,
 		mine,
 		messaging,
 		closed,

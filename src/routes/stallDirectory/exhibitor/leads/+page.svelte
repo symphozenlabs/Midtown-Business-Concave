@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidate } from '$app/navigation';
-	import { CircleAlert, CircleCheck, Download, Keyboard, Mail, Phone, ScanLine, Search, Trash2, UserCheck } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Download, FileSpreadsheet, FileText, Keyboard, Mail, Phone, ScanLine, Search, Trash2, UserCheck } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import QrScanner from '#lib/components/ops/QrScanner.svelte';
 	import type { Lead } from '#lib/server/stall-directory/store.ts';
@@ -24,6 +24,20 @@
 		if (!q) return data.leads;
 		return data.leads.filter((l) => [l.fullName, l.companyName, l.designation, l.city, l.note].join(' ').toLowerCase().includes(q));
 	});
+
+	/** Leads per page. */
+	const PAGE_SIZE = 20;
+	let pageNo = $state(1);
+	const pages = $derived(Math.max(1, Math.ceil(shown.length / PAGE_SIZE)));
+	// Back to the first page when the search changes; stay in range when leads are removed.
+	$effect(() => {
+		query;
+		untrack(() => (pageNo = 1));
+	});
+	$effect(() => {
+		if (pageNo > pages) pageNo = pages;
+	});
+	const visible = $derived(shown.slice((pageNo - 1) * PAGE_SIZE, pageNo * PAGE_SIZE));
 
 	/** Whether the last lookup came from the camera, so "Try again" reopens it. */
 	let fromCamera = $state(false);
@@ -131,7 +145,12 @@
 	<div class="panel-head">
 		<h2 id="leads-title">Your leads <span class="count">{data.leads.length}</span></h2>
 		{#if data.leads.length}
-			<a class="btn btn-secondary ops-btn-sm" href="/stallDirectory/exhibitor/leads/export" download><Download size={15} aria-hidden="true" /> Download CSV</a>
+			<div class="downloads" role="group" aria-label="Download all leads">
+				<span class="downloads-label"><Download size={15} aria-hidden="true" /> Download all</span>
+				<a class="btn btn-secondary ops-btn-sm" href="/stallDirectory/exhibitor/leads/export?format=xlsx" download><FileSpreadsheet size={15} aria-hidden="true" /> Excel</a>
+				<a class="btn btn-secondary ops-btn-sm" href="/stallDirectory/exhibitor/leads/export?format=pdf" download><FileText size={15} aria-hidden="true" /> PDF</a>
+				<a class="btn btn-ghost ops-btn-sm" href="/stallDirectory/exhibitor/leads/export?format=csv" download>CSV</a>
+			</div>
 		{/if}
 	</div>
 
@@ -150,7 +169,7 @@
 
 	{#if shown.length}
 		<ul class="leads">
-			{#each shown as l (l.bookingId + l.registrationId)}
+			{#each visible as l (l.bookingId + l.registrationId)}
 				<li>
 					<div class="lead-top">
 						<div>
@@ -178,6 +197,19 @@
 				</li>
 			{/each}
 		</ul>
+		{#if pages > 1}
+			<nav class="pager" aria-label="Lead pages">
+				<button type="button" class="btn btn-secondary ops-btn-sm" disabled={pageNo === 1} onclick={() => (pageNo -= 1)} aria-label="Previous page">
+					<ChevronLeft size={16} aria-hidden="true" /> Previous
+				</button>
+				<span aria-live="polite">
+					{(pageNo - 1) * PAGE_SIZE + 1}–{Math.min(pageNo * PAGE_SIZE, shown.length)} of {shown.length} · page {pageNo} of {pages}
+				</span>
+				<button type="button" class="btn btn-secondary ops-btn-sm" disabled={pageNo === pages} onclick={() => (pageNo += 1)} aria-label="Next page">
+					Next <ChevronRight size={16} aria-hidden="true" />
+				</button>
+			</nav>
+		{/if}
 	{:else if query.trim()}
 		<p class="empty">No lead matches “{query.trim()}”.</p>
 	{:else}
@@ -379,6 +411,41 @@
 		flex: none;
 		color: var(--text-supporting);
 		font-size: 12px;
+	}
+	.downloads {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.downloads-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		color: var(--text-supporting);
+		font-size: 13px;
+	}
+	.downloads a {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		text-decoration: none;
+	}
+	.pager {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--rule);
+		color: var(--text-supporting);
+		font-size: 13px;
+	}
+	.pager .btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
 	}
 	.remove {
 		display: inline-flex;
