@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { BadgeCheck, Mail, MapPin, MessageCircle, Phone, Store, UserRoundPlus } from '@lucide/svelte';
+	import { BadgeCheck, Mail, MessageCircle, Phone, Store, UserRoundPlus } from '@lucide/svelte';
 	import Avatar from '#lib/components/directory/Avatar.svelte';
-	import FloorMap from '#lib/components/directory/FloorMap.svelte';
 	import PublicShell from '#lib/components/ops/PublicShell.svelte';
 	import { SIDE_LABEL, stallSide } from '#lib/stall-directory/rules.ts';
 
@@ -51,12 +50,6 @@
 			</dl>
 		</section>
 
-		{#if c.stall}
-			<section class="ops-card" aria-label="Where to find them">
-				<span class="ops-eyebrow"><MapPin size={14} aria-hidden="true" /> On the floor</span>
-				<FloorMap exhibitors={data.exhibitors} selected={c.stall} fit />
-			</section>
-		{/if}
 		<a class="ops-muted all" href="/stallDirectory"><Store size={15} aria-hidden="true" /> See all stalls</a>
 	{/if}
 </PublicShell>
@@ -67,8 +60,7 @@
 		align-items: center;
 		gap: var(--space-4);
 	}
-	.holder .ops-eyebrow,
-	section > .ops-eyebrow {
+	.holder .ops-eyebrow {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;

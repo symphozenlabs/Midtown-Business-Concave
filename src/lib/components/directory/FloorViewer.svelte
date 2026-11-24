@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { MessageCircle, Minus, Plus, RotateCcw, X } from '@lucide/svelte';
+	import { MessageCircle, Minus, UserPlus, Plus, RotateCcw, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { lockPageScroll } from '#lib/smooth-scroll.ts';
 	import { STALL_NUMBERS } from '#lib/stall-booking.ts';
@@ -14,7 +14,7 @@
 	interface Props {
 		open: boolean;
 		/** Confirmed stalls with their business. `own`: the signed-in exhibitor's stall. */
-		exhibitors: { id: string; stall: number; businessName: string; own?: boolean }[];
+		exhibitors: { id: string; stall: number; businessName: string; own?: boolean; cardPath?: string }[];
 		/** Picks an open stall as the booking preference; leave out to hide that button. */
 		onpick?: (stall: number) => void;
 		preferred?: number | null;
@@ -279,6 +279,11 @@
 					{pickedInfo.e ? `${pickedInfo.e.own ? 'Your stall' : 'Stall'} ${pickedInfo.n}` : 'Available to book'}{#if pickedInfo.side}{' · '}{SIDE_LABEL[pickedInfo.side]}{/if}
 				</span>
 			</div>
+			{#if pickedInfo.e?.cardPath && !pickedInfo.e.own}
+				<a class="act act-alt" href={pickedInfo.e.cardPath} aria-label="Save {pickedInfo.e.businessName}’s contact">
+					<UserPlus size={18} aria-hidden="true" /> Save contact
+				</a>
+			{/if}
 			{#if pickedInfo.e?.own}
 				<a class="act" href="/stallDirectory/exhibitor">My stall</a>
 			{:else if pickedInfo.e && canMessage}
@@ -449,6 +454,11 @@
 	}
 	.tools button:focus-visible,
 	.close:focus-visible,
+	.act-alt {
+		border: 1px solid rgb(255 255 255 / 0.35);
+		background: transparent;
+		color: var(--on-ink);
+	}
 	.act:focus-visible,
 	.card-x:focus-visible {
 		outline: 2px solid var(--focus-ring-inverse);

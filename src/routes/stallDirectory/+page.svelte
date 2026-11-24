@@ -51,7 +51,7 @@
 	</header>
 
 	{#if tab === 'stalls'}
-		<StallBrowser exhibitors={data.exhibitors} mine={data.mine} canMessage={data.messaging} />
+		<StallBrowser exhibitors={data.exhibitors} cards={data.cards} mine={data.mine} canMessage={data.messaging} />
 	{:else}
 		<section class="panel" aria-label="Messages">
 			{#if data.conversations.length}

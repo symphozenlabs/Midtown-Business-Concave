@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { ChevronRight, Expand, Map as MapIcon, MapPin, MessageCircle, Search, Store } from '@lucide/svelte';
+	import { ChevronRight, Expand, Map as MapIcon, MapPin, MessageCircle, Search, Store, UserPlus } from '@lucide/svelte';
 	import Avatar from './Avatar.svelte';
 	import FloorMap from './FloorMap.svelte';
 	import FloorViewer from './FloorViewer.svelte';
@@ -17,9 +17,11 @@
 		mine?: string[];
 		/** Delegates can message stalls; exhibitors browsing other stalls can't. */
 		canMessage?: boolean;
+		/** Each stall's contact card, by booking id: the "Save contact" button. */
+		cards?: Record<string, string>;
 	}
 
-	let { exhibitors, mine: mineIds = [], canMessage = true }: Props = $props();
+	let { exhibitors, mine: mineIds = [], canMessage = true, cards = {} }: Props = $props();
 
 	let query = $state('');
 	let mapOpen = $state(false);
@@ -28,9 +30,13 @@
 
 	const mine = $derived(new Set(mineIds));
 	const listed = $derived(exhibitors.filter((e) => !mine.has(e.id)));
+	/** The signed-in exhibitor's own stalls, shown apart from the list so it never looks empty by mistake. */
+	const own = $derived(exhibitors.filter((e) => mine.has(e.id)));
 	const shown = $derived(listed.filter((e) => matchesStall(e, query)));
 	const onMap = $derived(
-		exhibitors.flatMap((e) => (e.stall ? [{ id: e.id, stall: e.stall, businessName: e.businessName, own: mine.has(e.id) }] : []))
+		exhibitors.flatMap((e) =>
+			e.stall ? [{ id: e.id, stall: e.stall, businessName: e.businessName, own: mine.has(e.id), cardPath: cards[e.id] }] : []
+		)
 	);
 	const matches = $derived(query.trim() ? new Set(shown.flatMap((e) => (e.stall ? [e.stall] : []))) : null);
 	const chosen = $derived(focus ? exhibitors.find((e) => e.stall === focus) ?? null : null);
@@ -61,6 +67,21 @@
 		</button>
 
 		<section class="panel" aria-label="Exhibitors">
+			{#each own as e (e.id)}
+				<div class="row own">
+					<Avatar name={e.businessName} />
+					<div class="who">
+						<strong>{e.businessName}</strong>
+						<span>Your stall · {e.stall ? `Stall ${e.stall}` : 'Stall to be announced'}</span>
+					</div>
+					{#if e.stall}
+						<button type="button" class="icon" onclick={() => showStall(e.stall!)} aria-label="Show your stall on the floor map">
+							<MapPin size={18} aria-hidden="true" />
+						</button>
+					{/if}
+					<a class="icon" href="/stallDirectory/exhibitor" aria-label="Your stall: open your messages and leads"><Store size={18} aria-hidden="true" /></a>
+				</div>
+			{/each}
 			<label class="search">
 				<Search size={18} aria-hidden="true" />
 				<input type="search" bind:value={query} placeholder="Search by business, name or stall number" aria-label="Search by business, name or stall number" autocomplete="off" />
@@ -83,11 +104,14 @@
 							{/if}
 							{#if e.stall}
 								<button type="button" class="icon" onclick={() => showStall(e.stall!)} aria-label="Show {e.businessName} on the floor map">
-									<MapPin size={20} aria-hidden="true" />
+									<MapPin size={18} aria-hidden="true" />
 								</button>
 							{/if}
+							{#if cards[e.id]}
+								<a class="icon" href={cards[e.id]} aria-label="Save {e.businessName}’s contact" title="Save contact"><UserPlus size={18} aria-hidden="true" /></a>
+							{/if}
 							{#if canMessage}
-								<a class="icon" href="/stallDirectory/{e.id}" aria-label="Message {e.businessName}"><MessageCircle size={20} aria-hidden="true" /></a>
+								<a class="icon" href="/stallDirectory/{e.id}" aria-label="Message {e.businessName}"><MessageCircle size={18} aria-hidden="true" /></a>
 							{/if}
 						</li>
 					{/each}
@@ -96,7 +120,7 @@
 				<p class="empty">No stall matches “{query.trim()}”.</p>
 			{:else}
 				<p class="empty">
-					{mine.size ? 'No other exhibitors yet. Your stall is on the floor map; other stalls appear here once confirmed.' : 'Exhibitors appear here once their stall is confirmed.'}
+					{own.length ? 'No other exhibitors yet. Other stalls appear here once the organisers confirm them.' : 'Exhibitors appear here once their stall is confirmed.'}
 				</p>
 			{/if}
 		</section>
@@ -118,10 +142,13 @@
 						<strong>{chosen.businessName}</strong>
 						<span>{mine.has(chosen.id) ? 'Your stall' : 'Stall'} {chosen.stall}{#if side}{' · '}{SIDE_LABEL[side]}{/if}</span>
 					</div>
+					{#if !mine.has(chosen.id) && cards[chosen.id]}
+						<a class="icon" href={cards[chosen.id]} aria-label="Save {chosen.businessName}’s contact" title="Save contact"><UserPlus size={18} aria-hidden="true" /></a>
+					{/if}
 					{#if mine.has(chosen.id)}
-						<a class="icon" href="/stallDirectory/exhibitor" aria-label="Your stall: open your messages and leads"><Store size={20} aria-hidden="true" /></a>
+						<a class="icon" href="/stallDirectory/exhibitor" aria-label="Your stall: open your messages and leads"><Store size={18} aria-hidden="true" /></a>
 					{:else if canMessage}
-						<a class="icon" href="/stallDirectory/{chosen.id}" aria-label="Message {chosen.businessName}"><MessageCircle size={20} aria-hidden="true" /></a>
+						<a class="icon" href="/stallDirectory/{chosen.id}" aria-label="Message {chosen.businessName}"><MessageCircle size={18} aria-hidden="true" /></a>
 					{/if}
 				</div>
 			{:else}
@@ -274,18 +301,28 @@
 	.row {
 		display: flex;
 		align-items: center;
-		gap: var(--space-3);
+		gap: 4px;
 		padding: var(--space-3) 0;
 		border-top: 1px solid var(--rule);
 	}
 	.row:first-child {
 		border-top: 0;
 	}
+	.row.own {
+		margin: 0 calc(-1 * var(--space-2)) 4px;
+		padding: var(--space-2);
+		border: 1px solid var(--gold);
+		border-radius: var(--radius-md);
+		background: var(--gold-tint);
+	}
 	.row.on {
 		margin-inline: calc(-1 * var(--space-2));
 		padding-inline: var(--space-2);
 		border-radius: var(--radius-sm);
 		background: var(--gold-tint);
+	}
+	.row > :global(:first-child) {
+		margin-right: var(--space-2);
 	}
 	.who {
 		display: grid;
@@ -302,9 +339,11 @@
 		overflow-wrap: anywhere;
 	}
 	.who span {
+		overflow: hidden;
 		color: var(--text-supporting);
-		font-size: 13.5px;
-		overflow-wrap: anywhere;
+		font-size: 13px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	a.who:focus-visible {
 		outline: 2px solid var(--focus-ring);
@@ -314,11 +353,13 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		min-width: 44px;
-		height: 44px;
-		border: 1px solid var(--control-border);
-		border-radius: var(--radius-md);
-		background: var(--white);
+		/* Small, borderless actions so the business name keeps the room on a phone. */
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		background: transparent;
 		color: var(--gold-ink);
 		cursor: pointer;
 	}

@@ -1,4 +1,3 @@
-import { listExhibitors } from '#lib/server/stall-directory/store.ts';
 import { resolveStallCard } from '#lib/server/stall-directory/card.ts';
 import type { PageServerLoad } from './$types';
 
@@ -11,5 +10,5 @@ export const prerender = false;
 export const load: PageServerLoad = async ({ params }) => {
 	const card = await resolveStallCard(params.token);
 	if (!card) return { valid: false as const };
-	return { valid: true as const, card, exhibitors: await listExhibitors() };
+	return { valid: true as const, card };
 };
