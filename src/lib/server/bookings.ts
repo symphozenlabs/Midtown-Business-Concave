@@ -458,10 +458,37 @@ export async function rejectStallBooking(id: string, reason: string, by: string)
 	return rows[0] ? bookingFrom(rows[0]) : null;
 }
 
-/** Changes the allotted stall of a booking; null clears it. */
+/** Stall numbers held by confirmed bookings: locked, and closed to everyone else's preference. */
+export async function takenStalls(): Promise<number[]> {
+	if (!isBookingStoreAvailable) return [];
+	if (useMemory) return memory.bookings.filter((b) => b.status === 'paid' && b.allottedStall).map((b) => b.allottedStall!);
+	await ensureReady();
+	const rows = await sql()`select allotted_stall from stall_bookings where status = 'paid' and allotted_stall is not null order by 1`;
+	return rows.map((r) => Number(r.allotted_stall));
+}
+
+/**
+ * Removes a booking for good, with its directory messages and leads (cascade).
+ * Returns what was deleted, for the confirmation line.
+ */
+export async function deleteStallBooking(id: string): Promise<StallBooking | null> {
+	if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+	if (useMemory) {
+		const i = memory.bookings.findIndex((b) => b.id === id);
+		return i < 0 ? null : memory.bookings.splice(i, 1)[0];
+	}
+	await ensureReady();
+	const rows = await sql()`delete from stall_bookings where id = ${id} returning *`;
+	return rows[0] ? bookingFrom(rows[0]) : null;
+}
+
+/**
+ * Sets the stall of a booking that hasn't got one yet; null clears it. A confirmed
+ * booking's stall is locked once allotted, so this changes nothing for those.
+ */
 export async function allotStall(id: string, allotted: number | null, by: string): Promise<StallBooking | null> {
 	if (useMemory) {
-		const b = memory.bookings.find((x) => x.id === id);
+		const b = memory.bookings.find((x) => x.id === id && !(x.status === 'paid' && x.allottedStall));
 		if (!b) return null;
 		Object.assign(b, { allottedStall: allotted, reviewedBy: by });
 		return b;
@@ -469,7 +496,7 @@ export async function allotStall(id: string, allotted: number | null, by: string
 	await ensureReady();
 	const rows = await sql()`
 		update stall_bookings set allotted_stall = ${allotted}, reviewed_by = ${by}, updated_at = now()
-		where id = ${id} returning *`;
+		where id = ${id} and not (status = 'paid' and allotted_stall is not null) returning *`;
 	return rows[0] ? bookingFrom(rows[0]) : null;
 }
 

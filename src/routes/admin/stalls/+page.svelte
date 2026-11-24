@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Check, CircleAlert, CircleCheck, LayoutGrid, Search, Store, X } from '@lucide/svelte';
+	import { Check, CircleAlert, CircleCheck, KeyRound, LayoutGrid, Lock, Search, Store, Trash2, X } from '@lucide/svelte';
 	import { formatRupees } from '#lib/payment.ts';
 	import { STALL_NUMBERS, STALL_STATUS_LABEL, type StallBookingStatus } from '#lib/stall-booking.ts';
 
@@ -72,6 +72,14 @@
 				<div><dt>Collected</dt><dd>{formatRupees(collected)}</dd></div>
 				<div><dt>Stalls free</dt><dd>{free} / {STALL_NUMBERS.length}</dd></div>
 			</dl>
+			{#if data.loginsWaiting}
+				<form method="post" action="?/sendLogins" use:enhance={submit}>
+					<button class="btn btn-primary ops-btn-sm" disabled={busy}>
+						<KeyRound size={15} aria-hidden="true" />
+						{data.loginsWaiting} stall QR + login {data.loginsWaiting === 1 ? 'email' : 'emails'} waiting to be sent
+					</button>
+				</form>
+			{/if}
 		</div>
 	{/if}
 </header>
@@ -192,12 +200,22 @@
 											</dl>
 
 											<div class="forms">
+												{#if b.status === 'paid' && b.allottedStall}
+													<p class="locked">
+														<Lock size={15} aria-hidden="true" />
+														<span><strong>Stall {b.allottedStall}</strong> is confirmed and locked. Delete the booking to free it.</span>
+													</p>
+													<form method="post" action="?/resendKit" use:enhance={submit} class="act">
+														<input type="hidden" name="id" value={b.id} />
+														<button class="btn btn-secondary ops-btn-sm" disabled={busy}><KeyRound size={15} aria-hidden="true" /> Resend stall QR + login</button>
+													</form>
+												{:else}
 												<form method="post" action={b.status === 'paid' ? '?/allot' : '?/markPaid'} use:enhance={submit} class="act">
 													<input type="hidden" name="id" value={b.id} />
 													<label class="ops-label">
-														Allot stall
-														<select name="allotted">
-															<option value="" selected={suggested === null}>Not yet</option>
+														Allot stall {#if b.status !== 'paid'}<small>(locked once confirmed)</small>{/if}
+														<select name="allotted" required={b.status !== 'paid'}>
+															<option value="" selected={suggested === null}>{b.status === 'paid' ? 'Not yet' : 'Choose a stall'}</option>
 															{#each STALL_NUMBERS as n (n)}
 																{@const holder = allotted.get(n)}
 																<option value={n} selected={suggested === n} disabled={!!holder && holder.id !== b.id}>
@@ -212,6 +230,7 @@
 														<button class="btn btn-primary ops-btn-sm" disabled={busy}><Check size={15} aria-hidden="true" /> Mark paid and email</button>
 													{/if}
 												</form>
+												{/if}
 
 												{#if b.status !== 'rejected' && b.status !== 'paid'}
 													<form method="post" action="?/reject" use:enhance={submit} class="act">
@@ -223,6 +242,14 @@
 														<button class="btn btn-ghost ops-btn-sm ops-danger" disabled={busy}><X size={15} aria-hidden="true" /> Reject</button>
 													</form>
 												{/if}
+
+												<form method="post" action="?/delete" use:enhance={submit} class="act delete">
+													<input type="hidden" name="id" value={b.id} />
+													<p class="ops-muted">
+														Removes {b.code} for good{b.allottedStall ? ` and frees stall ${b.allottedStall}` : ''}, with its directory messages and leads. No email is sent.
+													</p>
+													<button class="btn btn-ghost ops-btn-sm ops-danger" disabled={busy}><Trash2 size={15} aria-hidden="true" /> Delete booking</button>
+												</form>
 											</div>
 										</div>
 									</td>
@@ -360,6 +387,28 @@
 
 	.act .ops-label {
 		flex: 1 1 200px;
+	}
+
+	.act.delete {
+		align-items: center;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--rule);
+	}
+
+	.act.delete p {
+		flex: 1 1 220px;
+		font-size: 12.5px;
+	}
+
+	.locked {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--rule);
+		border-radius: var(--radius-sm);
+		background: var(--mist);
+		font-size: 13px;
 	}
 
 	@media (max-width: 860px) {

@@ -4,7 +4,7 @@
 	import { CircleAlert, LoaderCircle, LockKeyhole } from '@lucide/svelte';
 	import TextField from '#lib/components/TextField.svelte';
 
-	let { form } = $props();
+	let { data, form } = $props();
 
 	let identifier = $state(untrack(() => form?.identifier ?? ''));
 	let password = $state('');
@@ -20,9 +20,12 @@
 	<section class="card" aria-labelledby="login-title">
 		<img src="/poster/mbc.webp" alt="Midtown Business Conclave" width="1655" height="747" class="logo" />
 		<div class="head">
-			<span class="eyebrow">Organisers and event handlers</span>
+			<span class="eyebrow">Organisers, event handlers and exhibitors</span>
 			<h1 id="login-title">Sign in</h1>
-			<p>Organisers sign in with their email. Event handlers use the username and password the organiser gave them.</p>
+			<p>
+				Organisers sign in with their email. Event handlers use the username and password the organiser gave them.
+				Exhibitors use the email they booked their stall with, and their 10-digit mobile number as the password.
+			</p>
 		</div>
 
 		<form
@@ -36,6 +39,7 @@
 				};
 			}}
 		>
+			<input type="hidden" name="next" value={data.next} />
 			<TextField id="identifier" label="Username or email" bind:value={identifier} required autocomplete="username" />
 			<TextField id="password" label="Password" type="password" bind:value={password} required autocomplete="current-password" />
 

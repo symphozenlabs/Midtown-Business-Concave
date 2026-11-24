@@ -27,6 +27,7 @@
 	import { reveal } from '#lib/actions/reveal.ts';
 	import TextField from './TextField.svelte';
 	import UpiQr from './UpiQr.svelte';
+	import FloorViewer from './directory/FloorViewer.svelte';
 
 	interface Offer {
 		id: string;
@@ -61,6 +62,8 @@
 	let email = $state('');
 	let phone = $state('');
 	let preferred = $state<number | null>(null);
+	/** Stalls allotted to confirmed exhibitors: nobody else can pick them. */
+	let taken = $state<number[]>([]);
 	let errors = $state<Partial<Record<StallField | 'promoCode', string>>>({});
 
 	let promoInput = $state('');
@@ -76,7 +79,9 @@
 	let utrError = $state<string | null>(null);
 	let ready = $state(false);
 	let reduceMotion = $state(false);
-	let zoomed = $state<HTMLDialogElement | null>(null);
+	let viewerOpen = $state(false);
+	/** Confirmed stalls and their business, for the enlarged floor layout. */
+	let onMap = $state<{ id: string; stall: number; businessName: string }[]>([]);
 	let panel: HTMLElement;
 
 	const offer = $derived(offers.find((o) => o.id === stallTypeId) ?? offers[0]);
@@ -94,6 +99,11 @@
 					offers = data.offers;
 					if (!offers.some((o) => o.id === stallTypeId)) stallTypeId = offers[0].id;
 				}
+				if (Array.isArray(data?.taken)) {
+					taken = data.taken;
+					if (preferred !== null && taken.includes(preferred)) preferred = null;
+				}
+				if (Array.isArray(data?.exhibitors)) onMap = data.exhibitors;
 			})
 			.catch(() => {});
 		try {
@@ -185,6 +195,11 @@
 			if (!res.ok) {
 				error = data.message ?? 'Something went wrong. Please try again.';
 				if (data.errors) errors = data.errors;
+				// Someone else's stall was confirmed meanwhile: cross it out and clear the choice.
+				if (Array.isArray(data.taken)) {
+					taken = data.taken;
+					preferred = null;
+				}
 				if (data.errors?.promoCode) {
 					promo = null;
 					promoError = data.errors.promoCode;
@@ -431,7 +446,17 @@
 								<div class="numbers" id="stall-preferredStall" tabindex="-1">
 									<button type="button" class="num any" aria-pressed={preferred === null} onclick={() => (preferred = null)}>No preference</button>
 									{#each STALL_NUMBERS as n (n)}
-										<button type="button" class="num" aria-pressed={preferred === n} onclick={() => (preferred = n)}>{n}</button>
+										{@const isTaken = taken.includes(n)}
+									<button
+										type="button"
+										class="num"
+										class:taken={isTaken}
+										aria-pressed={preferred === n}
+										disabled={isTaken}
+										aria-label={isTaken ? `Stall ${n}, already taken` : undefined}
+										title={isTaken ? 'Already taken' : undefined}
+										onclick={() => (preferred = n)}>{n}</button
+									>
 									{/each}
 								</div>
 								{#if errors.preferredStall}<p class="field-error"><CircleAlert size={15} aria-hidden="true" /> {errors.preferredStall}</p>{/if}
@@ -439,6 +464,7 @@
 									<Info size={16} aria-hidden="true" />
 									<span>
 										<strong>Stall no. is only a preference.</strong> The final stall allotment is based on the organisers' decision.
+										{#if taken.length}Crossed-out stalls are already confirmed for other exhibitors.{/if}
 									</span>
 								</p>
 							</fieldset>
@@ -500,7 +526,7 @@
 
 			<aside class="side" use:reveal={160}>
 				<figure class="layout">
-					<button type="button" class="zoom" onclick={() => zoomed?.showModal()} aria-label="Enlarge the stall layout">
+					<button type="button" class="zoom" onclick={() => (viewerOpen = true)} aria-label="Enlarge the stall layout">
 						<img src={LAYOUT_SRC} alt="Floor layout: stalls 1 to 39 around the hall, with the one-to-one meeting zone, the meeting zone, the stage and the entry." width="1491" height="1055" loading="lazy" decoding="async" />
 						<span class="zoom-hint"><Expand size={15} aria-hidden="true" /> Enlarge</span>
 					</button>
@@ -521,10 +547,13 @@
 	</div>
 </section>
 
-<dialog class="lightbox" bind:this={zoomed} onclick={(e) => e.target === zoomed && zoomed?.close()} aria-label="Stall layout">
-	<button type="button" class="close" onclick={() => zoomed?.close()} aria-label="Close"><X size={22} aria-hidden="true" /></button>
-	<img src={LAYOUT_SRC} alt="Floor layout with stall numbers 1 to 39" width="1491" height="1055" />
-</dialog>
+<FloorViewer
+	open={viewerOpen}
+	exhibitors={onMap}
+	{preferred}
+	onpick={stage === 'form' ? (n) => (preferred = n) : undefined}
+	onclose={() => (viewerOpen = false)}
+/>
 
 <style>
 	.stalls {
@@ -684,6 +713,15 @@
 	.num:focus-visible {
 		outline: 2px solid var(--focus-ring);
 		outline-offset: 2px;
+	}
+
+	.num.taken {
+		border-style: dashed;
+		border-color: var(--control-border);
+		background: var(--mist);
+		color: var(--text-supporting);
+		text-decoration: line-through;
+		cursor: not-allowed;
 	}
 
 	.note {
@@ -1070,40 +1108,6 @@
 		border-top: 1px solid rgb(240 196 112 / 0.25);
 		font: var(--text-caption);
 		color: var(--gold-bright);
-	}
-
-	.lightbox {
-		width: min(96vw, 1400px);
-		max-width: none;
-		max-height: 94vh;
-		padding: 0;
-		border: 0;
-		border-radius: var(--radius-lg);
-		background: var(--ink);
-	}
-
-	.lightbox::backdrop {
-		background: rgb(6 11 26 / 0.85);
-	}
-
-	.lightbox img {
-		width: 100%;
-		height: auto;
-	}
-
-	.lightbox .close {
-		position: absolute;
-		top: var(--space-3);
-		right: var(--space-3);
-		display: grid;
-		place-items: center;
-		width: 44px;
-		height: 44px;
-		border: 0;
-		border-radius: 50%;
-		background: rgb(6 11 26 / 0.8);
-		color: var(--on-ink);
-		cursor: pointer;
 	}
 
 	.panel :global(.spin) {

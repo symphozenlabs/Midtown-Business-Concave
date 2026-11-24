@@ -46,14 +46,21 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 
 - **Book a stall** (homepage, after delegate registration): name, business name, email, mobile, a preferred
   stall number picked from the floor layout (`static/floor/stall-layout.jpg`; the layout has no stalls 25 and 35),
-  and an optional promo code. The note says the stall number is only a preference. The exhibitor then pays by UPI
-  and enters the transaction ID, as delegates do. Bookings are numbered `STL-XXXXXX`.
+  and an optional promo code. The note says the stall number is only a preference. Stalls already confirmed for
+  someone else are crossed out and refused by the server. The exhibitor then pays by UPI and enters the transaction
+  ID, as delegates do. Bookings are numbered `STL-XXXXXX`.
+- **Enlarge** opens the layout full screen: zoom 100–400% (buttons, wheel, pinch, double tap), drag to pan, and the
+  page behind stays still. Hovering a stall names its exhibitor; tapping a confirmed stall offers **Message**, and an
+  open one **Choose as preferred**.
 - **Price**: the stall types open for sale under `/admin/payments` → Stalls; with none set up, a standard
   6 ft × 6 ft stall at ₹7,500.
 - **Promo code SEFMEMBER** (25% off stalls) is added to the vouchers the first time the site needs it, and is
   edited, limited or closed under `/admin/payments` → Stalls like any other voucher.
-- `/admin/stalls` lists bookings: confirm a payment and allot the final stall (emails the exhibitor), change the
-  allotted stall, or reject with a note. A stall can be allotted to one confirmed booking only.
+- `/admin/stalls` lists bookings: **Mark paid and email** needs the final stall and locks it. The confirmation email
+  (same template) gives the stall number, the stall directory login and the stall QR (attached). **Reject** with a
+  note, or **Delete booking** (removes it with its messages and leads and frees the stall; no email). For exhibitors
+  confirmed before these existed, the **n stall QR + login emails waiting to be sent** button emails them in one
+  click; **Resend stall QR + login** in a confirmed booking's Manage sends one again.
 - **Sponsorship** section with the three packages from the poster and a **Become a sponsor** form. Each request
   gets a thank-you email and appears at `/admin/sponsors`, where organisers set its status and a private note.
 - Tables `stall_bookings` and `sponsor_requests` are created automatically on first use (also in
@@ -163,6 +170,28 @@ once with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY`, `VAPID_
 database (they would appear in the real directory and the ticket queue). Run `db/schema.sql` there, then
 [db/directory-test-seed.sql](db/directory-test-seed.sql), which refuses to run on a database with real registrations.
 `npm test` runs the directory's rules (Vitest).
+
+## Stall directory
+
+**`/stallDirectory`** is public: every confirmed stall on the floor map and in a list (business, contact name, stall
+number; never phone or email), searchable by business, name or stall number. Tap a stall to see who is there.
+
+- **Delegates message a stall** from its page (`/stallDirectory/<booking id>`), signed in with the same "Open my
+  pass" cookie as the visitors directory. The same limits apply (3 unanswered messages, 30 new conversations a day,
+  the delegate's own and the organiser's messaging switches, the closing time).
+- **Exhibitors sign in** at the same `/login` page as organisers and event handlers, with the email they booked with as the login and their 10-digit
+  mobile number as the password. Every confirmed booking under that email and phone is one exhibitor. Their area has
+  **Messages** (reply, or block a delegate without telling them, with their stall QR beside it), **Leads** (scan a
+  delegate's pass QR at the stall, or type the `MBC-` number, to save their contact card, add a note, and download a
+  CSV) and **Stalls** (the other stalls and the floor map, without leaving their area).
+- **Stall QR**, shared the way delegates share their pass: it opens `/stallDirectory/card/<code>.<signature>` with the
+  business, contact name, phone and email, **Save contact** (vCard) and **Message this stall**. The signature keeps the
+  link unguessable, so the phone and email reach only people shown the QR. It goes with the confirmation email and is
+  in the exhibitor's area to show or download.
+- **Notifications** follow the visitors directory: a backup email per conversation until it is read (never the
+  message text, counted in the same daily cap), and a push to the delegate when push is on.
+- The tables (`stall_conversations`, `stall_messages`, `stall_leads`, and `stall_bookings.login_emailed_at`) are in
+  [db/schema.sql](db/schema.sql) and are also created on first use. Messaging needs the visitors directory tables.
 
 ## Run locally
 

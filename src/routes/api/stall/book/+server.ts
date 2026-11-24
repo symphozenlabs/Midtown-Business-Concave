@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { validateStallBooking, type StallBookingInput } from '#lib/stall-booking.ts';
-import { createStallBooking, isBookingStoreAvailable, paymentOf } from '#lib/server/bookings.ts';
+import { createStallBooking, isBookingStoreAvailable, paymentOf, takenStalls } from '#lib/server/bookings.ts';
 import { allow } from '#lib/server/rate-limit.ts';
 import type { RequestHandler } from './$types';
 
@@ -26,6 +26,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!isBookingStoreAvailable) return json({ message: 'Stall booking is not available right now. Please try again later.' }, { status: 503 });
 	if (!allow(`stall-book:${getClientAddress()}`, 10, 10 * 60_000)) {
 		return json({ message: 'Too many bookings from this device. Wait a few minutes and try again.' }, { status: 429 });
+	}
+
+	// A stall confirmed for another exhibitor can't be anyone's preference.
+	if (input.preferredStall !== null && (await takenStalls()).includes(input.preferredStall)) {
+		const message = `Stall ${input.preferredStall} is already taken. Choose another stall or no preference.`;
+		return json({ message, errors: { preferredStall: message }, taken: await takenStalls() }, { status: 409 });
 	}
 
 	const result = await createStallBooking(input);

@@ -4,14 +4,88 @@ import { formatRupees } from '#lib/payment.ts';
 import { SPONSOR_TIERS } from '#lib/stall-booking.ts';
 import type { AwardApplication } from './awards.ts';
 import type { SponsorRequest, StallBooking } from './bookings.ts';
-import { escape, layout, schedule, send } from './email.ts';
+import { button, escape, layout, schedule, send, sendMessageEmail } from './email.ts';
 
 const gold = (s: string) => `<strong style="color:#f7d07d;">${escape(s)}</strong>`;
 const first = (name: string) => name.split(/\s+/)[0];
 
-/** Sent when an organiser confirms a stall booking's payment. */
-export async function sendStallConfirmedEmail(b: StallBooking) {
+/* ---------- stall directory login and stall QR ---------- */
+
+/** What a confirmed exhibitor gets: the stall login, and the stall QR that shares their contact card. */
+export interface ExhibitorKit {
+	loginUrl: string;
+	/** The page the stall QR opens: contact card with "Save contact". */
+	cardUrl: string;
+	/** The stall QR as a PNG, attached to the email. */
+	qr: Uint8Array;
+}
+
+/** The mobile number as the exhibitor types it: 10 digits. */
+const localPhone = (phone: string) => phone.replace(/^\+91/, '');
+
+const qrAttachment = (b: StallBooking, kit: ExhibitorKit) => ({ filename: `MBC2026-Stall-${b.code}.png`, content: kit.qr });
+
+function kitBlocks(b: StallBooking, kit: ExhibitorKit) {
+	const html = `
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0b1430;border-radius:10px;">
+<tr><td style="padding:16px 18px;color:#e9dfc9;font-size:14px;line-height:1.7;">
+<strong style="color:#ffffff;">Your stall QR</strong><br>
+The attached QR is your stall’s contact card. Print it or keep it on your phone at the stall: anyone who scans it sees your business, name, phone number and email, and can save you to their contacts or message you. Show it to the visitors you want to stay in touch with.
+<div style="margin-top:14px;">${button(kit.cardUrl, 'See my contact card')}</div>
+</td></tr></table>
+<p style="margin:16px 0 8px;"><strong style="color:#ffffff;">Your stall directory login</strong></p>
+<p style="margin:0 0 8px;">Read messages from delegates, and scan the QR on their passes to collect leads.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 12px;font-size:14px;">
+<tr><td style="padding:2px 12px 2px 0;color:#a69c8a;">Login</td><td>${gold(b.email)}</td></tr>
+<tr><td style="padding:2px 12px 2px 0;color:#a69c8a;">Password</td><td>${gold(localPhone(b.phone))} <span style="color:#a69c8a;">(your mobile number)</span></td></tr>
+</table>
+<p style="margin:0 0 12px;">${button(kit.loginUrl, 'Open my stall')}</p>`;
+	const text = `Your stall QR (attached) is your stall's contact card. Anyone who scans it sees your business, name, phone number and email, and can save you to their contacts or message you.
+See my contact card: ${kit.cardUrl}
+
+Your stall directory login
+Read messages from delegates, and scan the QR on their passes to collect leads.
+Login: ${b.email}
+Password: ${localPhone(b.phone)} (your mobile number)
+Open my stall: ${kit.loginUrl}`;
+	return { html, text };
+}
+
+/** The stall QR and login on their own, for exhibitors confirmed before these existed. */
+export async function sendExhibitorLoginEmail(b: StallBooking, kit: ExhibitorKit) {
 	const when = await schedule();
+	const blocks = kitBlocks(b, kit);
+	const stall = b.allottedStall ? ` (stall No. ${b.allottedStall})` : '';
+	const html = layout(
+		`Your stall QR and login, ${escape(first(b.fullName))}.`,
+		`<p style="margin:0 0 12px;">${escape(b.businessName)}${escape(stall)} is listed in the stall directory with the floor map, so delegates can find you and message you.</p>
+${blocks.html}
+<p style="margin:0;font-size:12px;color:#a69c8a;">Keep the login to yourself: anyone with it can read your stall’s messages and leads.</p>`,
+		when
+	);
+	const text = `Your stall QR and login, ${first(b.fullName)}.
+
+${b.businessName}${stall} is listed in the stall directory with the floor map, so delegates can find you and message you.
+
+${blocks.text}
+
+Keep the login to yourself: anyone with it can read your stall's messages and leads.`;
+	return send(b.email, `Your stall QR and login · ${EVENT.name} 2026`, html, text, [qrAttachment(b, kit)]);
+}
+
+/** Backup alert to the exhibitor: a delegate wrote to their stall. Never the message text. */
+export async function sendExhibitorMessageEmail(
+	b: { email: string; businessName: string },
+	from: { fullName: string; designation: string; companyName: string },
+	link: string
+) {
+	return sendMessageEmail(b.email, from, link, `the stall directory (${b.businessName})`);
+}
+
+/** Sent when an organiser confirms a stall booking's payment. With the kit, it carries the stall QR and login. */
+export async function sendStallConfirmedEmail(b: StallBooking, kit?: ExhibitorKit) {
+	const when = await schedule();
+	const blocks = kit ? kitBlocks(b, kit) : null;
 	const stall = b.allottedStall
 		? `Your allotted stall is ${gold(`No. ${b.allottedStall}`)}.`
 		: 'The organisers will let you know your final stall number before the event.';
@@ -22,15 +96,15 @@ export async function sendStallConfirmedEmail(b: StallBooking) {
 		`Your stall is confirmed, ${escape(first(b.fullName))}.`,
 		`<p style="margin:0 0 12px;">We have received your payment of ${gold(formatRupees(b.amountRupees))} for booking ${gold(b.code)} (${escape(b.businessName)}).</p>
 <p style="margin:0 0 12px;">${stall}</p>
-<p style="margin:0;">Stall: ${escape(b.stallType)}. Reply to this email if anything needs changing.</p>`,
+<p style="margin:0;">Stall: ${escape(b.stallType)}. Reply to this email if anything needs changing.</p>${blocks ? blocks.html : ''}`,
 		when
 	);
 	const text = `Your stall is confirmed, ${first(b.fullName)}.
 
 We have received your payment of ${formatRupees(b.amountRupees)} for booking ${b.code} (${b.businessName}).
 ${stallText}
-Stall: ${b.stallType}. Reply to this email if anything needs changing.`;
-	return send(b.email, `Stall confirmed · ${EVENT.name} 2026 · ${b.code}`, html, text);
+Stall: ${b.stallType}. Reply to this email if anything needs changing.${blocks ? `\n\n${blocks.text}` : ''}`;
+	return send(b.email, `Stall confirmed · ${EVENT.name} 2026 · ${b.code}`, html, text, kit ? [qrAttachment(b, kit)] : []);
 }
 
 export async function sendStallRejectedEmail(b: StallBooking, reason: string) {
