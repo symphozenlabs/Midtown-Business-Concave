@@ -79,6 +79,17 @@
 	padding: var(--space-4) var(--space-4) var(--space-12);
 }
 
+/* Pages with side-by-side layouts on a laptop (stall directory, exhibitor area). */
+.ops-wrap.ops-wrap-wide {
+	max-width: 1200px;
+}
+
+@media (min-width: 960px) {
+	.ops-wrap.ops-wrap-wide {
+		padding: var(--space-6) var(--space-6) var(--space-12);
+	}
+}
+
 /* Network state ------------------------------------------------------------ */
 
 .ops-net {

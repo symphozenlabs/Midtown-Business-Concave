@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
+	import { afterNavigate, invalidateAll } from '$app/navigation';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -202,6 +202,37 @@
 			redrawAll.running = false;
 		}
 	}
+
+	/**
+	 * Searches as you type (after a short pause), and resets the list the moment the box
+	 * is emptied, by backspace or the × button, without waiting for Enter.
+	 */
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	let searchInput: HTMLInputElement | undefined = $state();
+	let query = $state('');
+	// Follow the URL (tabs, back button), but never overwrite what is being typed.
+	$effect(() => {
+		const q = data.available ? data.filter.q : '';
+		if (document.activeElement !== searchInput && !refocusSearch) query = q;
+	});
+	/** Set when the search box submitted itself, so typing can carry on after the results load. */
+	let refocusSearch = false;
+	function onSearchInput() {
+		clearTimeout(searchTimer);
+		const form = searchInput?.form;
+		if (query.trim() === (data.available ? data.filter.q : '')) return;
+		searchTimer = setTimeout(() => {
+			refocusSearch = true;
+			form?.requestSubmit();
+		}, query.trim() ? 400 : 0);
+	}
+	afterNavigate(() => {
+		if (!refocusSearch || !searchInput) return;
+		refocusSearch = false;
+		searchInput.focus();
+		const end = searchInput.value.length;
+		searchInput.setSelectionRange(end, end);
+	});
 
 	// The current tab, ticket-email filter and search, as query parameters.
 	const filterQuery = $derived(
@@ -477,13 +508,24 @@
 		<div class="panel-head">
 			<h1 id="queue-title">Participants</h1>
 			<div class="head-actions">
-				<form method="get" class="search" role="search">
+				<form
+					method="get"
+					class="search"
+					role="search"
+					data-sveltekit-keepfocus
+					data-sveltekit-noscroll
+					data-sveltekit-replacestate
+					onsubmit={() => clearTimeout(searchTimer)}
+				>
 					<input type="hidden" name="status" value={data.filter.status} />
 					<Search size={15} aria-hidden="true" />
 					<input
 						type="search"
 						name="q"
-						value={data.filter.q}
+						bind:this={searchInput}
+						bind:value={query}
+						oninput={onSearchInput}
+						autocomplete="off"
 						placeholder="Name, email, code or UPI ID"
 						aria-label="Search registrations"
 					/>

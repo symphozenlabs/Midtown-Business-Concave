@@ -31,6 +31,26 @@ export function startSmoothScroll(): () => void {
 	};
 }
 
+/**
+ * Freezes the page behind a full-screen overlay: pauses the smooth scroller and stops
+ * the document scrolling, keeping the scrollbar's space so nothing shifts. Returns unlock().
+ */
+export function lockPageScroll(): () => void {
+	const root = document.documentElement;
+	const gap = window.innerWidth - root.clientWidth;
+	const before = { overflow: root.style.overflow, paddingRight: root.style.paddingRight, overscroll: root.style.overscrollBehavior };
+	lenis?.stop();
+	root.style.overflow = 'hidden';
+	root.style.overscrollBehavior = 'none';
+	if (gap > 0) root.style.paddingRight = `${gap}px`;
+	return () => {
+		root.style.overflow = before.overflow;
+		root.style.paddingRight = before.paddingRight;
+		root.style.overscrollBehavior = before.overscroll;
+		lenis?.start();
+	};
+}
+
 export function scrollToElement(el: HTMLElement, offset = -24) {
 	if (lenis) {
 		lenis.scrollTo(el, { offset, duration: 1.1 });

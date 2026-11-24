@@ -2,7 +2,11 @@
 	import '#lib/ops/ops.css';
 	import type { Snippet } from 'svelte';
 
-	let { subtitle, children }: { subtitle: string; children: Snippet } = $props();
+	/**
+	 * `wide` lets a page use a laptop's width (up to about 1200px) for side-by-side
+	 * layouts; the default keeps a single phone-width column.
+	 */
+	let { subtitle, wide = false, children }: { subtitle: string; wide?: boolean; children: Snippet } = $props();
 </script>
 
 <svelte:head>
@@ -18,7 +22,7 @@
 			<span>{subtitle}</span>
 		</div>
 	</header>
-	<main class="ops-wrap">
+	<main class="ops-wrap" class:ops-wrap-wide={wide}>
 		{@render children()}
 	</main>
 </div>

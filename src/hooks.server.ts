@@ -2,6 +2,7 @@ import { json, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { SITE_URL } from '#lib/event.ts';
 import { DIRECTORY_PATH, canonicalDirectoryPath } from '#lib/directory/rules.ts';
+import { STALL_DIRECTORY_PATH, canonicalStallDirectoryPath } from '#lib/stall-directory/rules.ts';
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 import { SESSION_COOKIE as HANDLER_COOKIE, readHandlerSession } from '#lib/server/ops/handlers.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
@@ -24,6 +25,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// The visitor card prints /visitorDirectory; any other casing of it still lands there.
 	const directory = canonicalDirectoryPath(pathname);
 	if (directory) redirect(308, directory + event.url.search);
+	const stallDirectory = canonicalStallDirectoryPath(pathname);
+	if (stallDirectory) redirect(308, stallDirectory + event.url.search);
 
 	checkDirectoryPurge(event);
 
@@ -61,7 +64,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event);
-	if (isLogin || pathname.startsWith('/admin') || pathname.startsWith('/api/') || isHandlerPage || pathname.startsWith('/me') || pathname.startsWith('/pass/') || pathname.startsWith(DIRECTORY_PATH)) {
+	if (isLogin || pathname.startsWith('/admin') || pathname.startsWith('/api/') || isHandlerPage || pathname.startsWith('/me') || pathname.startsWith('/pass/') || pathname.startsWith(DIRECTORY_PATH) || pathname.startsWith(STALL_DIRECTORY_PATH)) {
 		response.headers.set('cache-control', 'no-store');
 		response.headers.set('x-robots-tag', 'noindex');
 	}

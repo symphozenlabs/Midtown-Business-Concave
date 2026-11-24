@@ -236,7 +236,7 @@ ${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
 }
 
 /** Gold call-to-action button, as in the pass email. */
-const button = (href: string, label: string) =>
+export const button = (href: string, label: string) =>
 	`<a href="${escape(href)}" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#e3b04b;color:#171916;font-weight:bold;text-decoration:none;">${escape(label)}</a>`;
 
 /** "Email me my pass link" on the visitors directory: signs this phone in and opens the directory. */
@@ -266,20 +266,24 @@ Keep this link to yourself: it signs you in to your pass.`;
 export async function sendMessageEmail(
 	to: string,
 	from: { fullName: string; designation: string; companyName: string },
-	link: string
+	link: string,
+	/** Where it was sent: the visitors directory, or a stall in the stall directory. */
+	place = 'the visitors directory',
+	/** Replaces "Name, Designation at Company", e.g. with a stall's name. */
+	whoLabel?: string
 ): Promise<string> {
 	const when = await schedule();
-	const who = `${from.fullName}, ${from.designation} at ${from.companyName}`;
+	const who = whoLabel ?? `${from.fullName}, ${from.designation} at ${from.companyName}`;
 	const html = layout(
 		'You have a new message',
-		`<p style="margin:0 0 16px;">${escape(who)}, sent you a message in the visitors directory.</p>
+		`<p style="margin:0 0 16px;">${escape(who)}, sent you a message in ${escape(place)}.</p>
 <p style="margin:0 0 16px;">${button(link, 'Read and reply')}</p>
 <p style="margin:0;font-size:12px;color:#a69c8a;">Your phone number and email stay private. We won’t email you about this conversation again until you’ve read it.</p>`,
 		when
 	);
 	const text = `You have a new message
 
-${who}, sent you a message in the visitors directory.
+${who}, sent you a message in ${place}.
 
 Read and reply: ${link}
 

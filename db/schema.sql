@@ -525,6 +525,55 @@ create table if not exists push_subscriptions (
 );
 create index if not exists push_subscriptions_registration_idx on push_subscriptions (registration_id);
 
+-- ============================================================================
+-- Stall directory (/stallDirectory): anyone sees the confirmed stalls on the floor
+-- map; signed-in delegates message a stall and the exhibitor replies after signing
+-- in with the booking email and mobile number. Exhibitors scan delegates' passes to
+-- collect leads. src/lib/server/stall-directory/store.ts also creates these on first use.
+-- ============================================================================
+
+-- When the exhibitor was emailed their stall directory login.
+alter table stall_bookings add column if not exists login_emailed_at timestamptz;
+
+-- One conversation per delegate and stall; the delegate always starts it.
+-- <side>_read_at / <side>_emailed_at follow the visitors directory's backup-email rule.
+create table if not exists stall_conversations (
+  id                   uuid primary key default gen_random_uuid(),
+  stall_booking_id     uuid not null references stall_bookings (id) on delete cascade,
+  registration_id      uuid not null references registrations (id) on delete cascade,
+  last_sender          text not null check (last_sender in ('delegate', 'exhibitor')),
+  last_message_at      timestamptz not null default now(),
+  delegate_read_at     timestamptz,
+  exhibitor_read_at    timestamptz,
+  delegate_emailed_at  timestamptz,
+  exhibitor_emailed_at timestamptz,
+  exhibitor_blocked    boolean not null default false,
+  created_at           timestamptz not null default now(),
+  unique (stall_booking_id, registration_id)
+);
+create index if not exists stall_conversations_registration_idx on stall_conversations (registration_id, created_at);
+
+create table if not exists stall_messages (
+  id              bigint generated always as identity primary key,
+  conversation_id uuid not null references stall_conversations (id) on delete cascade,
+  sender          text not null check (sender in ('delegate', 'exhibitor')),
+  body            text not null check (char_length(body) between 1 and 1000),
+  client_key      uuid,
+  created_at      timestamptz not null default now()
+);
+create index if not exists stall_messages_conversation_idx on stall_messages (conversation_id, id);
+create unique index if not exists stall_messages_client_key on stall_messages (client_key) where client_key is not null;
+
+-- Delegates whose pass QR an exhibitor scanned at the stall.
+create table if not exists stall_leads (
+  stall_booking_id uuid not null references stall_bookings (id) on delete cascade,
+  registration_id  uuid not null references registrations (id) on delete cascade,
+  note             text check (char_length(note) <= 300),
+  scanned_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  primary key (stall_booking_id, registration_id)
+);
+
 -- Business award applications from awards.midtownevents.in (Admin → Awards). Also created
 -- automatically on first use. The Open/Closed switch is the "awards" row in settings.
 create table if not exists award_applications (
