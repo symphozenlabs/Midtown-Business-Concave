@@ -13,6 +13,7 @@ import {
 	type RegistrationDraft
 } from '#lib/registration.ts';
 import { discountFor } from '#lib/voucher.ts';
+import { isTicketType, priceFor } from '#lib/payment.ts';
 import { deleteObject, isStorageAvailable, putObject } from '#lib/server/r2.ts';
 import { findVoucher } from '#lib/server/vouchers.ts';
 import {
@@ -52,6 +53,7 @@ function readDraft(form: FormData): RegistrationDraft {
 	const interests = INTERESTS.map((i) => i.value as string);
 	return {
 		...emptyDraft(),
+		ticketType: isTicketType(text(form, 'ticketType')) ? (text(form, 'ticketType') as RegistrationDraft['ticketType']) : 'delegate',
 		fullName: text(form, 'fullName'),
 		email: text(form, 'email'),
 		phone: text(form, 'phone'),
@@ -142,9 +144,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const settings = await getPaymentSettings();
-	// Coming back to edit their details keeps a voucher they already applied.
-	const held = existing?.voucherCode ? await findVoucher(existing.voucherCode) : null;
-	const discount = held?.scope === 'pass' ? discountFor(held, settings.priceRupees) : 0;
+	const price = priceFor(settings, draft.ticketType);
+	// Coming back to edit their details keeps a voucher they already applied (delegate pass only).
+	const held = existing?.voucherCode && draft.ticketType === 'delegate' ? await findVoucher(existing.voucherCode) : null;
+	const discount = held?.scope === 'pass' ? discountFor(held, price) : 0;
 	const id = crypto.randomUUID();
 	const photoKey = `registrations/2026/${id}.${photo.ext}`;
 	const posterKey = `registrations/2026/${id}-poster.jpg`;
@@ -167,7 +170,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		heardFrom: draft.heardFrom || null,
 		whatsappUpdates: draft.whatsappUpdates,
 		posterFraming: readFraming(form),
-		amountRupees: settings.priceRupees - discount
+		ticketType: draft.ticketType,
+		amountRupees: price - discount
 	};
 
 	try {
@@ -182,7 +186,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				amountRupees: registration.amountRupees,
 				vpa: settings.vpa,
 				payeeName: settings.payeeName,
-				priceRupees: settings.priceRupees,
+				priceRupees: price,
+				ticketType: registration.ticketType,
 				voucherCode: registration.voucherCode,
 				discountRupees: registration.discountRupees
 			},

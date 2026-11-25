@@ -8,6 +8,7 @@ import { fetchSiteConfig } from './submit.ts';
  */
 export const siteConfig = $state({
 	priceRupees: DEFAULT_PAYMENT.priceRupees,
+	visitorPriceRupees: DEFAULT_PAYMENT.visitorPriceRupees,
 	event: { ...DEFAULT_EVENT } as EventSettings,
 	loaded: false
 });
@@ -18,6 +19,7 @@ let loading: Promise<void> | null = null;
 export function loadSiteConfig() {
 	loading ??= fetchSiteConfig().then((config) => {
 		if (config.priceRupees != null) siteConfig.priceRupees = config.priceRupees;
+		if (config.visitorPriceRupees != null) siteConfig.visitorPriceRupees = config.visitorPriceRupees;
 		if (config.event) siteConfig.event = config.event;
 		siteConfig.loaded = true;
 	});

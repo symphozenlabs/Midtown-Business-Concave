@@ -1,6 +1,10 @@
+import type { TicketType } from './payment.ts';
+
 export type Interest = 'networking' | 'private-meetings' | 'workshops' | 'b2b-stalls' | 'branding';
 
 export interface RegistrationDraft {
+	/** Delegate pass or Visitor ticket, picked with the hero buttons or at the top of the form. */
+	ticketType: TicketType;
 	fullName: string;
 	email: string;
 	phone: string;
@@ -23,6 +27,7 @@ export interface RegistrationDraft {
 
 export function emptyDraft(): RegistrationDraft {
 	return {
+		ticketType: 'delegate',
 		fullName: '',
 		email: '',
 		phone: '',

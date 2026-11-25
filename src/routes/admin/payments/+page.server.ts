@@ -62,18 +62,20 @@ export const actions: Actions = {
 		if (!locals.admin) return fail(401, { scope: 'qr', message: 'Sign in again.' });
 		const form = await request.formData();
 		const price = Number(text(form, 'priceRupees'));
+		const visitorPrice = Number(text(form, 'visitorPriceRupees'));
 		const vpa = text(form, 'vpa');
 		const payeeName = text(form, 'payeeName').replace(/\s+/g, ' ');
 
 		const errors: Record<string, string> = {};
-		if (!Number.isFinite(price) || price < MIN_PRICE || price > MAX_PRICE || Math.round(price * 100) !== price * 100) {
-			errors.priceRupees = `Enter an amount between ₹${MIN_PRICE} and ₹${MAX_PRICE.toLocaleString('en-IN')}.`;
-		}
+		const badAmount = (n: number) => !Number.isFinite(n) || n < MIN_PRICE || n > MAX_PRICE || Math.round(n * 100) !== n * 100;
+		const amountHint = `Enter an amount between ₹${MIN_PRICE} and ₹${MAX_PRICE.toLocaleString('en-IN')}.`;
+		if (badAmount(price)) errors.priceRupees = amountHint;
+		if (badAmount(visitorPrice)) errors.visitorPriceRupees = amountHint;
 		if (!isValidVpa(vpa)) errors.vpa = 'Enter a UPI ID like name@okbank.';
 		if (payeeName.length < 2 || payeeName.length > 60) errors.payeeName = 'Enter the name shown on the UPI account.';
 		if (Object.keys(errors).length) return fail(400, { scope: 'qr', errors, message: 'Check the payment details.' });
 
-		const payment: PaymentSettings = { priceRupees: price, vpa, payeeName };
+		const payment: PaymentSettings = { priceRupees: price, visitorPriceRupees: visitorPrice, vpa, payeeName };
 		const repriced = await savePaymentSettings(payment, locals.admin.email);
 		const moved =
 			repriced === 0 ? '' : ` ${repriced} unpaid registration${repriced === 1 ? '' : 's'} moved to the new amount.`;

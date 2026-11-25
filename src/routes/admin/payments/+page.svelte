@@ -78,13 +78,16 @@
 
 	const saved = untrack(() => (data.available ? data.payment : DEFAULT_PAYMENT));
 	let price = $state(String(saved.priceRupees));
+	let visitorPrice = $state(String(saved.visitorPriceRupees));
 	let vpa = $state(saved.vpa);
 	let payeeName = $state(saved.payeeName);
 	let generating = $state(false);
 
 	// The live QR is the one generated on the server; edits wait for "Generate QR".
 	const changed = $derived(
-		Number(price) !== live.priceRupees || vpa.trim() !== live.vpa || payeeName.trim().replace(/\s+/g, ' ') !== live.payeeName
+		Number(price) !== live.priceRupees ||
+			Number(visitorPrice) !== live.visitorPriceRupees ||
+			vpa.trim() !== live.vpa || payeeName.trim().replace(/\s+/g, ' ') !== live.payeeName
 	);
 
 	let copied = $state<string | null>(null);
@@ -458,6 +461,7 @@
 	{#if data.available}
 		<dl class="ops-counts">
 			<div><dt>Delegate pass</dt><dd>{formatRupees(live.priceRupees)}</dd></div>
+			<div><dt>Visitor ticket</dt><dd>{formatRupees(live.visitorPriceRupees)}</dd></div>
 			<div><dt>Stall types</dt><dd>{stalls.length} <small>{totalStalls} stalls</small></dd></div>
 			<div><dt>Memberships</dt><dd>{memberships.length}</dd></div>
 		</dl>
@@ -486,8 +490,8 @@
 			<div class="ops-heading">
 				<span class="ops-heading-icon"><Ticket size={16} aria-hidden="true" /></span>
 				<div>
-					<h2 id="pass-title">Delegate pass fee and payment QR</h2>
-					<p class="ops-hint">Used by the registration form. Unpaid delegates move to a new fee as soon as you generate the QR.</p>
+					<h2 id="pass-title">Delegate and visitor fees, and payment QR</h2>
+					<p class="ops-hint">Used by the registration form. Both tickets get the same pass; only the label and price differ. Unpaid registrations move to a new fee as soon as you generate the QR.</p>
 				</div>
 			</div>
 			{@render notice('qr')}
@@ -495,9 +499,14 @@
 			<div class="qr-grid">
 				<form method="post" action={act('generateQr')} use:enhance={generate} class="ops-form">
 					<label class="ops-label">
-						Event fee
+						Delegate pass fee
 						<span class="prefixed"><span aria-hidden="true">₹</span><input name="priceRupees" type="number" inputmode="decimal" min="1" step="0.01" bind:value={price} required /></span>
 						{#if errorFor('qr', 'priceRupees')}<small class="ops-field-error">{errorFor('qr', 'priceRupees')}</small>{/if}
+					</label>
+					<label class="ops-label">
+						Visitor ticket fee <small>Vouchers do not apply</small>
+						<span class="prefixed"><span aria-hidden="true">₹</span><input name="visitorPriceRupees" type="number" inputmode="decimal" min="1" step="0.01" bind:value={visitorPrice} required /></span>
+						{#if errorFor('qr', 'visitorPriceRupees')}<small class="ops-field-error">{errorFor('qr', 'visitorPriceRupees')}</small>{/if}
 					</label>
 					<label class="ops-label">
 						UPI ID
@@ -535,6 +544,7 @@
 								class="btn btn-ghost ops-btn-sm"
 								onclick={() => {
 									price = String(live.priceRupees);
+									visitorPrice = String(live.visitorPriceRupees);
 									vpa = live.vpa;
 									payeeName = live.payeeName;
 									scanNote = null;

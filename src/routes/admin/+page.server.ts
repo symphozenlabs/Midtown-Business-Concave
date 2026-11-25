@@ -59,7 +59,7 @@ async function cardBackJobs(origin: string) {
 		const byId = new Map(paid.map((r) => [r.id, r]));
 		return jobs.map((j) => {
 			const r = byId.get(j.id)!;
-			return { ...j, name: r.fullName, title: r.designation, code: r.code, photoKey: r.photoKey };
+			return { ...j, name: r.fullName, title: r.designation, code: r.code, photoKey: r.photoKey, ticketType: r.ticketType };
 		});
 	} catch (e) {
 		console.error('[admin] could not list ID card backs to make', e);

@@ -52,6 +52,15 @@ alter table registrations add column if not exists voucher_code    text;
 alter table registrations add column if not exists discount_rupees numeric(10, 2) not null default 0;
 create index if not exists registrations_voucher_idx on registrations (voucher_code) where voucher_code is not null;
 
+-- Ticket bought: the Delegate pass or the Visitor ticket. Both get the same pass and
+-- perks; only the label and price differ. Vouchers apply to the delegate pass only.
+alter table registrations add column if not exists ticket_type text not null default 'delegate';
+do $$ begin
+  alter table registrations add constraint registrations_ticket_type_check
+    check (ticket_type in ('delegate', 'visitor'));
+exception when duplicate_object then null;
+end $$;
+
 -- Optional LinkedIn profile, shown on the delegate's scan page and contact card.
 alter table registrations add column if not exists linkedin text check (char_length(linkedin) <= 200);
 
@@ -102,7 +111,7 @@ create table if not exists settings (
 );
 
 insert into settings (key, value)
-values ('payment', '{"priceRupees": 500, "vpa": "gmouly1@oksbi", "payeeName": "MOULISHWAR G"}')
+values ('payment', '{"priceRupees": 2000, "visitorPriceRupees": 499, "vpa": "gmouly1@oksbi", "payeeName": "MOULISHWAR G"}')
 on conflict (key) do nothing;
 
 -- Organiser accounts for /login → /admin. Passwords are pbkdf2-sha256 hashes

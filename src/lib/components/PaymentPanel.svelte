@@ -112,6 +112,8 @@
 </script>
 
 {#snippet voucherBox()}
+	<!-- Vouchers cover the delegate pass only. -->
+	{#if pending.ticketType !== 'visitor' || pending.voucherCode}
 	<div class="voucher">
 		{#if pending.voucherCode}
 			<div class="voucher-applied" role="status">
@@ -174,6 +176,7 @@
 			</button>
 		{/if}
 	</div>
+	{/if}
 {/snippet}
 
 <div class="pay">
@@ -188,7 +191,7 @@
 		</div>
 	{:else}
 	<div class="qr-card">
-		<span class="kicker">Scan and pay</span>
+		<span class="kicker">{pending.ticketType === 'visitor' ? 'Visitor ticket' : 'Delegate pass'} · Scan and pay</span>
 		{#if discount > 0}<s class="was">{formatRupees(fullPrice)}</s>{/if}
 		<strong class="amount">{amount}</strong>
 		<div class="qr-wrap">

@@ -1,3 +1,4 @@
+import { TICKET_LABEL } from '#lib/payment.ts';
 import { fail, redirect } from '@sveltejs/kit';
 import { getRegistration } from '#lib/server/store.ts';
 import { publicOrigin } from '#lib/server/site.ts';
@@ -32,7 +33,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 	]);
 	return {
 		signedIn: true as const,
-		me: { name: reg.fullName, code: reg.code, designation: reg.designation, company: reg.companyName, paid: reg.status === 'paid' },
+		me: { name: reg.fullName, code: reg.code, ticket: TICKET_LABEL[reg.ticketType], designation: reg.designation, company: reg.companyName, paid: reg.status === 'paid' },
 		passUrl: passUrl(publicOrigin(url), pass.token),
 		connections,
 		certificate: certificate && !certificate.revokedAt ? certificate.number : null,

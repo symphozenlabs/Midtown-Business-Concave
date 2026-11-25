@@ -326,7 +326,12 @@
 			const { renderBackFile } = await import('#lib/poster/renderer.ts');
 			for (const job of jobs) {
 				try {
-					const blob = await renderBackFile({ code: job.code, qrText: job.qrText, event: data.available ? data.event : null });
+					const blob = await renderBackFile({
+						code: job.code,
+						qrText: job.qrText,
+						event: data.available ? data.event : null,
+						ticketType: job.ticketType
+					});
 					const res = await fetch(`/admin/card-back/${job.id}`, { method: 'POST', body: blob, headers: { 'content-type': 'image/jpeg' } });
 					if (!res.ok) throw new Error(`${res.status}`);
 					backs!.done++;
@@ -705,7 +710,7 @@
 								</th>
 							{/if}
 							<th class="col-toggle"><span class="visually-hidden">Details</span></th>
-							<th>Delegate</th>
+							<th>Registration</th>
 							<th>Email</th>
 							<th>UPI transaction ID</th>
 							<th class="col-amount num">Amount</th>
@@ -748,7 +753,7 @@
 										<img class="photo" src={media(r.photoKey)} alt="" width="34" height="34" loading="lazy" />
 										<div class="who">
 											<strong>{r.fullName}</strong>
-											<span class="mono code">{r.code}</span>
+											<span class="mono code">{r.code}{#if r.ticketType === 'visitor'} · <span class="ticket-tag">Visitor</span>{/if}</span>
 										</div>
 									</div>
 								</td>
@@ -2042,5 +2047,11 @@
 			grid-template-columns: minmax(0, 1fr);
 			margin-left: var(--space-3);
 		}
+	}
+
+	.ticket-tag {
+		font-family: inherit;
+		font-weight: 600;
+		color: var(--gold-ink);
 	}
 </style>

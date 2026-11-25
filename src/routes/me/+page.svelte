@@ -57,7 +57,7 @@
 
 		<section class="ops-card pass" aria-labelledby="pass-title">
 			<div class="who">
-				<span class="ops-eyebrow">Delegate pass · {data.me.code}</span>
+				<span class="ops-eyebrow">{data.me.ticket} pass · {data.me.code}</span>
 				<h1 id="pass-title" class="ops-title name">{data.me.name}</h1>
 				<p class="ops-sub">{data.me.designation}, {data.me.company}</p>
 			</div>
