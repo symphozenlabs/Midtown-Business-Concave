@@ -28,7 +28,10 @@
 			<header>
 				<span class="eyebrow">Agenda</span>
 				<h2 id="agenda-dialog-title">How the day unfolds</h2>
-				<p>{EVENT.dateLabel} · {EVENT.venue}</p>
+				<p>
+					{EVENT.dateLabel} ·
+					<a href={EVENT.venueMapUrl} target="_blank" rel="noopener noreferrer">{EVENT.venue}</a>
+				</p>
 			</header>
 
 			<ol class="list">
