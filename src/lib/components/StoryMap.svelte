@@ -347,7 +347,7 @@
 	const facts = $derived([
 		{ icon: CalendarDays, value: when.dateLabel },
 		{ icon: Clock, value: when.timeLabel },
-		{ icon: MapPin, value: EVENT.venue }
+		{ icon: MapPin, value: EVENT.venue, href: EVENT.venueMapUrl }
 	]);
 </script>
 
@@ -412,7 +412,16 @@
 					<h3 use:scrub={line(FINAL[0], FINAL[1], 1)}>Be in the room.</h3>
 					<ul class="facts" use:scrub={line(FINAL[0], FINAL[1], 2)}>
 						{#each facts as fact (fact.value)}
-							<li><fact.icon size={18} strokeWidth={1.75} aria-hidden="true" /> {fact.value}</li>
+							<li>
+								<fact.icon size={18} strokeWidth={1.75} aria-hidden="true" />
+								{#if 'href' in fact && fact.href}
+									<a class="map-link" href={fact.href} target="_blank" rel="noopener noreferrer"
+										>{fact.value}<span class="visually-hidden">, open in Google Maps</span></a
+									>
+								{:else}
+									{fact.value}
+								{/if}
+							</li>
 						{/each}
 					</ul>
 					<div use:scrub={line(FINAL[0], FINAL[1], 3)}>
@@ -670,6 +679,17 @@
 		gap: var(--space-3);
 		font: var(--text-ui);
 		color: var(--on-ink);
+	}
+
+	.map-link {
+		color: inherit;
+		text-decoration: underline;
+		text-decoration-color: rgb(240 196 112 / 0.55);
+		text-underline-offset: 3px;
+	}
+
+	.map-link:hover {
+		color: var(--gold);
 	}
 
 	.facts :global(svg) {

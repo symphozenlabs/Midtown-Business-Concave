@@ -18,8 +18,10 @@ export const EVENT = {
 	timeLabel: '10.00 am – 6.00 pm',
 	compactDate: 'Sat, 28 Nov 2026',
 	compactTime: '10 am – 6 pm',
-	compactVenue: 'Salem, TN',
-	venue: 'Salem, Tamil Nadu',
+	compactVenue: 'Kongu SRV School',
+	venue: 'Kongu SRV School, Salem',
+	/** Google Maps pin for the venue, linked wherever the venue is shown. */
+	venueMapUrl: 'https://maps.app.goo.gl/KxTssnaNwnMKBvFP7',
 	partners: [
 		{ role: 'Networking partner', name: 'Coimbatore Entrepreneurs Forum' },
 		{ role: 'Event partner', name: 'Midtown Events' },

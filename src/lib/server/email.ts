@@ -98,7 +98,7 @@ export function layout(title: string, body: string, when: EventLabels, brand?: {
 	const heading = brand?.heading ?? `${EVENT.name} 2026`;
 	const footer = brand
 		? escape(brand.footer)
-		: `${escape(when.dateLabel)} · ${escape(when.timeLabel)} · ${escape(EVENT.venue)}<br>Organised by ${escape(EVENT.presenter)} and Midtown Events`;
+		: `${escape(when.dateLabel)} · ${escape(when.timeLabel)} · <a href="${escape(EVENT.venueMapUrl)}" style="color:#f7d07d;">${escape(EVENT.venue)}</a><br>Organised by ${escape(EVENT.presenter)} and Midtown Events`;
 	return `<!doctype html><html><body style="margin:0;background:#0b1430;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#101a3a;border:1px solid #6b5426;border-radius:14px;">
@@ -212,7 +212,8 @@ Registration number: ${reg.code}
 Delegate: ${reg.fullName}, ${reg.designation}, ${reg.companyName}
 Paid: ${formatRupees(reg.amountRupees)}${reg.upiTxnId ? ` (UPI ref ${reg.upiTxnId})` : ''}
 ${pass ? `\n${passText(pass, qrOnCard)}\n` : ''}
-${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
+${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}
+Map: ${EVENT.venueMapUrl}`;
 	return send(reg.email, `Your ticket · ${EVENT.name} 2026 · ${reg.code}`, html, text, attachments);
 }
 
@@ -231,7 +232,8 @@ Here is your ${back ? 'ID card back with your QR pass' : 'QR pass'} for ${EVENT.
 
 ${passText(pass, Boolean(back))}
 
-${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}`;
+${when.dateLabel} · ${when.timeLabel} · ${EVENT.venue}
+Map: ${EVENT.venueMapUrl}`;
 	return send(reg.email, `Your event pass · ${EVENT.name} 2026 · ${reg.code}`, html, text, cardAttachments(reg, null, back, pass));
 }
 

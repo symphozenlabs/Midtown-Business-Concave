@@ -35,7 +35,7 @@
 	const facts = $derived([
 		{ icon: CalendarDays, label: 'Date', value: when.compactDate, short: when.compactDate, full: when.dateLabel },
 		{ icon: Clock, label: 'Time', value: when.compactTime, short: when.compactTime, full: when.timeLabel },
-		{ icon: MapPin, label: 'Venue', value: EVENT.venue, short: EVENT.compactVenue, full: EVENT.venue }
+		{ icon: MapPin, label: 'Venue', value: EVENT.venue, short: EVENT.compactVenue, full: EVENT.venue, href: EVENT.venueMapUrl }
 	]);
 </script>
 
@@ -69,9 +69,19 @@
 						<div>
 							<dt>{fact.label}</dt>
 							<dd>
-								<span class="long" aria-hidden="true">{fact.value}</span><span class="short" aria-hidden="true"
-									>{fact.short}</span
-								><span class="visually-hidden">{fact.full}</span>
+								{#if 'href' in fact && fact.href}
+									<a class="map-link" href={fact.href} target="_blank" rel="noopener noreferrer"
+										><span class="long" aria-hidden="true"
+											>{#each fact.value.split(', ') as part, i (i)}{#if i}{', '}{/if}<span class="part">{part}</span>{/each}</span
+										><span class="short" aria-hidden="true"
+											>{fact.short}</span
+										><span class="visually-hidden">{fact.full}, open in Google Maps</span></a
+									>
+								{:else}
+									<span class="long" aria-hidden="true">{fact.value}</span><span class="short" aria-hidden="true"
+										>{fact.short}</span
+									><span class="visually-hidden">{fact.full}</span>
+								{/if}
 							</dd>
 						</div>
 					</div>
@@ -263,6 +273,18 @@
 		display: none;
 	}
 
+	.map-link {
+		color: inherit;
+		text-decoration: underline;
+		text-decoration-color: rgb(240 196 112 / 0.55);
+		text-underline-offset: 3px;
+	}
+
+	.map-link:hover {
+		color: var(--gold);
+		text-decoration-color: currentColor;
+	}
+
 	.cta {
 		display: grid;
 		justify-items: start;
@@ -394,6 +416,32 @@
 
 		h1 {
 			font-size: clamp(30px, min(9vw, 5.6svh), 56px);
+		}
+	}
+
+	/* Small laptops: the logo sits close beside the facts, so the venue takes two lines. */
+	@media (min-width: 1024px) and (max-width: 1279px) {
+		/* "Kongu SRV School," then "Salem": each part stays whole. */
+		.map-link .long {
+			white-space: normal;
+		}
+
+		.map-link .part {
+			white-space: nowrap;
+		}
+
+		.fact {
+			gap: var(--space-2);
+			padding-inline: 12px;
+		}
+
+		.roles {
+			gap: var(--space-2);
+		}
+
+		.roles .btn {
+			min-width: 0;
+			padding-inline: 14px;
 		}
 	}
 
