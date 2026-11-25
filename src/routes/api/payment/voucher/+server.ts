@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { isRegistrationCode } from '#lib/registration-code.ts';
 import { allow } from '#lib/server/rate-limit.ts';
 import { applyVoucher, isStoreAvailable } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
@@ -20,7 +21,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
 	const voucher = typeof body?.voucher === 'string' ? body.voucher.slice(0, 40) : '';
 
-	if (!/^MBC-[A-Z0-9]{6}$/.test(code) || !email) return json({ message: MESSAGES.not_found }, { status: 400 });
+	if (!isRegistrationCode(code) || !email) return json({ message: MESSAGES.not_found }, { status: 400 });
 	if (!isStoreAvailable) return json({ message: 'Vouchers cannot be checked right now. Please try again later.' }, { status: 503 });
 	// Slows down guessing codes, per registration and per address.
 	if (!allow(`voucher:${code}`, 10, 10 * 60_000) || !allow(`voucher-ip:${getClientAddress()}`, 30, 10 * 60_000)) {

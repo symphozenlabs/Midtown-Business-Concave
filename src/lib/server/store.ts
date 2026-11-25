@@ -2,6 +2,7 @@ import { dev } from '$app/env';
 import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/event-settings.ts';
 import { DEFAULT_PAYMENT, isTicketType, priceFor, type PaymentSettings, type TicketType } from '#lib/payment.ts';
 import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
+import { codePrefix, codeVariants, withTicketPrefix } from '#lib/registration-code.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 import { findVoucher, listVouchers } from './vouchers.ts';
 
@@ -80,6 +81,8 @@ export type PaymentResult =
 
 /** What an unpaid delegate should pay now. */
 export interface PaymentDetails {
+	/** The registration number now: an older visitor code may have moved from MBC- to MBCV-. */
+	code: string;
 	status: Status;
 	amountRupees: number;
 	vpa: string;
@@ -111,9 +114,9 @@ export const isStoreAvailable = isDatabaseConfigured || useMemory;
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L
 
-function newCode() {
+function newCode(ticket: TicketType) {
 	const bytes = crypto.getRandomValues(new Uint8Array(6));
-	return 'MBC-' + [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+	return codePrefix(ticket) + [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
 const iso = (v: unknown) => (v == null ? null : new Date(v as string).toISOString());
@@ -361,15 +364,41 @@ export async function applyVoucher(code: string, email: string, rawVoucher: stri
 }
 
 async function findForPayment(code: string, email: string): Promise<Registration | null> {
+	const variants = codeVariants(code);
 	if (useMemory) {
-		return [...mem.rows.values()].find((r) => r.code === code && r.email.toLowerCase() === email.toLowerCase()) ?? null;
+		return (
+			[...mem.rows.values()].find((r) => variants.includes(r.code) && r.email.toLowerCase() === email.toLowerCase()) ?? null
+		);
 	}
-	const rows = await sql()`select * from registrations where code = ${code} and lower(email) = lower(${email})`;
+	await recodeUnpaidVisitors();
+	const rows = await sql()`select * from registrations where code = any(${variants}) and lower(email) = lower(${email})`;
 	return rows[0] ? fromRow(rows[0]) : null;
+}
+
+let recoded: Promise<void> | null = null;
+
+/**
+ * Visitors who registered before visitor codes existed have MBC- codes. Unpaid ones
+ * move to MBCV- (once per server instance); their payment page picks the new code up.
+ * Anyone who already reported a payment keeps theirs: it is in their UPI payment note.
+ */
+function recodeUnpaidVisitors(): Promise<void> {
+	recoded ??= (async () => {
+		await ensureTicketTypeColumn();
+		await sql()`
+			update registrations r set code = 'MBCV-' || substr(r.code, 5), updated_at = now()
+			where r.ticket_type = 'visitor' and r.status = 'pending_payment' and r.code like 'MBC-%'
+				and not exists (select 1 from registrations o where o.code = 'MBCV-' || substr(r.code, 5))`;
+	})().catch((e) => {
+		recoded = null;
+		throw e;
+	});
+	return recoded;
 }
 
 function detailsOf(r: Registration, settings: PaymentSettings): PaymentDetails {
 	return {
+		code: r.code,
 		status: r.status,
 		amountRupees: r.amountRupees,
 		vpa: settings.vpa,
@@ -468,7 +497,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 		const row: Registration = {
 			...input,
 			id: crypto.randomUUID(),
-			code: newCode(),
+			code: newCode(input.ticketType),
 			status: 'pending_payment',
 			upiTxnId: null,
 			paymentSubmittedAt: null,
@@ -500,7 +529,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 					city, interests, heard_from, consent, whatsapp_updates, poster_framing,
 					status, ticket_type, amount_rupees
 				) values (
-					${newCode()}, ${input.fullName}, ${input.email}, ${input.phone}, ${input.photoKey}, ${input.posterKey},
+					${newCode(input.ticketType)}, ${input.fullName}, ${input.email}, ${input.phone}, ${input.photoKey}, ${input.posterKey},
 					${input.companyName}, ${input.designation}, ${input.industry}, ${input.about},
 					${input.website}, ${input.linkedin}, ${input.city}, ${input.interests}, ${input.heardFrom},
 					true, ${input.whatsappUpdates}, ${JSON.stringify(input.posterFraming)}::jsonb,
@@ -525,6 +554,7 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 		const row: Registration = {
 			...prev,
 			...input,
+			code: withTicketPrefix(prev.code, input.ticketType),
 			...(input.ticketType === 'delegate' ? {} : { voucherCode: null, discountRupees: 0 }),
 			status: 'pending_payment',
 			upiTxnId: null,
@@ -537,8 +567,25 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 		return row;
 	}
 	await Promise.all([ensureColumn('registrations', 'linkedin'), ensureTicketTypeColumn()]);
+	// The code follows the ticket (MBC- or MBCV-, same six characters). Should the other
+	// spelling already belong to someone, they get a fresh code instead.
+	const [current] = await sql()`select code from registrations where id = ${id}`;
+	let code = withTicketPrefix(current.code, input.ticketType);
+	for (let attempt = 0; attempt < 4; attempt++) {
+		try {
+			return await replaceRow(id, input, code);
+		} catch (e) {
+			if (uniqueViolation(e) !== 'registrations_code_key') throw e;
+			code = newCode(input.ticketType);
+		}
+	}
+	throw new Error('Could not allocate a registration code');
+}
+
+async function replaceRow(id: string, input: RegistrationInput, code: string): Promise<Registration> {
 	const rows = await sql()`
 		update registrations set
+			code = ${code},
 			full_name = ${input.fullName}, email = ${input.email}, phone = ${input.phone},
 			photo_key = ${input.photoKey}, poster_key = ${input.posterKey},
 			company_name = ${input.companyName}, designation = ${input.designation},
@@ -563,7 +610,7 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
  */
 export async function submitPayment(code: string, email: string, utr: string | null): Promise<PaymentResult> {
 	if (useMemory) {
-		const row = [...mem.rows.values()].find((r) => r.code === code && r.email.toLowerCase() === email.toLowerCase());
+		const row = await findForPayment(code, email);
 		if (!row) return { ok: false, reason: 'not_found' };
 		if (row.status === 'paid') return { ok: false, reason: 'paid' };
 		if (!utr && row.amountRupees > 0) return { ok: false, reason: 'utr_required' };
@@ -572,8 +619,9 @@ export async function submitPayment(code: string, email: string, utr: string | n
 		return { ok: true, registration: row };
 	}
 
+	await recodeUnpaidVisitors();
 	const existing = await sql()`
-		select id, status, amount_rupees from registrations where code = ${code} and lower(email) = lower(${email})`;
+		select id, status, amount_rupees from registrations where code = any(${codeVariants(code)}) and lower(email) = lower(${email})`;
 	if (!existing[0]) return { ok: false, reason: 'not_found' };
 	if (existing[0].status === 'paid') return { ok: false, reason: 'paid' };
 	if (!utr && Number(existing[0].amount_rupees) > 0) return { ok: false, reason: 'utr_required' };

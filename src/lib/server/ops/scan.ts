@@ -1,3 +1,4 @@
+import { isRegistrationCode } from '#lib/registration-code.ts';
 import { TICKET_LABEL, formatRupees, isTicketType, type TicketType } from '#lib/payment.ts';
 import type { Category, ScanParticipant, ScanResult } from '#lib/ops/categories.ts';
 import { sql } from '../db.ts';
@@ -539,7 +540,7 @@ export interface LookupHit {
  */
 export async function lookup(q: string): Promise<LookupHit[]> {
 	const query = q.trim().slice(0, 60);
-	if (/^MBC-[A-Z0-9]{6}$/i.test(query)) {
+	if (isRegistrationCode(query.toUpperCase())) {
 		const rows = await sql()`select code, full_name, company_name from registrations where code = ${query.toUpperCase()}`;
 		return rows.map((r) => ({ code: r.code, name: r.full_name, company: r.company_name }));
 	}

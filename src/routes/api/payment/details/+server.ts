@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { isRegistrationCode } from '#lib/registration-code.ts';
 import { getPaymentDetails, isStoreAvailable } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
 
@@ -13,7 +14,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const code = typeof body?.code === 'string' ? body.code.trim().toUpperCase() : '';
 	const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
 
-	if (!/^MBC-[A-Z0-9]{6}$/.test(code) || !email) {
+	if (!isRegistrationCode(code) || !email) {
 		return json({ message: 'We could not find your registration.' }, { status: 400 });
 	}
 	if (!isStoreAvailable) return json({ message: 'Unavailable.' }, { status: 503 });

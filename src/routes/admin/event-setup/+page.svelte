@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { untrack } from 'svelte';
+	import { REGISTRATION_CODE_PATTERN } from '#lib/registration-code.ts';
 	import {
 		BadgeCheck,
 		CalendarDays,
@@ -340,7 +341,7 @@
 				</div>
 				{@render notice('pass')}
 				<form method="post" action="?/reissue" class="reissue" use:enhance={keep}>
-					<label class="ops-label">Registration number<input name="code" autocomplete="off" placeholder="MBC-XXXXXX" required pattern="[Mm][Bb][Cc]-[A-Za-z0-9]{'{6}'}" /></label>
+					<label class="ops-label">Registration number<input name="code" autocomplete="off" placeholder="MBC-XXXXXX or MBCV-XXXXXX" required pattern={REGISTRATION_CODE_PATTERN} /></label>
 					<label class="ops-check"><input type="checkbox" name="email" checked /> Email the new pass</label>
 					<button class="btn btn-secondary ops-btn-sm" type="submit" disabled={!data.passesReady}><QrCode size={15} aria-hidden="true" /> Reissue QR</button>
 				</form>

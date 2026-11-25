@@ -567,7 +567,7 @@
 				<div class="link">
 					<span class="link-label">Payment link (mobile tap-to-pay)</span>
 					<code>{liveLink}</code>
-					<p class="ops-hint">Each delegate's note carries their own registration number in place of MBC-XXXXXX.</p>
+					<p class="ops-hint">Each person's note carries their own registration number (MBC-… for delegates, MBCV-… for visitors) in place of MBC-XXXXXX.</p>
 					<div class="ops-actions">
 						<button type="button" class="btn btn-secondary ops-btn-sm" onclick={() => copy(liveLink)}>
 							{#if copied === liveLink}<Check size={14} aria-hidden="true" /> Copied{:else}<Copy size={14} aria-hidden="true" /> Copy link{/if}

@@ -8,8 +8,8 @@ import type { RequestHandler } from './$types';
 export const prerender = false;
 
 /**
- * The exhibitor scanned a delegate's pass QR at the stall (or typed their MBC-
- * registration number): save them as a lead and return their contact card. Showing
+ * The exhibitor scanned a delegate's pass QR at the stall (or typed their MBC- or
+ * MBCV- registration number): save them as a lead and return their contact card. Showing
  * the QR is how a delegate shares their card, the same rule as the handler desks.
  */
 export const POST: RequestHandler = async ({ request, cookies }) => {

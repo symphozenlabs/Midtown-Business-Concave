@@ -345,7 +345,7 @@
 		<section class="ops-card" aria-labelledby="lookup-title">
 			<h2 id="lookup-title" class="small-title">Find a delegate</h2>
 			<label class="ops-label">
-				Name or registration number (MBC-…)
+				Name or registration number (MBC-… or MBCV-…)
 				<input type="search" bind:value={query} oninput={search} autocomplete="off" placeholder="At least 3 letters" />
 			</label>
 			{#if searching}<p class="ops-muted"><LoaderCircle size={14} class="ops-spin" aria-hidden="true" /> Searching…</p>{/if}
