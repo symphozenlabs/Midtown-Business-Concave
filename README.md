@@ -223,7 +223,7 @@ emails in the terminal.
    environment variable (Settings → Environment variables).
 
 The ticket price and the UPI details behind the payment QR are changed at `/admin/payments`, and the event date
-and time at `/admin/event-setup` (defaults: ₹500 to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
+and time at `/admin/event-setup` (defaults: Delegate ₹2000 with vouchers, Visitor ₹499 without, to MOULISHWAR G, `gmouly1@oksbi`; 28 November 2026, 10 am – 6 pm) and
 stored in the `settings` table. A new fee or UPI ID also applies to delegates who registered but have not paid:
 their payment page picks up the new amount and QR within 30 seconds (or as soon as they return to the tab).
 Anyone who has already entered a UPI transaction ID keeps the amount they paid. The poster artwork carries its

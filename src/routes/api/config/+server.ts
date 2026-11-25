@@ -11,5 +11,5 @@ export const GET: RequestHandler = async () => {
 	const [payment, event] = isStoreAvailable
 		? await Promise.all([getPaymentSettings(), getEventSettings()])
 		: [DEFAULT_PAYMENT, DEFAULT_EVENT];
-	return json({ priceRupees: payment.priceRupees, event });
+	return json({ priceRupees: payment.priceRupees, visitorPriceRupees: payment.visitorPriceRupees, event });
 };

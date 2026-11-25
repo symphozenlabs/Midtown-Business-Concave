@@ -1,6 +1,18 @@
+/** The two tickets sold on the registration form. Both get the same pass; only the label and price differ. */
+export type TicketType = 'delegate' | 'visitor';
+export const TICKET_TYPES: TicketType[] = ['delegate', 'visitor'];
+export const TICKET_LABEL: Record<TicketType, string> = { delegate: 'Delegate', visitor: 'Visitor' };
+
+export function isTicketType(value: unknown): value is TicketType {
+	return value === 'delegate' || value === 'visitor';
+}
+
 /** Payment details the delegate pays to; the admin can change these from the dashboard. */
 export interface PaymentSettings {
+	/** Delegate pass fee. */
 	priceRupees: number;
+	/** Visitor ticket fee. */
+	visitorPriceRupees: number;
 	/** UPI ID (virtual payment address), e.g. name@oksbi */
 	vpa: string;
 	payeeName: string;
@@ -8,10 +20,16 @@ export interface PaymentSettings {
 
 /** Defaults, taken from the organiser's Google Pay QR. */
 export const DEFAULT_PAYMENT: PaymentSettings = {
-	priceRupees: 500,
+	priceRupees: 2000,
+	visitorPriceRupees: 499,
 	vpa: 'gmouly1@oksbi',
 	payeeName: 'MOULISHWAR G'
 };
+
+/** The full fee of a ticket, before any voucher. */
+export function priceFor(settings: PaymentSettings, ticket: TicketType) {
+	return ticket === 'visitor' ? settings.visitorPriceRupees : settings.priceRupees;
+}
 
 export const MIN_PRICE = 1;
 export const MAX_PRICE = 100000;
@@ -27,7 +45,7 @@ export function isValidVpa(vpa: string) {
  * it pre-fills the payee, the exact amount and a note carrying the registration
  * number, so each payment can be matched to its registration.
  */
-export function upiLink(settings: PaymentSettings, amountRupees: number, code: string) {
+export function upiLink(settings: Pick<PaymentSettings, 'vpa' | 'payeeName'> & { priceRupees?: number }, amountRupees: number, code: string) {
 	const params = new URLSearchParams({
 		pa: settings.vpa.trim(),
 		pn: settings.payeeName.trim(),

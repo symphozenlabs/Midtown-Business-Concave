@@ -42,6 +42,8 @@
 		type PendingRegistration
 	} from '#lib/submit.ts';
 	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
+	import { TICKET_LABEL, TICKET_TYPES, formatRupees, isTicketType, type TicketType } from '#lib/payment.ts';
+	import { ticketChoice, ticketFromHash } from '#lib/ticket-choice.svelte.ts';
 	import { scrollToElement } from '#lib/smooth-scroll.ts';
 	import { reveal } from '#lib/actions/reveal.ts';
 	import TextField from './TextField.svelte';
@@ -117,6 +119,7 @@
 			const saved = localStorage.getItem(DRAFT_KEY);
 			if (saved) {
 				const previous = { ...emptyDraft(), ...JSON.parse(saved), consent: false };
+				if (!isTicketType(previous.ticketType)) previous.ticketType = 'delegate';
 				restored = JSON.stringify(previous) !== JSON.stringify(emptyDraft());
 				draft = previous;
 			}
@@ -131,6 +134,29 @@
 		} catch {
 			/* storage unavailable: start fresh */
 		}
+		// A shared link such as /#register-visitor opens the form on that ticket; the
+		// browser scrolls to the matching anchor at the top of this section.
+		const fromLink = ticketFromHash(location.hash);
+		if (fromLink) selectTicket(fromLink);
+	});
+
+	const ticketPrice = (t: TicketType) => (t === 'visitor' ? siteConfig.visitorPriceRupees : siteConfig.priceRupees);
+
+	/**
+	 * Picks the ticket. Someone already on the payment step for the other ticket goes
+	 * back to the review step, where "Proceed to pay" re-registers them on this one.
+	 */
+	function selectTicket(ticket: TicketType) {
+		if (status === 'done') return;
+		draft.ticketType = ticket;
+		if (step === PAYMENT && pending && (pending.ticketType ?? 'delegate') !== ticket) goTo(REVIEW);
+	}
+
+	// The hero's "Register as Delegate / Visitor" buttons.
+	$effect(() => {
+		if (!ticketChoice.nonce) return;
+		const ticket = ticketChoice.ticket;
+		untrack(() => ticket && selectTicket(ticket));
 	});
 
 	function remember(key: string, value: unknown) {
@@ -380,10 +406,13 @@
 {#snippet allInterestsIcon()}<ListChecks size={18} strokeWidth={1.75} />{/snippet}
 
 <section class="register" id="register" aria-labelledby="register-title">
+	<!-- Targets for shared links that pick a ticket: /#register-visitor, /#register-delegate. -->
+	<span id="register-visitor" class="ticket-anchor" aria-hidden="true"></span>
+	<span id="register-delegate" class="ticket-anchor" aria-hidden="true"></span>
 	<div class="container grid">
 		<div class="main">
 			<header class="intro" use:reveal>
-				<span class="eyebrow">Delegate registration</span>
+				<span class="eyebrow">Delegate and visitor registration</span>
 				<h2 id="register-title">Reserve your seat in Salem</h2>
 				<p class="lead">
 					Five short steps, about three minutes. Your “I am attending” poster builds itself as you go. Once your
@@ -398,6 +427,19 @@
 						<TicketSent {posterUrl} email={pending.email} code={pending.code} utr={utrSent} onrestart={startOver} />
 					</div>
 				{:else}
+					{#if step !== PAYMENT}
+						<fieldset class="tickets">
+							<legend>Your ticket</legend>
+							{#each TICKET_TYPES as t (t)}
+								<label class="ticket-option" class:selected={draft.ticketType === t}>
+									<input type="radio" name="ticketType" value={t} checked={draft.ticketType === t} onchange={() => selectTicket(t)} />
+									<span class="ticket-name">{TICKET_LABEL[t]}</span>
+									<span class="ticket-price">{formatRupees(ticketPrice(t))}</span>
+								</label>
+							{/each}
+						</fieldset>
+					{/if}
+
 					<StepRoute steps={STEPS} current={step} {reached} onselect={goTo} />
 
 					{#if restored}
@@ -676,7 +718,7 @@
 										{/each}
 										<div class="ticket">
 											<div>
-												<strong>Delegate ticket</strong>
+												<strong>{TICKET_LABEL[draft.ticketType]} ticket · {formatRupees(ticketPrice(draft.ticketType))}</strong>
 												<span>Pay by UPI on the next step. Your ticket is emailed once the payment is confirmed.</span>
 											</div>
 										</div>
@@ -1015,6 +1057,69 @@
 		min-height: 36px;
 		font-size: 14px;
 		color: var(--gold-ink);
+	}
+
+	.ticket-anchor {
+		position: absolute;
+		top: 0;
+	}
+
+	.tickets {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+		margin: 0 0 var(--space-5);
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+
+	.tickets legend {
+		grid-column: 1 / -1;
+		margin-bottom: var(--space-2);
+		padding: 0;
+		font: var(--text-caption);
+		color: var(--text-supporting);
+	}
+
+	.ticket-option {
+		position: relative;
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-sm);
+		box-shadow: inset 0 0 0 1px var(--gold-line);
+		cursor: pointer;
+		transition: box-shadow 160ms ease, background-color 160ms ease;
+	}
+
+	.ticket-option.selected {
+		background: var(--gold-tint);
+		box-shadow: inset 0 0 0 2px var(--gold-ink);
+	}
+
+	.ticket-option:has(input:focus-visible) {
+		outline: 2px solid var(--gold-ink);
+		outline-offset: 2px;
+	}
+
+	.ticket-option input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.ticket-name {
+		font-weight: 600;
+		color: var(--charcoal);
+	}
+
+	.ticket-price {
+		font: var(--text-caption);
+		color: var(--text-supporting);
+		white-space: nowrap;
 	}
 
 	.ticket {

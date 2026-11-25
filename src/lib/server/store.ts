@@ -1,6 +1,6 @@
 import { dev } from '$app/env';
 import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/event-settings.ts';
-import { DEFAULT_PAYMENT, type PaymentSettings } from '#lib/payment.ts';
+import { DEFAULT_PAYMENT, isTicketType, priceFor, type PaymentSettings, type TicketType } from '#lib/payment.ts';
 import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 import { findVoucher, listVouchers } from './vouchers.ts';
@@ -31,6 +31,8 @@ export interface RegistrationInput {
 	heardFrom: string | null;
 	whatsappUpdates: boolean;
 	posterFraming: PosterFraming;
+	/** Delegate pass or Visitor ticket: same pass, different label and price. */
+	ticketType: TicketType;
 	amountRupees: number;
 }
 
@@ -136,6 +138,7 @@ function fromRow(r: Record<string, any>): Registration {
 		heardFrom: r.heard_from,
 		whatsappUpdates: r.whatsapp_updates,
 		posterFraming: r.poster_framing ?? { zoom: 1, dx: 0, dy: 0 },
+		ticketType: isTicketType(r.ticket_type) ? r.ticket_type : 'delegate',
 		amountRupees: Number(r.amount_rupees),
 		status: r.status,
 		upiTxnId: r.upi_txn_id,
@@ -198,19 +201,28 @@ export async function savePaymentSettings(settings: PaymentSettings, by: string)
 		mem.payment = { ...settings };
 		let repriced = 0;
 		for (const row of mem.rows.values()) {
-			if (row.status !== 'pending_payment' || row.voucherCode || row.amountRupees === settings.priceRupees) continue;
-			row.amountRupees = settings.priceRupees;
+			const price = priceFor(settings, row.ticketType);
+			if (row.status !== 'pending_payment' || row.voucherCode || row.amountRupees === price) continue;
+			row.amountRupees = price;
 			repriced++;
 		}
 		return repriced + (await syncVoucherHolders());
 	}
 	await writeSetting('payment', settings, by);
-	await ensureVoucherColumns();
+	await Promise.all([ensureVoucherColumns(), ensureTicketTypeColumn()]);
 	const rows = await sql()`
-		update registrations set amount_rupees = ${settings.priceRupees}, updated_at = now()
-		where status = 'pending_payment' and voucher_code is null and amount_rupees <> ${settings.priceRupees}
+		update registrations
+		set amount_rupees = case when ticket_type = 'visitor' then ${settings.visitorPriceRupees}::numeric else ${settings.priceRupees}::numeric end,
+			updated_at = now()
+		where status = 'pending_payment' and voucher_code is null
+			and amount_rupees <> case when ticket_type = 'visitor' then ${settings.visitorPriceRupees}::numeric else ${settings.priceRupees}::numeric end
 		returning id`;
 	return rows.length + (await syncVoucherHolders());
+}
+
+/** Added on first use when db/schema.sql has not been rerun. */
+async function ensureTicketTypeColumn() {
+	await ensureColumn('registrations', 'ticket_type', "text not null default 'delegate'");
 }
 
 /* ---------- vouchers ---------- */
@@ -303,6 +315,8 @@ export async function applyVoucher(code: string, email: string, rawVoucher: stri
 	const reg = await findForPayment(code, email);
 	if (!reg) return { ok: false, reason: 'not_found' };
 	if (reg.status !== 'pending_payment') return { ok: false, reason: 'not_pending' };
+	// Vouchers cover the delegate pass only.
+	if (voucher && reg.ticketType !== 'delegate') return { ok: false, reason: 'invalid' };
 	// Already holding this code: it stays theirs even if the voucher has since closed or filled up.
 	const already = !!voucher && reg.voucherCode === voucher.code;
 	if (voucher && !already && !voucher.active) return { ok: false, reason: 'closed' };
@@ -476,7 +490,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 		return row;
 	}
 
-	await ensureColumn('registrations', 'linkedin');
+	await Promise.all([ensureColumn('registrations', 'linkedin'), ensureTicketTypeColumn()]);
 	for (let attempt = 0; attempt < 4; attempt++) {
 		try {
 			const rows = await sql()`
@@ -484,13 +498,13 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 					code, full_name, email, phone, photo_key, poster_key,
 					company_name, designation, industry, about, website, linkedin,
 					city, interests, heard_from, consent, whatsapp_updates, poster_framing,
-					status, amount_rupees
+					status, ticket_type, amount_rupees
 				) values (
 					${newCode()}, ${input.fullName}, ${input.email}, ${input.phone}, ${input.photoKey}, ${input.posterKey},
 					${input.companyName}, ${input.designation}, ${input.industry}, ${input.about},
 					${input.website}, ${input.linkedin}, ${input.city}, ${input.interests}, ${input.heardFrom},
 					true, ${input.whatsappUpdates}, ${JSON.stringify(input.posterFraming)}::jsonb,
-					'pending_payment', ${input.amountRupees}
+					'pending_payment', ${input.ticketType}, ${input.amountRupees}
 				)
 				returning *`;
 			return fromRow(rows[0]);
@@ -511,6 +525,7 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 		const row: Registration = {
 			...prev,
 			...input,
+			...(input.ticketType === 'delegate' ? {} : { voucherCode: null, discountRupees: 0 }),
 			status: 'pending_payment',
 			upiTxnId: null,
 			paymentSubmittedAt: null,
@@ -521,7 +536,7 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 		mem.rows.set(id, row);
 		return row;
 	}
-	await ensureColumn('registrations', 'linkedin');
+	await Promise.all([ensureColumn('registrations', 'linkedin'), ensureTicketTypeColumn()]);
 	const rows = await sql()`
 		update registrations set
 			full_name = ${input.fullName}, email = ${input.email}, phone = ${input.phone},
@@ -531,6 +546,10 @@ export async function replaceRegistration(id: string, input: RegistrationInput):
 			city = ${input.city}, interests = ${input.interests},
 			heard_from = ${input.heardFrom}, whatsapp_updates = ${input.whatsappUpdates},
 			poster_framing = ${JSON.stringify(input.posterFraming)}::jsonb, amount_rupees = ${input.amountRupees},
+			ticket_type = ${input.ticketType},
+			-- Vouchers cover the delegate pass only: switching to a visitor ticket drops one.
+			voucher_code = case when ${input.ticketType} = 'delegate' then voucher_code end,
+			discount_rupees = case when ${input.ticketType} = 'delegate' then discount_rupees else 0 end,
 			status = 'pending_payment', upi_txn_id = null, payment_submitted_at = null,
 			reviewed_at = null, reviewed_by = null, rejection_reason = null, updated_at = now()
 		where id = ${id}

@@ -1,4 +1,4 @@
-import { formatRupees } from '#lib/payment.ts';
+import { TICKET_LABEL, formatRupees, isTicketType, type TicketType } from '#lib/payment.ts';
 import type { Category, ScanParticipant, ScanResult } from '#lib/ops/categories.ts';
 import { sql } from '../db.ts';
 import { evaluate, issue, certificateFor } from './certificates.ts';
@@ -32,6 +32,7 @@ interface Person {
 	status: 'pending_payment' | 'payment_submitted' | 'paid' | 'rejected';
 	amountRupees: number;
 	upiTxnId: string | null;
+	ticketType: TicketType;
 }
 
 /** Desk context passed to each operation. */
@@ -77,7 +78,9 @@ function notConfirmed(p: Person): ScanResult {
 
 async function loadPerson(id: string): Promise<Person | null> {
 	const rows = await sql()`
-		select id, code, full_name, designation, company_name, status, amount_rupees, upi_txn_id
+		select id, code, full_name, designation, company_name, status, amount_rupees, upi_txn_id,
+			-- Read through jsonb so a database without the column yet still scans (as delegates).
+			to_jsonb(registrations) ->> 'ticket_type' as ticket_type
 		from registrations where id = ${id}`;
 	const r = rows[0];
 	return r
@@ -89,7 +92,8 @@ async function loadPerson(id: string): Promise<Person | null> {
 				companyName: r.company_name,
 				status: r.status,
 				amountRupees: Number(r.amount_rupees),
-				upiTxnId: r.upi_txn_id
+				upiTxnId: r.upi_txn_id,
+				ticketType: isTicketType(r.ticket_type) ? r.ticket_type : 'delegate'
 			}
 		: null;
 }
@@ -134,7 +138,7 @@ async function ticket({ event, person }: Desk): Promise<ScanResult> {
 					: 'Rejected';
 	const facts = [
 		{ label: 'Participant ID', value: person.code },
-		{ label: 'Ticket', value: 'Delegate' },
+		{ label: 'Ticket', value: TICKET_LABEL[person.ticketType] },
 		{ label: 'Registration', value: person.status === 'rejected' ? 'Rejected' : 'Registered' },
 		{ label: 'Payment', value: payment },
 		{ label: 'Approval', value: person.status === 'paid' ? 'Approved' : person.status === 'rejected' ? 'Rejected' : 'Pending' }
@@ -145,7 +149,7 @@ async function ticket({ event, person }: Desk): Promise<ScanResult> {
 		outcome: 'success',
 		code: 'VALID_TICKET',
 		title: 'VALID TICKET',
-		message: 'Confirmed delegate. They can go through.',
+		message: `Confirmed ${TICKET_LABEL[person.ticketType].toLowerCase()}. They can go through.`,
 		participant: participantOf(person),
 		facts
 	};

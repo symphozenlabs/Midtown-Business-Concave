@@ -49,7 +49,7 @@
 					<span class="photo initials" aria-hidden="true">{data.profile.fullName.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>
 				{/if}
 				<div>
-					<span class="ops-eyebrow"><BadgeCheck size={14} aria-hidden="true" /> Confirmed delegate · {data.profile.code}</span>
+					<span class="ops-eyebrow"><BadgeCheck size={14} aria-hidden="true" /> Confirmed {data.profile.ticket.toLowerCase()} · {data.profile.code}</span>
 					<h1 id="name" class="ops-title name">{data.profile.fullName}</h1>
 					<p class="role">{data.profile.designation}, {data.profile.companyName}</p>
 				</div>

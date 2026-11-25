@@ -1,3 +1,4 @@
+import { TICKET_LABEL, isTicketType } from '#lib/payment.ts';
 import { ensureColumn, sql } from '../db.ts';
 import { audit } from './event.ts';
 
@@ -71,12 +72,15 @@ export interface PassHolder extends PublicProfile {
 	email: string;
 	phone: string;
 	linkedin: string | null;
+	/** "Delegate" or "Visitor". */
+	ticket: string;
 }
 
 export async function passHolder(registrationId: string): Promise<PassHolder | null> {
 	await ensureColumn('registrations', 'linkedin');
 	const rows = await sql()`
-		select id, code, full_name, email, phone, designation, company_name, industry, city, about, website, linkedin, interests, photo_key
+		select id, code, full_name, email, phone, designation, company_name, industry, city, about, website, linkedin, interests, photo_key,
+			to_jsonb(registrations) ->> 'ticket_type' as ticket_type
 		from registrations where id = ${registrationId} and status = 'paid'`;
 	const r = rows[0];
 	if (!r) return null;
@@ -87,7 +91,8 @@ export async function passHolder(registrationId: string): Promise<PassHolder | n
 		photoKey: r.photo_key ?? null,
 		email: r.email,
 		phone: r.phone,
-		linkedin: r.linkedin ?? null
+		linkedin: r.linkedin ?? null,
+		ticket: TICKET_LABEL[isTicketType(r.ticket_type) ? r.ticket_type : 'delegate']
 	};
 }
 

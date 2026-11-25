@@ -7,6 +7,7 @@
  */
 
 import { eventLabels, type EventSettings } from '#lib/event-settings.ts';
+import { TICKET_LABEL, type TicketType } from '#lib/payment.ts';
 
 export interface PosterAssets {
 	sef: HTMLImageElement;
@@ -510,6 +511,8 @@ export interface BackState {
 	qr: CanvasImageSource;
 	/** The saved schedule, so the artwork's date and time strip matches the front. */
 	event?: EventSettings | null;
+	/** Ticket bought; a visitor's card reads VISITOR PASS. Defaults to the delegate pass. */
+	ticketType?: TicketType;
 }
 
 const BACK = {
@@ -679,7 +682,7 @@ export function renderBack(canvas: HTMLCanvasElement, st: BackState, A: PosterAs
 	const e = BACK.eyebrow;
 	ctx.save();
 	ctx.textBaseline = 'alphabetic';
-	drawEyebrow(ctx, 'DELEGATE PASS', 540, e.y, e.size, e.track, e.line);
+	drawEyebrow(ctx, `${TICKET_LABEL[st.ticketType ?? 'delegate'].toUpperCase()} PASS`, 540, e.y, e.size, e.track, e.line);
 	ctx.restore();
 
 	drawBackQr(ctx, st.qr);
@@ -693,6 +696,7 @@ export interface BackFileInput {
 	/** What the QR encodes: the delegate's pass link. */
 	qrText: string;
 	event?: EventSettings | null;
+	ticketType?: TicketType;
 }
 
 /** Renders the ID card back as a 4K JPEG, the same size as the front. */
@@ -706,7 +710,7 @@ export async function renderBackFile(input: BackFileInput, width = POSTER_UHD_WI
 		color: { dark: '#0b1430', light: '#ffffff' }
 	});
 	const canvas = document.createElement('canvas');
-	renderBack(canvas, { code: input.code, qr, event: input.event }, assets, width);
+	renderBack(canvas, { code: input.code, qr, event: input.event, ticketType: input.ticketType }, assets, width);
 	const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
 	canvas.width = 0;
 	canvas.height = 0;

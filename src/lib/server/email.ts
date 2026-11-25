@@ -179,7 +179,7 @@ export async function sendTicketEmail(
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0b1430;border-radius:10px;">
 <tr><td style="padding:16px 18px;color:#e9dfc9;font-size:14px;line-height:1.8;">
 <strong style="color:#ffffff;">Registration number:</strong> <span style="color:#f7d07d;letter-spacing:1px;">${escape(reg.code)}</span><br>
-<strong style="color:#ffffff;">Delegate:</strong> ${escape(reg.fullName)}, ${escape(reg.designation)}, ${escape(reg.companyName)}<br>
+<strong style="color:#ffffff;">${reg.ticketType === 'visitor' ? 'Visitor' : 'Delegate'}:</strong> ${escape(reg.fullName)}, ${escape(reg.designation)}, ${escape(reg.companyName)}<br>
 <strong style="color:#ffffff;">Paid:</strong> ${escape(formatRupees(reg.amountRupees))}${reg.upiTxnId ? ` (UPI ref ${escape(reg.upiTxnId)})` : ''}
 </td></tr></table>`;
 	const name = slug(reg.fullName);

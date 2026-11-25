@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { CalendarDays, Clock, Handshake, ListOrdered, MapPin, Store, Ticket } from '@lucide/svelte';
+	import { CalendarDays, Clock, Handshake, ListOrdered, MapPin, Store, Ticket, UserRound } from '@lucide/svelte';
 	import { agenda, loadAgenda } from '#lib/agenda.svelte.ts';
 	import { EVENT } from '#lib/event.ts';
 	import { eventLabels } from '#lib/event-settings.ts';
 	import { loadSiteConfig, siteConfig } from '#lib/site-config.svelte.ts';
+	import { chooseTicket } from '#lib/ticket-choice.svelte.ts';
 	import Countdown from './Countdown.svelte';
 	import HeroBackdrop from './HeroBackdrop.svelte';
 	import Skyline from './Skyline.svelte';
@@ -87,8 +88,11 @@
 				<div class="register-as">
 					<span class="register-title" id="register-as">Register as</span>
 					<nav class="roles" aria-labelledby="register-as">
-						<a href="#register" class="btn btn-gold">
+						<a href="#register" class="btn btn-gold" onclick={() => chooseTicket('delegate')}>
 							<Ticket size={18} aria-hidden="true" /> Delegate
+						</a>
+						<a href="#register" class="btn btn-ghost-gold" onclick={() => chooseTicket('visitor')}>
+							<UserRound size={18} aria-hidden="true" /> Visitor
 						</a>
 						<a href="#book-stall" class="btn btn-ghost-gold">
 							<Store size={18} aria-hidden="true" /> Exhibitor
@@ -475,7 +479,7 @@
 
 		.roles {
 			display: grid;
-			grid-template-columns: repeat(3, minmax(0, 1fr));
+			grid-template-columns: repeat(4, minmax(0, 1fr));
 			gap: var(--space-2);
 		}
 

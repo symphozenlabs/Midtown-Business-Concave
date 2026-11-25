@@ -28,7 +28,7 @@ const ensured = new Map<string, Promise<void>>();
 export function ensureColumn(
 	table: 'registrations' | 'event_handlers',
 	column: string,
-	type: 'text' | 'numeric(10, 2) not null default 0' = 'text'
+	type: 'text' | 'numeric(10, 2) not null default 0' | "text not null default 'delegate'" = 'text'
 ) {
 	if (!/^[a-z_]+$/.test(column)) throw new Error(`Bad column name: ${column}`);
 	const key = `${table}.${column}`;

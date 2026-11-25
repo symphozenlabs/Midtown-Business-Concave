@@ -1,5 +1,6 @@
 import { isValidEventSettings, type EventSettings } from './event-settings.ts';
 import type { RegistrationDraft } from './registration';
+import type { TicketType } from './payment.ts';
 
 export class SubmitError extends Error {
 	constructor(
@@ -19,6 +20,8 @@ export interface PendingRegistration {
 	amountRupees: number;
 	vpa: string;
 	payeeName: string;
+	/** Optional: registrations saved by an older page lack it, and those are delegate passes. */
+	ticketType?: TicketType;
 	/** The fee before the voucher. Optional: registrations saved by an older page lack these. */
 	priceRupees?: number;
 	voucherCode?: string | null;
@@ -141,18 +144,20 @@ export async function fetchPaymentDetails(pending: PendingRegistration): Promise
 
 export interface SiteConfig {
 	priceRupees: number | null;
+	visitorPriceRupees: number | null;
 	event: EventSettings | null;
 }
 
 /** Current ticket price and event schedule, as set on the dashboard. */
 export async function fetchSiteConfig(): Promise<SiteConfig> {
-	const none: SiteConfig = { priceRupees: null, event: null };
+	const none: SiteConfig = { priceRupees: null, visitorPriceRupees: null, event: null };
 	try {
 		const res = await fetch('/api/config');
 		if (!res.ok) return none;
 		const data = await res.json();
 		return {
 			priceRupees: typeof data.priceRupees === 'number' ? data.priceRupees : null,
+			visitorPriceRupees: typeof data.visitorPriceRupees === 'number' ? data.visitorPriceRupees : null,
 			event: isValidEventSettings(data.event) ? { startsAt: data.event.startsAt, endsAt: data.event.endsAt } : null
 		};
 	} catch {
