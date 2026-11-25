@@ -443,7 +443,7 @@ export async function removeLead(bookingIds: string[], bookingId: string, regist
 	return rows.length > 0;
 }
 
-/** The registration behind a typed registration number (MBC-XXXXXX), for the manual lookup. */
+/** The registration behind a typed registration number (MBC-XXXXXX or MBCV-XXXXXX), for the manual lookup. */
 export async function registrationByCode(code: string): Promise<string | null> {
 	const rows = await sql()`select id from registrations where code = ${code} and status = 'paid'`;
 	return (rows[0]?.id as string | undefined) ?? null;

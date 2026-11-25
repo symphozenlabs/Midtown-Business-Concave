@@ -104,7 +104,7 @@
 								<option value="rejected">Rejected</option>
 							</select>
 						</label>
-						<label class="ops-label">Participant<input name="q" value={data.filter.q} placeholder="Name or MBC-…" autocomplete="off" /></label>
+						<label class="ops-label">Participant<input name="q" value={data.filter.q} placeholder="Name, MBC-… or MBCV-…" autocomplete="off" /></label>
 						<label class="ops-label">Date<input type="date" name="date" value={data.filter.date} /></label>
 						<label class="ops-label">From<input type="time" name="from" value={data.filter.from} /></label>
 						<label class="ops-label">Until<input type="time" name="to" value={data.filter.to} /></label>

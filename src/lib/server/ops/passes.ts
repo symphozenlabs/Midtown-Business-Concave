@@ -1,4 +1,5 @@
 import { dev } from '$app/env';
+import { REGISTRATION_CODE } from '#lib/registration-code.ts';
 import { PASS_SECRET } from '$app/env/private';
 import type { EventSettings } from '#lib/event-settings.ts';
 import { sql } from '../db.ts';
@@ -28,7 +29,7 @@ async function sign(purpose: string, ...parts: (string | number)[]) {
 }
 
 const TOKEN = /^[A-Za-z0-9_-]{22}$/;
-const CODE = /^MBC-[A-Z0-9]{6}$/;
+const CODE = REGISTRATION_CODE;
 
 export interface Pass {
 	registrationId: string;

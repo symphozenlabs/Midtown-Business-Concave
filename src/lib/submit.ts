@@ -1,6 +1,7 @@
 import { isValidEventSettings, type EventSettings } from './event-settings.ts';
 import type { RegistrationDraft } from './registration';
 import type { TicketType } from './payment.ts';
+import { isRegistrationCode } from './registration-code.ts';
 
 export class SubmitError extends Error {
 	constructor(
@@ -32,11 +33,15 @@ export interface PendingRegistration {
 export type PaymentDetails = Pick<
 	PendingRegistration,
 	'amountRupees' | 'vpa' | 'payeeName' | 'priceRupees' | 'voucherCode' | 'discountRupees'
->;
+> & {
+	/** Present when the server sends it: an older visitor code may have moved from MBC- to MBCV-. */
+	code?: string;
+};
 
 function readDetails(data: any): PaymentDetails | null {
 	if (typeof data?.amountRupees !== 'number' || typeof data.vpa !== 'string' || typeof data.payeeName !== 'string') return null;
 	return {
+		...(typeof data.code === 'string' && isRegistrationCode(data.code) ? { code: data.code } : {}),
 		amountRupees: data.amountRupees,
 		vpa: data.vpa,
 		payeeName: data.payeeName,

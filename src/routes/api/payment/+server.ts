@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { isRegistrationCode } from '#lib/registration-code.ts';
 import { normaliseUtr } from '#lib/payment.ts';
 import { isStoreAvailable, submitPayment } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const free = body?.free === true;
 	const utr = free ? null : normaliseUtr(typeof body?.utr === 'string' ? body.utr : '');
 
-	if (!/^MBC-[A-Z0-9]{6}$/.test(code) || !email) {
+	if (!isRegistrationCode(code) || !email) {
 		return json({ message: 'We could not find your registration. Please register again.' }, { status: 400 });
 	}
 	if (!free && !utr) {

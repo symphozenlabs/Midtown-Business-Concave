@@ -135,7 +135,7 @@
 	<form class="manual" onsubmit={onManual}>
 		<label for="manual-code"><Keyboard size={15} aria-hidden="true" /> Camera not working? Type the registration number</label>
 		<div class="row">
-			<input id="manual-code" bind:value={code} placeholder="MBC-XXXXXX" autocomplete="off" autocapitalize="characters" maxlength="20" />
+			<input id="manual-code" bind:value={code} placeholder="MBC-XXXXXX or MBCV-XXXXXX" autocomplete="off" autocapitalize="characters" maxlength="20" />
 			<button type="submit" class="btn btn-secondary" disabled={busy || !code.trim()}>Add</button>
 		</div>
 	</form>
