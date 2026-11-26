@@ -173,11 +173,13 @@ database (they would appear in the real directory and the ticket queue). Run `db
 
 ## Stall directory
 
-**`/stallDirectory`** is public: every confirmed stall on the floor map and in a list (business, contact name, stall
-number; never phone or email), searchable by business, name or stall number. Tap a stall to see who is there.
+There is no public stall page. The stalls are the **Stalls** tab of the visitors directory
+(`/visitorDirectory?tab=stalls`), so only signed-in delegates see them: every confirmed stall on the floor map and in a
+list (business, contact name, stall number; never phone or email), searchable by business, name or stall number. Old
+`/stallDirectory` and `/stallDirectory/<booking id>` links redirect there.
 
-- **Delegates message a stall** from its page (`/stallDirectory/<booking id>`), signed in with the same "Open my
-  pass" cookie as the visitors directory. The same limits apply (3 unanswered messages, 30 new conversations a day,
+- **Delegates message a stall** from its page (`/visitorDirectory/stalls/<booking id>`), signed in with the "Open my
+  pass" cookie. Stall conversations appear in the directory's Messages tab with the people ones. The same limits apply (3 unanswered messages, 30 new conversations a day,
   the delegate's own and the organiser's messaging switches, the closing time).
 - **Exhibitors sign in** at the same `/login` page as organisers and event handlers, with the email they booked with as the login and their 10-digit
   mobile number as the password. Every confirmed booking under that email and phone is one exhibitor. Their area has

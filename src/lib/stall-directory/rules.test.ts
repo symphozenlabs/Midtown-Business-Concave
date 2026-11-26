@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STALL_NUMBERS } from '../stall-booking.ts';
 import {
-	FLOOR, STALL_SPOTS, byStall, canonicalStallDirectoryPath, delegateBlocker, exhibitorBlocker, matchesStall, stallSide,
+	FLOOR, STALL_SPOTS, byStall, canonicalStallDirectoryPath, delegateBlocker, movedStallDirectoryPath, exhibitorBlocker, matchesStall, stallSide,
 	type DelegateFacts, type Exhibitor
 } from './rules.ts';
 
@@ -107,5 +107,21 @@ describe('canonicalStallDirectoryPath', () => {
 		expect(canonicalStallDirectoryPath('/stallDirectory')).toBeNull();
 		expect(canonicalStallDirectoryPath('/stallDirectoryX')).toBeNull();
 		expect(canonicalStallDirectoryPath('/stalls')).toBeNull();
+	});
+});
+
+describe('movedStallDirectoryPath', () => {
+	const id = '0b6c3c7e-2f4a-4d8e-9a51-6f1e2d3c4b5a';
+	it('sends the old directory to the stalls tab', () => {
+		expect(movedStallDirectoryPath('/stallDirectory')).toBe('/visitorDirectory?tab=stalls');
+		expect(movedStallDirectoryPath('/stallDirectory/')).toBe('/visitorDirectory?tab=stalls');
+	});
+	it('sends a stall page to its new place', () => {
+		expect(movedStallDirectoryPath(`/stallDirectory/${id}`)).toBe(`/visitorDirectory/stalls/${id}`);
+	});
+	it('leaves the exhibitor area and the cards alone', () => {
+		expect(movedStallDirectoryPath('/stallDirectory/exhibitor')).toBeNull();
+		expect(movedStallDirectoryPath('/stallDirectory/exhibitor/stalls')).toBeNull();
+		expect(movedStallDirectoryPath('/stallDirectory/card/abc.def')).toBeNull();
 	});
 });

@@ -23,25 +23,22 @@ export const prerender = false;
 
 const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
+/** A stall in the visitors directory: who they are, where they are, and the delegate's conversation with them. */
 export const load: PageServerLoad = async ({ cookies, params }) => {
 	if (!isUuid(params.stall)) error(404, 'Not found');
+	// Only signed-in delegates see the stalls, like the people in the directory.
+	const viewer = await directoryViewer(cookies);
+	if (viewer.state !== 'open') return { state: viewer.state };
+
 	const [exhibitor, exhibitors, messaging] = await Promise.all([getExhibitor(params.stall), listExhibitors(), stallDirectoryReady()]);
 	if (!exhibitor) error(404, 'Not found');
-	const base = { exhibitor, exhibitors, messaging };
-	if (!messaging) return { ...base, chat: { state: 'off' as const } };
-
-	const viewer = await directoryViewer(cookies);
-	if (viewer.state === 'signed-out' || viewer.state === 'not-ready') return { ...base, chat: { state: 'signed-out' as const } };
-	if (viewer.state === 'unpaid') return { ...base, chat: { state: 'unpaid' as const } };
-	if (viewer.state === 'closed') return { ...base, chat: { state: 'closed' as const } };
+	const base = { state: viewer.state, exhibitor, exhibitors };
+	if (!messaging) return { ...base, chat: null };
 
 	const thread = await delegateThread(viewer.me, exhibitor.id, false);
 	const messages = thread.conversationId ? await stallMessagesIn(thread.conversationId, 'delegate', { registrationId: viewer.me.id }) : [];
 	if (thread.conversationId) await markStallRead(thread.conversationId, 'delegate');
-	return {
-		...base,
-		chat: { state: 'open' as const, conversationId: thread.conversationId, messages, blocker: delegateBlocker(thread.facts) }
-	};
+	return { ...base, chat: { conversationId: thread.conversationId, messages, blocker: delegateBlocker(thread.facts) } };
 };
 
 export const actions: Actions = {

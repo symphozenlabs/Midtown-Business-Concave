@@ -1,26 +1,28 @@
 <script lang="ts">
 	import { ArrowLeft } from '@lucide/svelte';
 	import ChatPanel from '#lib/components/directory/ChatPanel.svelte';
-	import DelegateSignIn from '#lib/components/directory/DelegateSignIn.svelte';
+	import DirectoryState from '#lib/components/directory/DirectoryState.svelte';
 	import FloorMap from '#lib/components/directory/FloorMap.svelte';
 	import PublicShell from '#lib/components/ops/PublicShell.svelte';
-	import { SIDE_LABEL, stallSide } from '#lib/stall-directory/rules.ts';
+	import { STALLS_TAB_PATH, SIDE_LABEL, stallSide } from '#lib/stall-directory/rules.ts';
 
 	let { data } = $props();
-
-	const e = $derived(data.exhibitor);
-	const side = $derived(e.stall ? stallSide(e.stall) : null);
 </script>
 
 <svelte:head>
-	<title>{e.businessName} · Stall directory · Midtown Business Conclave</title>
+	<title>{data.state === 'open' ? `${data.exhibitor.businessName} · ` : ''}Visitors directory · Midtown Business Conclave</title>
 </svelte:head>
 
-<PublicShell subtitle="Stall directory" wide>
+<PublicShell subtitle="Visitors directory" wide={data.state === 'open'}>
+	{#if data.state !== 'open'}
+		<DirectoryState screen={data.state} />
+	{:else}
+	{@const e = data.exhibitor}
+	{@const side = e.stall ? stallSide(e.stall) : null}
 	<div class="layout">
 	<div class="main">
 	<header class="stall-head">
-		<a class="back" href="/stallDirectory{e.stall ? `?stall=${e.stall}` : ''}" aria-label="Back to the stall directory"><ArrowLeft size={22} aria-hidden="true" /></a>
+		<a class="back" href={STALLS_TAB_PATH} aria-label="Back to the stalls"><ArrowLeft size={22} aria-hidden="true" /></a>
 		<span class="num" class:none={e.stall === null} aria-hidden="true">{e.stall ?? '–'}</span>
 		<div class="who">
 			<h1>{e.businessName}</h1>
@@ -29,13 +31,13 @@
 	</header>
 
 	{#if e.stall}
-		<details class="panel map phone-only" open={data.chat.state !== 'open' || data.chat.messages.length === 0}>
+		<details class="panel map phone-only" open={!data.chat || data.chat.messages.length === 0}>
 			<summary>Where to find them{#if side}: <span>{SIDE_LABEL[side]}</span>{/if}</summary>
 			<FloorMap exhibitors={data.exhibitors} selected={e.stall} />
 		</details>
 	{/if}
 
-	{#if data.chat.state === 'open'}
+	{#if data.chat}
 		<ChatPanel
 			messages={data.chat.messages}
 			conversationId={data.chat.conversationId}
@@ -44,14 +46,6 @@
 			blocker={data.chat.blocker}
 			emptyText="Say hello. Tell them what you’d like to know, or when you’ll drop by stall {e.stall ?? ''}."
 		/>
-	{:else if data.chat.state === 'signed-out'}
-		<section class="panel">
-			<DelegateSignIn next="/stallDirectory/{e.id}" lead="Registered for the conclave? Sign in to message {e.businessName}." />
-		</section>
-	{:else if data.chat.state === 'unpaid'}
-		<p class="note">You can message exhibitors once your registration payment is confirmed.</p>
-	{:else if data.chat.state === 'closed'}
-		<p class="note">Messaging has closed. Thank you for joining us.</p>
 	{/if}
 	</div>
 
@@ -64,6 +58,7 @@
 		</aside>
 	{/if}
 	</div>
+	{/if}
 </PublicShell>
 
 <style>
@@ -172,10 +167,5 @@
 	}
 	.map[open] summary {
 		margin-bottom: var(--space-3);
-	}
-	.note {
-		padding: var(--space-4);
-		color: var(--text-supporting);
-		text-align: center;
 	}
 </style>

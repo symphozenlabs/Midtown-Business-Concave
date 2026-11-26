@@ -2,7 +2,7 @@ import { json, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { SITE_URL } from '#lib/event.ts';
 import { DIRECTORY_PATH, canonicalDirectoryPath } from '#lib/directory/rules.ts';
-import { STALL_DIRECTORY_PATH, canonicalStallDirectoryPath } from '#lib/stall-directory/rules.ts';
+import { STALL_DIRECTORY_PATH, canonicalStallDirectoryPath, movedStallDirectoryPath } from '#lib/stall-directory/rules.ts';
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 import { SESSION_COOKIE as HANDLER_COOKIE, readHandlerSession } from '#lib/server/ops/handlers.ts';
 import { opsReady } from '#lib/server/ops/event.ts';
@@ -27,6 +27,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (directory) redirect(308, directory + event.url.search);
 	const stallDirectory = canonicalStallDirectoryPath(pathname);
 	if (stallDirectory) redirect(308, stallDirectory + event.url.search);
+	// The stalls are now a tab of the visitors directory; old links still land there.
+	const moved = movedStallDirectoryPath(pathname);
+	if (moved) redirect(308, moved);
 
 	checkDirectoryPurge(event);
 

@@ -58,14 +58,14 @@ export async function sendExhibitorLoginEmail(b: StallBooking, kit: ExhibitorKit
 	const stall = b.allottedStall ? ` (stall No. ${b.allottedStall})` : '';
 	const html = layout(
 		`Your stall QR and login, ${escape(first(b.fullName))}.`,
-		`<p style="margin:0 0 12px;">${escape(b.businessName)}${escape(stall)} is listed in the stall directory with the floor map, so delegates can find you and message you.</p>
+		`<p style="margin:0 0 12px;">${escape(b.businessName)}${escape(stall)} is listed in the visitors directory with the floor map, so delegates can find you and message you.</p>
 ${blocks.html}
 <p style="margin:0;font-size:12px;color:#a69c8a;">Keep the login to yourself: anyone with it can read your stall’s messages and leads.</p>`,
 		when
 	);
 	const text = `Your stall QR and login, ${first(b.fullName)}.
 
-${b.businessName}${stall} is listed in the stall directory with the floor map, so delegates can find you and message you.
+${b.businessName}${stall} is listed in the visitors directory with the floor map, so delegates can find you and message you.
 
 ${blocks.text}
 
@@ -79,7 +79,7 @@ export async function sendExhibitorMessageEmail(
 	from: { fullName: string; designation: string; companyName: string },
 	link: string
 ) {
-	return sendMessageEmail(b.email, from, link, `the stall directory (${b.businessName})`);
+	return sendMessageEmail(b.email, from, link, `the visitors directory (${b.businessName})`);
 }
 
 /** Sent when an organiser confirms a stall booking's payment. With the kit, it carries the stall QR and login. */

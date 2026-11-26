@@ -7,8 +7,8 @@ export const prerender = false;
 
 /**
  * The stall types open for booking, with their prices, and the confirmed stalls:
- * taken numbers for the booking form, and who is on each for the floor map (the same
- * public details as the stall directory).
+ * taken numbers for the booking form, and who is on each for its floor map (business
+ * name and stall number only).
  */
 export const GET: RequestHandler = async () => {
 	if (!isBookingStoreAvailable) return json({ offers: [], taken: [], exhibitors: [] }, { status: 503 });

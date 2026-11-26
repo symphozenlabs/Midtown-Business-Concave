@@ -287,7 +287,7 @@
 			{#if pickedInfo.e?.own}
 				<a class="act" href="/stallDirectory/exhibitor">My stall</a>
 			{:else if pickedInfo.e && canMessage}
-				<a class="act" href="/stallDirectory/{pickedInfo.e.id}" aria-label="Message {pickedInfo.e.businessName}">
+				<a class="act" href="/visitorDirectory/stalls/{pickedInfo.e.id}" aria-label="Message {pickedInfo.e.businessName}">
 					<MessageCircle size={19} aria-hidden="true" /> Message
 				</a>
 			{:else if onpick}

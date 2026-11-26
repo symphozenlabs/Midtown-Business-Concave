@@ -526,8 +526,9 @@ create table if not exists push_subscriptions (
 create index if not exists push_subscriptions_registration_idx on push_subscriptions (registration_id);
 
 -- ============================================================================
--- Stall directory (/stallDirectory): anyone sees the confirmed stalls on the floor
--- map; signed-in delegates message a stall and the exhibitor replies after signing
+-- Stall directory: the confirmed stalls are the Stalls tab of the visitors directory
+-- (/visitorDirectory?tab=stalls, delegates only); a delegate messages a stall and the
+-- exhibitor replies from /stallDirectory/exhibitor after signing
 -- in with the booking email and mobile number. Exhibitors scan delegates' passes to
 -- collect leads. src/lib/server/stall-directory/store.ts also creates these on first use.
 -- ============================================================================

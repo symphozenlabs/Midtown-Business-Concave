@@ -61,7 +61,7 @@
 								<rect x={spot.x} y={spot.y} width={spot.w} height={spot.h} rx="6" />
 							</g>
 						{:else}
-							<a href="/stallDirectory/{e.id}" class="spot taken" class:selected={selected === n} class:dim aria-label="Stall {n}: {e.businessName}">
+							<a href="/visitorDirectory/stalls/{e.id}" class="spot taken" class:selected={selected === n} class:dim aria-label="Stall {n}: {e.businessName}">
 								<rect x={spot.x} y={spot.y} width={spot.w} height={spot.h} rx="6" />
 							</a>
 						{/if}
