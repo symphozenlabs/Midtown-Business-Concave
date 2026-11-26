@@ -327,11 +327,11 @@
 								<dl class="summary">
 									<div><dt>Stall</dt><dd>{booking.stallType}</dd></div>
 									<div><dt>Preferred stall</dt><dd>{booking.preferredStall ?? 'No preference'}</dd></div>
-									<div><dt>Price</dt><dd>{formatRupees(booking.priceRupees)}</dd></div>
+									<div><dt>Price</dt><dd class="money">{formatRupees(booking.priceRupees)}</dd></div>
 									{#if booking.discountRupees > 0}
-										<div><dt>Promo {booking.voucherCode}</dt><dd>−{formatRupees(booking.discountRupees)}</dd></div>
+										<div><dt>Promo {booking.voucherCode}</dt><dd class="money">−{formatRupees(booking.discountRupees)}</dd></div>
 									{/if}
-									<div class="total"><dt>To pay</dt><dd>{formatRupees(booking.amountRupees)}</dd></div>
+									<div class="total"><dt>To pay</dt><dd class="money">{formatRupees(booking.amountRupees)}</dd></div>
 								</dl>
 								{#if booking.amountRupees > 0}
 									<TextField
@@ -341,8 +341,8 @@
 										required
 										inputmode="numeric"
 										maxlength={14}
-										placeholder="12 digits, e.g. 412345678901"
-										help="Find it as UPI Ref No. or UTR on your payment receipt."
+										placeholder="e.g. 412345678901"
+										help="The 12-digit UPI Ref No. or UTR on your payment receipt."
 										error={utrError}
 									/>
 								{/if}
@@ -482,7 +482,7 @@
 										<input
 											id="stall-promo"
 											bind:value={promoInput}
-											placeholder="Have a code? Enter it here"
+											placeholder="Enter promo code"
 											autocomplete="off"
 											autocapitalize="characters"
 											spellcheck="false"
@@ -604,6 +604,14 @@
 		border: 1px solid var(--rule);
 		border-radius: var(--radius-lg);
 		scroll-margin-top: 24px;
+	}
+
+	.step,
+	.fields,
+	.checkout,
+	.details,
+	.promo {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.step {
@@ -774,7 +782,9 @@
 	}
 
 	.promo-row input {
-		flex: 1;
+		/* Zero basis: the input's intrinsic ~20ch width must not set the form's minimum width. */
+		flex: 1 1 0;
+		width: 0;
 		min-width: 0;
 		min-height: 48px;
 		padding: 0 var(--space-4);
@@ -884,6 +894,8 @@
 
 	.qr-card {
 		display: grid;
+		/* One shrinkable column: the long UPI ID must not size the card's contents. */
+		grid-template-columns: minmax(0, 1fr);
 		justify-items: center;
 		gap: var(--space-2);
 		padding: var(--space-6) var(--space-6) var(--space-4);
@@ -924,6 +936,13 @@
 		font-weight: 600;
 	}
 
+	.payee,
+	.vpa,
+	.ref {
+		max-width: 100%;
+		overflow-wrap: anywhere;
+	}
+
 	.vpa {
 		border: 0;
 		background: none;
@@ -943,6 +962,7 @@
 	}
 
 	.ref strong {
+		white-space: nowrap;
 		color: var(--gold-bright);
 	}
 
@@ -973,6 +993,11 @@
 		text-align: right;
 	}
 
+	.summary .money {
+		flex: none;
+		white-space: nowrap;
+	}
+
 	.summary .total {
 		padding-top: var(--space-2);
 		border-top: 1px solid var(--rule);
@@ -998,6 +1023,12 @@
 
 	.done p {
 		color: var(--text-body);
+	}
+
+	/* Long emails / business names have no break points. */
+	.done p,
+	.step-head p {
+		overflow-wrap: anywhere;
 	}
 
 	/* Side: layout and price */
@@ -1153,6 +1184,19 @@
 
 		.checkout .btn-primary {
 			justify-self: stretch;
+		}
+
+		/* Primary action on top, full width; "Start over" below it. */
+		.nav {
+			flex-direction: column-reverse;
+		}
+
+		.nav .btn {
+			width: 100%;
+		}
+
+		.qr-card {
+			padding-inline: var(--space-4);
 		}
 	}
 
