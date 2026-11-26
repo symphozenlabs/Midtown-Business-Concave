@@ -57,7 +57,7 @@ SvelteKit 3 · Svelte 5 · TypeScript · Neon Postgres · Cloudflare R2 · Resen
 - **Promo code SEFMEMBER** (25% off stalls) is added to the vouchers the first time the site needs it, and is
   edited, limited or closed under `/admin/payments` → Stalls like any other voucher.
 - `/admin/stalls` lists bookings: **Mark paid and email** needs the final stall and locks it. The confirmation email
-  (same template) gives the stall number, the stall directory login and the stall QR (attached). **Reject** with a
+  (same template) gives the stall number, the stall login with Open my messages / Open my leads links, and the stall QR (attached). **Reject** with a
   note, or **Delete booking** (removes it with its messages and leads and frees the stall; no email). For exhibitors
   confirmed before these existed, the **n stall QR + login emails waiting to be sent** button emails them in one
   click; **Resend stall QR + login** in a confirmed booking's Manage sends one again.
@@ -174,15 +174,17 @@ database (they would appear in the real directory and the ticket queue). Run `db
 ## Stall directory
 
 There is no public stall page. The stalls are the **Stalls** tab of the visitors directory
-(`/visitorDirectory?tab=stalls`), so only signed-in delegates see them: every confirmed stall on the floor map and in a
-list (business, contact name, stall number; never phone or email), searchable by business, name or stall number. Old
+(`/visitorDirectory?tab=stalls`), so only signed-in delegates see them: every confirmed stall in a list laid out like
+People (business, contact name, stall number; never phone or email), searchable by business, name or stall number,
+with a **Floor map** above it that stays closed until the delegate opens it (tap a gold stall to open that stall). Old
 `/stallDirectory` and `/stallDirectory/<booking id>` links redirect there.
 
 - **Delegates message a stall** from its page (`/visitorDirectory/stalls/<booking id>`), signed in with the "Open my
   pass" cookie. Stall conversations appear in the directory's Messages tab with the people ones. The same limits apply (3 unanswered messages, 30 new conversations a day,
   the delegate's own and the organiser's messaging switches, the closing time).
 - **Exhibitors sign in** at the same `/login` page as organisers and event handlers, with the email they booked with as the login and their 10-digit
-  mobile number as the password. Every confirmed booking under that email and phone is one exhibitor. Their area has
+  mobile number as the password. Their email has **Open my messages** and **Open my leads** buttons
+  (`/login?next=…`), which land straight in that tab after signing in. Every confirmed booking under that email and phone is one exhibitor. Their area has
   **Messages** (reply, or block a delegate without telling them, with their stall QR beside it), **Leads** (scan a
   delegate's pass QR at the stall, or type the `MBC-` number, to save their contact card, add a note, and download a
   CSV) and **Stalls** (the other stalls and the floor map, without leaving their area).

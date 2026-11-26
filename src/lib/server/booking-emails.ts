@@ -9,11 +9,14 @@ import { button, escape, layout, schedule, send, sendMessageEmail } from './emai
 const gold = (s: string) => `<strong style="color:#f7d07d;">${escape(s)}</strong>`;
 const first = (name: string) => name.split(/\s+/)[0];
 
-/* ---------- stall directory login and stall QR ---------- */
+/* ---------- stall login and stall QR ---------- */
 
 /** What a confirmed exhibitor gets: the stall login, and the stall QR that shares their contact card. */
 export interface ExhibitorKit {
+	/** Sign in, then their messages from delegates. */
 	loginUrl: string;
+	/** Sign in, then their leads (scan a delegate's pass, download the CSV). */
+	leadsUrl: string;
 	/** The page the stall QR opens: contact card with "Save contact". */
 	cardUrl: string;
 	/** The stall QR as a PNG, attached to the email. */
@@ -33,21 +36,22 @@ function kitBlocks(b: StallBooking, kit: ExhibitorKit) {
 The attached QR is your stall’s contact card. Print it or keep it on your phone at the stall: anyone who scans it sees your business, name, phone number and email, and can save you to their contacts or message you. Show it to the visitors you want to stay in touch with.
 <div style="margin-top:14px;">${button(kit.cardUrl, 'See my contact card')}</div>
 </td></tr></table>
-<p style="margin:16px 0 8px;"><strong style="color:#ffffff;">Your stall directory login</strong></p>
-<p style="margin:0 0 8px;">Read messages from delegates, and scan the QR on their passes to collect leads.</p>
+<p style="margin:16px 0 8px;"><strong style="color:#ffffff;">Your stall login</strong></p>
+<p style="margin:0 0 8px;">Open your stall to read and answer messages from delegates, and to scan the QR on their passes to collect leads. Sign in with:</p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 12px;font-size:14px;">
 <tr><td style="padding:2px 12px 2px 0;color:#a69c8a;">Login</td><td>${gold(b.email)}</td></tr>
 <tr><td style="padding:2px 12px 2px 0;color:#a69c8a;">Password</td><td>${gold(localPhone(b.phone))} <span style="color:#a69c8a;">(your mobile number)</span></td></tr>
 </table>
-<p style="margin:0 0 12px;">${button(kit.loginUrl, 'Open my stall')}</p>`;
+<p style="margin:0 0 12px;">${button(kit.loginUrl, 'Open my messages')}&nbsp; ${button(kit.leadsUrl, 'Open my leads')}</p>`;
 	const text = `Your stall QR (attached) is your stall's contact card. Anyone who scans it sees your business, name, phone number and email, and can save you to their contacts or message you.
 See my contact card: ${kit.cardUrl}
 
-Your stall directory login
-Read messages from delegates, and scan the QR on their passes to collect leads.
+Your stall login
+Open your stall to read and answer messages from delegates, and to scan the QR on their passes to collect leads. Sign in with:
 Login: ${b.email}
 Password: ${localPhone(b.phone)} (your mobile number)
-Open my stall: ${kit.loginUrl}`;
+Open my messages: ${kit.loginUrl}
+Open my leads: ${kit.leadsUrl}`;
 	return { html, text };
 }
 
