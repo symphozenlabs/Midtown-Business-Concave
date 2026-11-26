@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CircleAlert, Search } from '@lucide/svelte';
+	import { ChevronDown, CircleAlert, Map as MapIcon, Search } from '@lucide/svelte';
 	import Avatar from '#lib/components/directory/Avatar.svelte';
 	import DirectoryState from '#lib/components/directory/DirectoryState.svelte';
+	import FloorMap from '#lib/components/directory/FloorMap.svelte';
 	import NotifyBanner from '#lib/components/directory/NotifyBanner.svelte';
 	import PersonRow from '#lib/components/directory/PersonRow.svelte';
 	import StallRow from '#lib/components/directory/StallRow.svelte';
@@ -132,6 +133,15 @@
 				{/if}
 			</section>
 		{:else if tab === 'stalls'}
+			<!-- Closed until the delegate opens it; tap a gold stall to open that stall. -->
+			<details class="panel floor-map">
+				<summary>
+					<span class="floor-title"><MapIcon size={18} aria-hidden="true" /> Floor map</span>
+					<ChevronDown class="chevron" size={18} aria-hidden="true" />
+				</summary>
+				<p class="floor-hint">Gold stalls are taken. Tap one to see who is there and message them.</p>
+				<FloorMap exhibitors={data.exhibitors} />
+			</details>
 			<section class="panel" aria-label="Stalls">
 				<label class="search">
 					<Search size={18} aria-hidden="true" />
@@ -225,6 +235,44 @@
 		border: 1px solid var(--rule);
 		border-radius: var(--radius-md);
 		background: var(--white);
+	}
+	.floor-map summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		min-height: 44px;
+		color: var(--charcoal);
+		font-size: 15px;
+		font-weight: 600;
+		list-style: none;
+		cursor: pointer;
+	}
+	.floor-map summary::-webkit-details-marker {
+		display: none;
+	}
+	.floor-map summary:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+	.floor-title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.floor-title :global(svg),
+	.floor-map summary :global(.chevron) {
+		color: var(--gold-ink);
+	}
+	.floor-map summary :global(.chevron) {
+		transition: transform 0.15s;
+	}
+	.floor-map[open] summary :global(.chevron) {
+		transform: rotate(180deg);
+	}
+	.floor-hint {
+		color: var(--text-supporting);
+		font-size: 13.5px;
 	}
 	.search {
 		display: flex;

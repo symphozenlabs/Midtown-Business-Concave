@@ -57,7 +57,14 @@ async function takenBy(stall: number | null, id: string) {
 /** The stall login and the stall QR (contact card), with links on the live site. */
 async function exhibitorKit(url: URL, b: { id: string; code: string }): Promise<ExhibitorKit> {
 	const origin = publicOrigin(url);
-	return { loginUrl: `${origin}/login`, cardUrl: origin + (await stallCardPath(b)), qr: await stallCardQr(origin, b) };
+	// Sign in, then straight to their messages or their leads (already signed in: no login screen).
+	const signIn = (path: string) => `${origin}/login?next=${encodeURIComponent(path)}`;
+	return {
+		loginUrl: signIn('/stallDirectory/exhibitor'),
+		leadsUrl: signIn('/stallDirectory/exhibitor/leads'),
+		cardUrl: origin + (await stallCardPath(b)),
+		qr: await stallCardQr(origin, b)
+	};
 }
 
 export const actions: Actions = {
