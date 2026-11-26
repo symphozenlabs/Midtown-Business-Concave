@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { MAX_LOGO_BYTES, validateAwardApplication, type AwardApplicationInput } from '#lib/awards.ts';
 import { sendAwardAckEmail } from '#lib/server/booking-emails.ts';
-import { areAwardsOpen, createAwardApplication, DuplicateAwardError, isAwardsStoreAvailable } from '#lib/server/awards.ts';
+import { areAwardsOpen, createAwardApplication, getAwardsWindow, DuplicateAwardError, isAwardsStoreAvailable } from '#lib/server/awards.ts';
 import { deleteObject, isStorageAvailable, putObject } from '#lib/server/r2.ts';
 import { allow } from '#lib/server/rate-limit.ts';
 import type { RequestHandler } from './$types';
@@ -10,8 +10,8 @@ export const prerender = false;
 
 /** Whether the form is taking applications; the awards page itself is static. */
 export const GET: RequestHandler = async () => {
-	const open = isAwardsStoreAvailable ? await areAwardsOpen() : false;
-	return json({ open }, { headers: { 'cache-control': 'no-store' } });
+	const { open, closesAt } = await getAwardsWindow();
+	return json({ open, closesAt: open ? closesAt : null }, { headers: { 'cache-control': 'no-store' } });
 };
 
 /** Trusts the file's first bytes, not its name or the type the browser reported. */

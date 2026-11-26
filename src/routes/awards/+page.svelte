@@ -9,6 +9,8 @@
 
 	let view = $state<'poster' | 'form' | 'done'>('poster');
 	let open = $state(true);
+	let closesAt = $state<string | null>(null);
+	const closeFormat = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 
 	let fullName = $state('');
 	let designation = $state('');
@@ -42,6 +44,7 @@
 			.then((r) => (r.ok ? r.json() : null))
 			.then((d) => {
 				if (d && typeof d.open === 'boolean') open = d.open;
+				closesAt = typeof d?.closesAt === 'string' ? d.closesAt : null;
 			})
 			.catch(() => {});
 		return () => {
@@ -192,6 +195,7 @@
 							<Trophy size={20} aria-hidden="true" /> Apply for Business Awards <ArrowRight size={18} aria-hidden="true" />
 						</button>
 						<p class="free">Free to apply · Takes about five minutes</p>
+						{#if closesAt}<p class="deadline" role="status">Applications close on <strong>{closeFormat.format(new Date(closesAt))}</strong></p>{/if}
 					{:else}
 						<p class="closed" role="status">Applications for the awards are now closed. Thank you for your interest.</p>
 					{/if}
@@ -456,6 +460,18 @@
 
 	.free {
 		font: var(--text-caption);
+	}
+
+	.deadline {
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-sm);
+		background: rgb(227 176 75 / 0.12);
+		color: var(--on-ink);
+		font: var(--text-caption);
+	}
+
+	.deadline strong {
+		color: var(--gold-bright);
 	}
 
 	.closed {
