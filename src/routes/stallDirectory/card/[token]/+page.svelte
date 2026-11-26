@@ -22,7 +22,7 @@
 			<span class="ops-eyebrow">Stall QR</span>
 			<h1 class="ops-title">Not a valid stall QR</h1>
 			<p class="ops-sub">This QR was not issued by the Midtown Business Conclave organisers, or the stall is not confirmed.</p>
-			<a class="btn btn-secondary" href="/stallDirectory">Open the stall directory</a>
+			<a class="btn btn-secondary" href="/visitorDirectory?tab=stalls">See all stalls</a>
 		</div>
 	{:else}
 		{@const c = data.card}
@@ -42,7 +42,7 @@
 			<a class="ops-big-btn save" href="/stallDirectory/card/{page.params.token}/vcard" download>
 				<UserRoundPlus size={24} aria-hidden="true" /> SAVE CONTACT
 			</a>
-			<a class="btn btn-secondary message" href="/stallDirectory/{c.id}"><MessageCircle size={18} aria-hidden="true" /> Message this stall</a>
+			<a class="btn btn-secondary message" href="/visitorDirectory/stalls/{c.id}"><MessageCircle size={18} aria-hidden="true" /> Message this stall</a>
 			<dl class="facts">
 				<div><dt>Stall</dt><dd>{c.stall ? `No. ${c.stall}` : 'To be announced'}</dd></div>
 				{#if side}<div><dt>Where</dt><dd>{SIDE_LABEL[side]}</dd></div>{/if}
@@ -50,7 +50,7 @@
 			</dl>
 		</section>
 
-		<a class="ops-muted all" href="/stallDirectory"><Store size={15} aria-hidden="true" /> See all stalls</a>
+		<a class="ops-muted all" href="/visitorDirectory?tab=stalls"><Store size={15} aria-hidden="true" /> See all stalls</a>
 	{/if}
 </PublicShell>
 

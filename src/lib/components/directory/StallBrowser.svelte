@@ -8,7 +8,7 @@
 
 	/**
 	 * The stall list with search and the floor map: beside the list on a laptop, behind a
-	 * map card on a phone. Used by the public stall directory and the exhibitor's Stalls tab.
+	 * map card on a phone. Used by the exhibitor's Stalls tab.
 	 */
 	interface Props {
 		/** Every confirmed stall. */
@@ -92,7 +92,7 @@
 						<li class="row" class:on={e.stall !== null && e.stall === focus}>
 							<Avatar name={e.businessName} />
 							{#if canMessage}
-								<a class="who" href="/stallDirectory/{e.id}">
+								<a class="who" href="/visitorDirectory/stalls/{e.id}">
 									<strong>{e.businessName}</strong>
 									<span>{e.stall ? `Stall ${e.stall}` : 'Stall to be announced'} · {e.contactName}</span>
 								</a>
@@ -111,7 +111,7 @@
 								<a class="icon" href={cards[e.id]} aria-label="Save {e.businessName}’s contact" title="Save contact"><UserPlus size={18} aria-hidden="true" /></a>
 							{/if}
 							{#if canMessage}
-								<a class="icon" href="/stallDirectory/{e.id}" aria-label="Message {e.businessName}"><MessageCircle size={18} aria-hidden="true" /></a>
+								<a class="icon" href="/visitorDirectory/stalls/{e.id}" aria-label="Message {e.businessName}"><MessageCircle size={18} aria-hidden="true" /></a>
 							{/if}
 						</li>
 					{/each}
@@ -148,7 +148,7 @@
 					{#if mine.has(chosen.id)}
 						<a class="icon" href="/stallDirectory/exhibitor" aria-label="Your stall: open your messages and leads"><Store size={18} aria-hidden="true" /></a>
 					{:else if canMessage}
-						<a class="icon" href="/stallDirectory/{chosen.id}" aria-label="Message {chosen.businessName}"><MessageCircle size={18} aria-hidden="true" /></a>
+						<a class="icon" href="/visitorDirectory/stalls/{chosen.id}" aria-label="Message {chosen.businessName}"><MessageCircle size={18} aria-hidden="true" /></a>
 					{/if}
 				</div>
 			{:else}

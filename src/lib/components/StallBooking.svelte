@@ -551,6 +551,7 @@
 	open={viewerOpen}
 	exhibitors={onMap}
 	{preferred}
+	canMessage={false}
 	onpick={stage === 'form' ? (n) => (preferred = n) : undefined}
 	onclose={() => (viewerOpen = false)}
 />

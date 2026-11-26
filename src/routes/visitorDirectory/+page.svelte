@@ -6,28 +6,71 @@
 	import DirectoryState from '#lib/components/directory/DirectoryState.svelte';
 	import NotifyBanner from '#lib/components/directory/NotifyBanner.svelte';
 	import PersonRow from '#lib/components/directory/PersonRow.svelte';
+	import StallRow from '#lib/components/directory/StallRow.svelte';
 	import PublicShell from '#lib/components/ops/PublicShell.svelte';
 	import { startPolling } from '#lib/directory/poller.svelte.ts';
 	import { BLOCKER_TEXT, matchesSearch } from '#lib/directory/rules.ts';
+	import { matchesStall } from '#lib/stall-directory/rules.ts';
 	import { messageTime } from '#lib/directory/time.ts';
 
 	let { data } = $props();
 
 	let query = $state('');
-	const tab = $derived(page.url.searchParams.get('tab') === 'messages' ? 'messages' : 'people');
+	let stallQuery = $state('');
+	const TABS = ['people', 'stalls', 'messages'] as const;
+	const tab = $derived(TABS.find((t) => t === page.url.searchParams.get('tab')) ?? 'people');
 	const shown = $derived(data.state === 'open' ? data.people.filter((p) => matchesSearch(p, query)) : []);
+	const shownStalls = $derived(data.state === 'open' ? data.exhibitors.filter((e) => matchesStall(e, stallQuery)) : []);
+	const unread = $derived(data.state === 'open' ? data.unread + data.stallUnread : 0);
 
-	// New messages: refresh the Messages list and its unread count.
+	/** Conversations with people and with stalls, newest first. */
+	const inbox = $derived(
+		data.state !== 'open'
+			? []
+			: [
+					...data.conversations.map((c) => ({
+						key: `p-${c.personId}`,
+						href: `/visitorDirectory/${c.personId}`,
+						name: c.fullName,
+						role: `${c.designation} · ${c.companyName}`,
+						lastAt: c.lastAt,
+						preview: c.preview,
+						unread: c.unread
+					})),
+					...data.stallConversations.map((c) => ({
+						key: `s-${c.conversationId}`,
+						href: `/visitorDirectory/stalls/${c.bookingId}`,
+						name: c.businessName,
+						role: c.stall ? `Exhibitor · Stall ${c.stall}` : 'Exhibitor · Stall to be announced',
+						lastAt: c.lastAt,
+						preview: c.preview,
+						unread: c.unread
+					}))
+				].sort((a, b) => (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : 0))
+	);
+
+	// New messages from people or stalls: refresh the Messages list and its unread count.
 	$effect(() => {
 		if (data.state !== 'open') return;
-		const known = { latest: data.latest, unread: data.unread };
+		const known = {
+			people: { latest: data.latest, unread: data.unread },
+			stalls: { latest: data.stallLatest, unread: data.stallUnread }
+		};
+		const stallMessaging = data.stallMessaging;
+		const changed = async (url: string, was: { latest: string | null; unread: number }) => {
+			const res = await fetch(url);
+			if (!res.ok) return false;
+			const state = (await res.json()) as { latest: string | null; unread: number };
+			return state.latest !== was.latest || state.unread !== was.unread;
+		};
 		return startPolling({
 			inConversation: false,
 			tick: async () => {
-				const res = await fetch('/api/directory/poll');
-				if (!res.ok) return false;
-				const state = (await res.json()) as { latest: string | null; unread: number };
-				if (state.latest === known.latest && state.unread === known.unread) return false;
+				const [people, stalls] = await Promise.all([
+					changed('/api/directory/poll', known.people),
+					stallMessaging ? changed('/api/stall-directory/poll?as=delegate', known.stalls) : false
+				]);
+				if (!people && !stalls) return false;
 				await invalidate('directory:list');
 				return true;
 			}
@@ -47,11 +90,15 @@
 	{:else}
 		<header class="dir-head">
 			<h1>Visitors directory</h1>
-			<p>{data.people.length} {data.people.length === 1 ? 'person' : 'people'} registered</p>
+			<p>
+				{data.people.length} {data.people.length === 1 ? 'person' : 'people'} registered · {data.exhibitors.length}
+				{data.exhibitors.length === 1 ? 'stall' : 'stalls'}
+			</p>
 			<nav class="tabs" aria-label="Directory">
 				<a href="?tab=people" aria-current={tab === 'people' ? 'page' : undefined}>People</a>
+				<a href="?tab=stalls" aria-current={tab === 'stalls' ? 'page' : undefined}>Stalls</a>
 				<a href="?tab=messages" aria-current={tab === 'messages' ? 'page' : undefined}>
-					Messages{#if data.unread}<span class="badge" aria-label="{data.unread} unread">{data.unread}</span>{/if}
+					Messages{#if unread}<span class="badge" aria-label="{unread} unread">{unread}</span>{/if}
 				</a>
 			</nav>
 		</header>
@@ -84,20 +131,38 @@
 					<p class="empty">No one else is listed yet.</p>
 				{/if}
 			</section>
+		{:else if tab === 'stalls'}
+			<section class="panel" aria-label="Stalls">
+				<label class="search">
+					<Search size={18} aria-hidden="true" />
+					<input type="search" bind:value={stallQuery} placeholder="Search by business, name or stall number" aria-label="Search by business, name or stall number" autocomplete="off" />
+				</label>
+				{#if shownStalls.length}
+					<ul class="list">
+						{#each shownStalls as exhibitor (exhibitor.id)}
+							<StallRow {exhibitor} canMessage={data.stallMessaging} />
+						{/each}
+					</ul>
+				{:else if stallQuery.trim()}
+					<p class="empty">No stall matches “{stallQuery.trim()}”.</p>
+				{:else}
+					<p class="empty">Stalls appear here once the organisers confirm them.</p>
+				{/if}
+			</section>
 		{:else}
 			<section class="panel" aria-label="Messages">
-				{#if data.conversations.length}
+				{#if inbox.length}
 					<ul class="list">
-						{#each data.conversations as c (c.personId)}
+						{#each inbox as c (c.key)}
 							<li>
-								<a class="convo" href="/visitorDirectory/{c.personId}">
-									<Avatar name={c.fullName} />
+								<a class="convo" href={c.href}>
+									<Avatar name={c.name} />
 									<span class="convo-text">
 										<span class="convo-top">
-											<strong>{c.fullName}</strong>
+											<strong>{c.name}</strong>
 											<time datetime={c.lastAt}>{messageTime(c.lastAt)}</time>
 										</span>
-										<span class="role">{c.designation} · {c.companyName}</span>
+										<span class="role">{c.role}</span>
 										<span class="preview" class:unread={c.unread}>{c.preview}</span>
 									</span>
 									{#if c.unread}<span class="dot" aria-label="Unread"></span>{/if}
@@ -106,7 +171,7 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="empty">No conversations yet. Tap the message icon next to someone to start one.</p>
+					<p class="empty">No conversations yet. Tap the message icon next to someone or a stall to start one.</p>
 				{/if}
 			</section>
 		{/if}

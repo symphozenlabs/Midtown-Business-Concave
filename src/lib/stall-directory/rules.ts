@@ -2,15 +2,23 @@
  * Stall directory: the floor map and who may message whom. Plain functions with no
  * server or SvelteKit imports, so they run in unit tests and in the browser alike.
  *
- * Anyone can open the directory and the floor map. Signed-in delegates (the same
- * "Open my pass" cookie as the visitors directory) can message a confirmed stall, and
- * the exhibitor answers from their inbox after signing in with the email they booked
- * with and their mobile number. Exhibitors only reply: they can't start conversations.
+ * The stalls are a tab of the visitors directory, so only signed-in delegates (the
+ * "Open my pass" cookie) see them and can message a confirmed stall. The exhibitor
+ * answers from their area under /stallDirectory/exhibitor after signing in with the
+ * email they booked with and their mobile number. Exhibitors only reply: they can't
+ * start conversations.
  */
 
-import { NEW_CONVERSATIONS_PER_DAY, UNANSWERED_LIMIT } from '../directory/rules.ts';
+import { DIRECTORY_PATH, NEW_CONVERSATIONS_PER_DAY, UNANSWERED_LIMIT } from '../directory/rules.ts';
 
+/** The exhibitor area and the stall QR cards live under this path. There is no public page at it. */
 export const STALL_DIRECTORY_PATH = '/stallDirectory';
+
+/** The stalls tab of the visitors directory. */
+export const STALLS_TAB_PATH = `${DIRECTORY_PATH}?tab=stalls`;
+
+/** A stall's page in the visitors directory, where a delegate messages it. */
+export const stallPagePath = (bookingId: string) => `${DIRECTORY_PATH}/stalls/${bookingId}`;
 
 /* ---------- floor map ---------- */
 
@@ -140,4 +148,18 @@ export function canonicalStallDirectoryPath(pathname: string): string | null {
 	const match = pathname.match(/^\/stalldirectory(\/.*)?$/i);
 	if (!match || pathname.startsWith(STALL_DIRECTORY_PATH)) return null;
 	return STALL_DIRECTORY_PATH + (match[1] ?? '');
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The old public stall directory moved into the visitors directory. Links already sent
+ * (emails, pushes, bookmarks) to /stallDirectory or a stall's page land on the new place.
+ * The exhibitor area and the stall cards stay where they are.
+ */
+export function movedStallDirectoryPath(pathname: string): string | null {
+	if (pathname === STALL_DIRECTORY_PATH || pathname === `${STALL_DIRECTORY_PATH}/`) return STALLS_TAB_PATH;
+	const id = pathname.slice(STALL_DIRECTORY_PATH.length + 1);
+	if (pathname.startsWith(`${STALL_DIRECTORY_PATH}/`) && UUID.test(id)) return stallPagePath(id);
+	return null;
 }

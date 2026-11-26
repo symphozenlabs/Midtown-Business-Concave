@@ -57,7 +57,7 @@
 		</ul>
 	{:else}
 		<p class="empty">
-			No messages yet. Delegates find your stall in the <a href="/stallDirectory">stall directory</a> and can write to you from there.
+			No messages yet. Delegates find your stall in the Stalls section of the visitors directory and can write to you from there.
 			You’ll get an email when someone does.
 		</p>
 	{/if}

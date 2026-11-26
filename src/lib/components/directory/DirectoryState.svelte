@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import { CircleAlert, MailCheck } from '@lucide/svelte';
 
 	/** Every directory screen except the open directory itself. */
@@ -44,6 +45,8 @@
 					};
 				}}
 			>
+				<!-- The emailed link opens this page again: the stall or person they were looking at. -->
+				<input type="hidden" name="next" value={page.url.pathname + page.url.search} />
 				<label class="ops-label">
 					Email you registered with
 					<input type="email" name="email" autocomplete="email" inputmode="email" required maxlength="120" />
