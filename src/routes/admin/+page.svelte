@@ -27,6 +27,7 @@
 		MailWarning,
 		Mails,
 		MailX,
+		Printer,
 		QrCode,
 		RefreshCw,
 		Search,
@@ -296,6 +297,50 @@
 	function startReject(id: string) {
 		rejecting = rejecting === id ? null : id;
 		open.add(id);
+	}
+
+	/*
+	 * Print label: one person's 75 x 50 mm name-and-QR label for the label printer. The
+	 * label page loads in a hidden frame and its print dialog opens. Cmd- or Ctrl-click
+	 * opens the label in a tab instead.
+	 */
+	let label = $state<{ id: string; error: string | null } | null>(null);
+	let labelFrame: HTMLIFrameElement | null = null;
+	$effect(() => () => labelFrame?.remove());
+
+	async function printLabel(e: MouseEvent, id: string) {
+		if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+		e.preventDefault();
+		if (label && !label.error) return;
+		label = { id, error: null };
+		try {
+			// An expired sign-in redirects to /login: say so rather than print the sign-in page.
+			const res = await fetch(`/admin/qr-labels/${id}`, { headers: { accept: 'application/json' }, redirect: 'manual' });
+			if (res.type === 'opaqueredirect') throw new Error('Your sign-in has expired. Reload the page and sign in again.');
+			if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? `Could not load the label (${res.status}).`);
+			const html = await res.text();
+			// The previous label's frame stays until now: removing it while its print dialog is open can cancel the print.
+			labelFrame?.remove();
+			const frame = document.createElement('iframe');
+			frame.title = 'Label to print';
+			frame.tabIndex = -1;
+			frame.setAttribute('aria-hidden', 'true');
+			frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:320mm;height:220mm;border:0';
+			const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
+			frame.srcdoc = html;
+			document.body.append(frame);
+			labelFrame = frame;
+			await loaded;
+			const win = frame.contentWindow as (Window & { labelReady?: Promise<unknown> }) | null;
+			if (!win?.labelReady) throw new Error('Could not open the label.');
+			await win.labelReady;
+			label = null;
+			win.focus();
+			win.print();
+		} catch (err) {
+			console.error('[admin] could not print the label', err);
+			label = { id, error: err instanceof Error && err.message ? err.message : 'Could not print the label.' };
+		}
 	}
 
 	async function copy(text: string, key: string) {
@@ -825,6 +870,22 @@
 									<div class="row-actions">
 										{#if r.status === 'paid'}
 											{@const state = emailState(r)}
+											{@const loadingLabel = label?.id === r.id && !label.error}
+											<a
+												class="btn btn-ghost btn-sm"
+												href="/admin/qr-labels/{r.id}"
+												target="_blank"
+												rel="noopener"
+												onclick={(e) => printLabel(e, r.id)}
+												aria-busy={loadingLabel}
+												title="Print this person’s name and QR label (75 × 50 mm) on the label printer"
+											>
+												{#if loadingLabel}<LoaderCircle size={15} class="spin" aria-hidden="true" />{:else}<Printer
+														size={15}
+														aria-hidden="true"
+													/>{/if}
+												<span class="action-label">Print label</span>
+											</a>
 											<form method="post" action={act('resend')} use:enhance={working(r.id)}>
 												<input type="hidden" name="id" value={r.id} />
 												<button
@@ -867,6 +928,9 @@
 											{/if}
 										{/if}
 									</div>
+									{#if label?.id === r.id && label.error}
+										<small class="label-error" role="alert">{label.error}</small>
+									{/if}
 								</td>
 							</tr>
 							{#if isOpen}
@@ -1732,6 +1796,16 @@
 
 	.row-actions form {
 		display: contents;
+	}
+
+	.label-error {
+		display: block;
+		max-width: 260px;
+		margin: 4px 0 0 auto;
+		white-space: normal;
+		text-align: right;
+		font-size: 12px;
+		color: var(--danger);
 	}
 
 	/* Collapsed details: the inner wrapper animates, the cell carries no padding. */
