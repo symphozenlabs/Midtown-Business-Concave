@@ -5,7 +5,7 @@
  */
 import * as core from 'qrcode/lib/core/qrcode.js';
 
-interface BitMatrix {
+export interface BitMatrix {
 	size: number;
 	data: Uint8Array;
 }
@@ -14,6 +14,9 @@ type Create = (text: string, options: { errorCorrectionLevel: string }) => { mod
 
 /** The CommonJS export arrives as a named or a default export depending on the bundler. */
 const create: Create = (core as any).create ?? (core as any).default?.create;
+
+/** The QR's modules, `size` by `size`, row by row: 1 is a dark module. Error correction M. */
+export const qrMatrix = (text: string): BitMatrix => create(text, { errorCorrectionLevel: 'M' }).modules;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
 	let c = n;
@@ -44,7 +47,7 @@ async function deflate(bytes: Uint8Array) {
 
 /** Black-on-white QR, `scale` pixels per module with the standard four-module quiet zone. */
 export async function qrPng(text: string, scale = 10): Promise<Uint8Array> {
-	const { modules } = create(text, { errorCorrectionLevel: 'M' });
+	const modules = qrMatrix(text);
 	const margin = 4;
 	const side = (modules.size + margin * 2) * scale;
 
