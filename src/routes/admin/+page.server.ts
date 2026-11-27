@@ -16,7 +16,7 @@ import { cardBacksToMake, markPassEmailed, passEmailFor, passesToSend } from '#l
 import { adminFlagsFor, setAdminFlags } from '#lib/server/directory/people.ts';
 import { directoryReady } from '#lib/server/directory/settings.ts';
 import { audit, getDefaultEvent, opsReady } from '#lib/server/ops/event.ts';
-import { TICKET_LABEL, priceFor } from '#lib/payment.ts';
+import { TICKET_LABEL, formatRupees, priceFor } from '#lib/payment.ts';
 import { readWalkIn } from '#lib/walk-in.ts';
 import {
 	EMAIL_FILTERS,
@@ -281,21 +281,34 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * A walk-in's pass, made at the help desk: name, designation, company and ticket only.
-	 * Added as paid at the ticket's price; the dashboard then prints their label.
+	 * A walk-in's pass, made at the help desk: name, designation, company, ticket, the
+	 * amount received and an optional UPI reference. Added as paid; the dashboard then
+	 * prints their label.
 	 */
 	createWalkIn: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { walkIn: true, message: 'Sign in again.' });
 		const form = await request.formData();
-		const read = readWalkIn({
-			fullName: form.get('fullName'),
-			designation: form.get('designation'),
-			companyName: form.get('companyName'),
-			ticketType: form.get('ticketType')
-		});
+		const payment = await getPaymentSettings();
+		const prices = { delegate: priceFor(payment, 'delegate'), visitor: priceFor(payment, 'visitor') };
+		const read = readWalkIn(
+			{
+				fullName: form.get('fullName'),
+				designation: form.get('designation'),
+				companyName: form.get('companyName'),
+				ticketType: form.get('ticketType'),
+				amountRupees: form.get('amountRupees'),
+				upiTxnId: form.get('upiTxnId')
+			},
+			prices
+		);
 		if (!read.ok) return fail(400, { walkIn: true, errors: read.errors, message: 'Check the highlighted fields.' });
 
-		const reg = await createWalkIn(read.input, locals.admin.email);
+		const result = await createWalkIn(read.input, prices[read.input.ticketType], locals.admin.email);
+		if (!result.ok) {
+			const message = 'That UPI reference ID is already on another registration or stall booking.';
+			return fail(409, { walkIn: true, errors: { upiTxnId: message }, message });
+		}
+		const reg = result.registration;
 		if (isDatabaseConfigured && (await opsReady())) {
 			const event = await getDefaultEvent();
 			await audit({
@@ -305,15 +318,16 @@ export const actions: Actions = {
 				action: 'registration.walk-in',
 				targetType: 'registration',
 				targetId: reg.id,
-				details: { code: reg.code, ticketType: reg.ticketType, amountRupees: reg.amountRupees }
+				details: { code: reg.code, ticketType: reg.ticketType, amountRupees: reg.amountRupees, upiTxnId: reg.upiTxnId }
 			});
 		}
 		console.info(`[admin] ${locals.admin.email} added walk-in ${reg.code} (${reg.fullName})`);
+		const paid = reg.amountRupees > 0 ? `${formatRupees(reg.amountRupees)} received` : 'complimentary';
 		return {
 			id: reg.id,
 			walkIn: true,
 			print: form.get('print') === 'on',
-			success: `Added ${reg.fullName} as a walk-in ${TICKET_LABEL[reg.ticketType]} (${reg.code}).`
+			success: `Added ${reg.fullName} as a walk-in ${TICKET_LABEL[reg.ticketType]} (${reg.code}), ${paid}.`
 		};
 	},
 
