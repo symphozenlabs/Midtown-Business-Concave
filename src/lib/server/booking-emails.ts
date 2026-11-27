@@ -96,16 +96,24 @@ export async function sendStallConfirmedEmail(b: StallBooking, kit?: ExhibitorKi
 	const stallText = b.allottedStall
 		? `Your allotted stall is No. ${b.allottedStall}.`
 		: 'The organisers will let you know your final stall number before the event.';
+	// A complimentary stall (promo or added by the organisers) has no payment to acknowledge.
+	const free = b.amountRupees <= 0;
+	const received = free
+		? `Your complimentary stall, booking ${gold(b.code)} (${escape(b.businessName)}), is confirmed.`
+		: `We have received your payment of ${gold(formatRupees(b.amountRupees))} for booking ${gold(b.code)} (${escape(b.businessName)}).`;
+	const receivedText = free
+		? `Your complimentary stall, booking ${b.code} (${b.businessName}), is confirmed.`
+		: `We have received your payment of ${formatRupees(b.amountRupees)} for booking ${b.code} (${b.businessName}).`;
 	const html = layout(
 		`Your stall is confirmed, ${escape(first(b.fullName))}.`,
-		`<p style="margin:0 0 12px;">We have received your payment of ${gold(formatRupees(b.amountRupees))} for booking ${gold(b.code)} (${escape(b.businessName)}).</p>
+		`<p style="margin:0 0 12px;">${received}</p>
 <p style="margin:0 0 12px;">${stall}</p>
 <p style="margin:0;">Stall: ${escape(b.stallType)}. Reply to this email if anything needs changing.</p>${blocks ? blocks.html : ''}`,
 		when
 	);
 	const text = `Your stall is confirmed, ${first(b.fullName)}.
 
-We have received your payment of ${formatRupees(b.amountRupees)} for booking ${b.code} (${b.businessName}).
+${receivedText}
 ${stallText}
 Stall: ${b.stallType}. Reply to this email if anything needs changing.${blocks ? `\n\n${blocks.text}` : ''}`;
 	return send(b.email, `Stall confirmed · ${EVENT.name} 2026 · ${b.code}`, html, text, kit ? [qrAttachment(b, kit)] : []);

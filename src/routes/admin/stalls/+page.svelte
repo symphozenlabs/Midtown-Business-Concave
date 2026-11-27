@@ -1,10 +1,20 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { Check, CircleAlert, CircleCheck, KeyRound, LayoutGrid, Lock, Search, Store, Trash2, X } from '@lucide/svelte';
+	import { enhance, type SubmitFunction } from '$app/forms';
+	import { Check, CircleAlert, CircleCheck, KeyRound, LayoutGrid, LoaderCircle, Lock, Plus, Search, Store, Trash2, X } from '@lucide/svelte';
+	import OpsDialog from '#lib/components/ops/OpsDialog.svelte';
 	import { formatRupees } from '#lib/payment.ts';
-	import { STALL_NUMBERS, STALL_STATUS_LABEL, type StallBookingStatus } from '#lib/stall-booking.ts';
+	import { STALL_LIMITS, STALL_NUMBERS, STALL_STATUS_LABEL, type StallBookingStatus } from '#lib/stall-booking.ts';
 
 	let { data, form } = $props();
+
+	interface Feedback {
+		/** From the New booking form: shown in its dialog, not at the top of the page. */
+		create?: boolean;
+		message?: string;
+		success?: string;
+		errors?: Record<string, string>;
+	}
+	const f = $derived(form as Feedback | null);
 
 	const when = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
 	const fmt = (iso: string | null) => (iso ? when.format(new Date(iso)) : '—');
@@ -49,6 +59,40 @@
 			busy = false;
 		};
 	};
+
+	/* ---------- new booking, taken offline ---------- */
+
+	const offers = $derived(data.available ? data.offers : []);
+	let adding = $state(false);
+	let saving = $state(false);
+	let draft = $state({ stallTypeId: '', amountRupees: '' });
+	const offer = $derived(offers.find((o) => o.id === draft.stallTypeId) ?? offers[0]);
+	// A failed attempt's errors belong to it; opening the form again starts clean.
+	let dismissed = $state<unknown>(null);
+	const createError = (field: string) => (form !== dismissed && f?.create ? f.errors?.[field] : undefined);
+	const createMessage = $derived(form !== dismissed && f?.create ? f.message : undefined);
+
+	function openAdd() {
+		draft = { stallTypeId: offers[0]?.id ?? '', amountRupees: offers[0] ? String(offers[0].priceRupees) : '' };
+		dismissed = form;
+		adding = true;
+	}
+
+	/** A different stall type starts from its full price. */
+	function chooseOffer(id: string) {
+		draft.stallTypeId = id;
+		const o = offers.find((x) => x.id === id);
+		if (o) draft.amountRupees = String(o.priceRupees);
+	}
+
+	const addBooking: SubmitFunction = () => {
+		saving = true;
+		return async ({ result, update }) => {
+			await update({ reset: false });
+			saving = false;
+			if (result.type === 'success') adding = false;
+		};
+	};
 </script>
 
 <svelte:head>
@@ -59,7 +103,8 @@
 	<div>
 		<h1>Stall bookings</h1>
 		<p class="ops-hint">
-			Exhibitors book from the website with a preferred stall. Confirm the payment and allot the final stall here.
+			Exhibitors book from the website with a preferred stall. Confirm the payment and allot the final stall here, or
+			add a booking taken offline with <strong>New booking</strong>.
 			Prices and the SEFMEMBER promo code are under <a href="/admin/payments?tab=stalls">Payments → Stalls</a>.
 		</p>
 	</div>
@@ -72,6 +117,9 @@
 				<div><dt>Collected</dt><dd>{formatRupees(collected)}</dd></div>
 				<div><dt>Stalls free</dt><dd>{free} / {STALL_NUMBERS.length}</dd></div>
 			</dl>
+			<button type="button" class="btn btn-primary ops-btn-sm" onclick={openAdd}>
+				<Plus size={15} aria-hidden="true" /> New booking
+			</button>
 			{#if data.loginsWaiting}
 				<form method="post" action="?/sendLogins" use:enhance={submit}>
 					<button class="btn btn-primary ops-btn-sm" disabled={busy}>
@@ -90,10 +138,10 @@
 		<p>Stall bookings need the database. Set <code>DATABASE_URL</code>.</p>
 	</div>
 {:else}
-	{#if form?.message}
-		<div class="ops-banner error" role="alert"><CircleAlert size={18} aria-hidden="true" /><p>{form.message}</p></div>
-	{:else if form?.success}
-		<div class="ops-banner ok" role="status"><CircleCheck size={18} aria-hidden="true" /><p>{form.success}</p></div>
+	{#if f?.message && !f.create}
+		<div class="ops-banner error" role="alert"><CircleAlert size={18} aria-hidden="true" /><p>{f.message}</p></div>
+	{:else if f?.success}
+		<div class="ops-banner ok" role="status"><CircleCheck size={18} aria-hidden="true" /><p>{f.success}</p></div>
 	{/if}
 
 	<section class="ops-panel" aria-labelledby="map-title">
@@ -261,6 +309,97 @@
 			</div>
 		{/if}
 	</section>
+
+	<OpsDialog bind:open={adding} title="New stall booking" description="For a booking taken offline. It is added as confirmed, with the stall locked." wide>
+		<form method="post" action="?/create" class="ops-form" use:enhance={addBooking}>
+			{#if createMessage}
+				<div class="ops-banner error" role="alert"><CircleAlert size={16} aria-hidden="true" /><p>{createMessage}</p></div>
+			{/if}
+
+			<div class="pair">
+				<label class="ops-label">
+					Business name
+					<input name="businessName" maxlength={STALL_LIMITS.businessName} required autocomplete="off" />
+					{#if createError('businessName')}<small class="ops-field-error">{createError('businessName')}</small>{/if}
+				</label>
+				<label class="ops-label">
+					Contact name
+					<input name="fullName" maxlength={STALL_LIMITS.fullName} required autocomplete="off" />
+					{#if createError('fullName')}<small class="ops-field-error">{createError('fullName')}</small>{/if}
+				</label>
+			</div>
+
+			<div class="pair">
+				<label class="ops-label">
+					Email <small>The confirmation and login go here</small>
+					<input name="email" type="email" maxlength={STALL_LIMITS.email} required autocomplete="off" />
+					{#if createError('email')}<small class="ops-field-error">{createError('email')}</small>{/if}
+				</label>
+				<label class="ops-label">
+					Mobile
+					<input name="phone" type="tel" inputmode="tel" required autocomplete="off" placeholder="98427 88990" />
+					{#if createError('phone')}<small class="ops-field-error">{createError('phone')}</small>{/if}
+				</label>
+			</div>
+
+			<div class="pair">
+				<label class="ops-label">
+					Stall type
+					<select name="stallTypeId" value={draft.stallTypeId} onchange={(e) => chooseOffer(e.currentTarget.value)}>
+						{#each offers as o (o.id)}
+							<option value={o.id}>{o.name} ({o.sizeLabel}) · {formatRupees(o.priceRupees)}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="ops-label">
+					Allot stall <small>Locked once added</small>
+					<select name="allotted" required>
+						<option value="">Choose a stall</option>
+						{#each STALL_NUMBERS as n (n)}
+							{@const holder = allotted.get(n)}
+							<option value={n} disabled={!!holder}>{n}{holder ? ` · ${holder.businessName}` : ''}</option>
+						{/each}
+					</select>
+					{#if createError('allottedStall')}<small class="ops-field-error">{createError('allottedStall')}</small>{/if}
+				</label>
+			</div>
+
+			<div class="pair">
+				<label class="ops-label">
+					Amount received
+					<span class="prefixed">
+						<span aria-hidden="true">₹</span>
+						<input name="amountRupees" type="number" inputmode="decimal" min="0" max={offer?.priceRupees} step="0.01" bind:value={draft.amountRupees} required />
+					</span>
+					{#if createError('amountRupees')}
+						<small class="ops-field-error">{createError('amountRupees')}</small>
+					{:else if offer}
+						<small>
+							Full price {formatRupees(offer.priceRupees)}.
+							<button type="button" class="link" onclick={() => (draft.amountRupees = '0')}>Make it complimentary</button>
+						</small>
+					{/if}
+				</label>
+				<label class="ops-label">
+					UPI transaction ID <small>Optional. Empty for cash or bank transfer</small>
+					<input name="upiTxnId" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="12 digits" />
+					{#if createError('upiTxnId')}<small class="ops-field-error">{createError('upiTxnId')}</small>{/if}
+				</label>
+			</div>
+
+			<label class="ops-check">
+				<input type="checkbox" name="email" checked />
+				Email the confirmation{data.exhibitorLogin ? ' with the stall QR and login' : ''}
+			</label>
+
+			<div class="ops-dialog-actions">
+				<button type="button" class="btn btn-ghost ops-btn-sm" onclick={() => (adding = false)}>Cancel</button>
+				<button type="submit" class="btn btn-primary ops-btn-sm" disabled={saving}>
+					{#if saving}<LoaderCircle size={15} class="ops-spin" aria-hidden="true" /> Adding…{:else}<Check size={15} aria-hidden="true" /> Add booking{/if}
+				</button>
+			</div>
+		</form>
+	</OpsDialog>
 {/if}
 
 <style>
@@ -411,8 +550,69 @@
 		font-size: 13px;
 	}
 
+	/* New booking dialog ------------------------------------------------- */
+
+	.pair {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+		align-items: start;
+	}
+
+	.prefixed {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-height: 40px;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-sm);
+		background: var(--white);
+	}
+
+	.prefixed:focus-within {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 1px;
+	}
+
+	.prefixed span {
+		color: var(--text-supporting);
+	}
+
+	/* The shared .ops-label input style would draw a second box inside. */
+	.ops-label .prefixed input {
+		flex: 1;
+		min-width: 0;
+		min-height: 38px;
+		padding: 0;
+		border: 0;
+		background: none;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.ops-label .prefixed input:focus {
+		outline: none;
+	}
+
+	.link {
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--gold-ink);
+		font: inherit;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+
 	@media (max-width: 860px) {
 		.manage {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	@media (max-width: 640px) {
+		.pair {
 			grid-template-columns: minmax(0, 1fr);
 		}
 	}
