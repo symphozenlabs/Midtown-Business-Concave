@@ -164,6 +164,25 @@ export async function cardBacksToMake(
 	return jobs;
 }
 
+/**
+ * Each participant's pass link: the same URL as the QR on their ID card back and in
+ * their ticket email. Creates the pass for anyone who has none yet. Needs passes set up.
+ */
+export async function passUrlsFor(registrationIds: string[], origin: string): Promise<Map<string, string>> {
+	const urls = new Map<string, string>();
+	if (!registrationIds.length) return urls;
+	const event = await getDefaultEvent();
+	const rows = await sql()`
+		select registration_id, version from participant_qr_tokens
+		where event_id = ${event.id} and revoked_at is null and registration_id = any(${registrationIds}::uuid[])`;
+	const versions = new Map<string, number>(rows.map((r) => [r.registration_id, r.version]));
+	for (const id of registrationIds) {
+		const version = versions.get(id) ?? (await ensurePass(event.id, id)).version;
+		urls.set(id, passUrl(origin, await qrToken(id, version)));
+	}
+	return urls;
+}
+
 /** The key a back for this delegate must have right now, or null when passes are off. */
 export async function currentCardBackKey(registrationId: string): Promise<string | null> {
 	if (!isPassConfigured || !(await opsReady())) return null;

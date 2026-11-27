@@ -17,6 +17,8 @@
 		CircleAlert,
 		Clock,
 		Copy,
+		Download,
+		FileSpreadsheet,
 		IndianRupee,
 		ListChecks,
 		LoaderCircle,
@@ -614,6 +616,22 @@
 				{/each}
 			</nav>
 			<div class="tool-buttons">
+				{#if paidTotal > 0}
+					<div
+						class="downloads"
+						role="group"
+						aria-label="Download QR labels"
+						title="Every paid Delegate and Visitor with the link their QR opens, for printing labels in OpenLabel"
+					>
+						<span class="downloads-label"><QrCode size={15} aria-hidden="true" /> QR labels</span>
+						<a class="btn btn-ghost btn-sm" href="/admin/qr-labels?format=xlsx" download>
+							<FileSpreadsheet size={15} aria-hidden="true" /> Excel
+						</a>
+						<a class="btn btn-ghost btn-sm" href="/admin/qr-labels?format=csv" download>
+							<Download size={15} aria-hidden="true" /> CSV
+						</a>
+					</div>
+				{/if}
 				{#if selectable.length > 0}
 					<button
 						type="button"
@@ -1206,6 +1224,28 @@
 
 	.head-actions {
 		flex-wrap: nowrap;
+	}
+
+	.downloads {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		padding-right: var(--space-2);
+		border-right: 1px solid var(--rule);
+	}
+
+	.downloads-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		margin-right: var(--space-1);
+		color: var(--text-supporting);
+		font-size: 13px;
+		white-space: nowrap;
+	}
+
+	.downloads a {
+		text-decoration: none;
 	}
 
 	.search {
