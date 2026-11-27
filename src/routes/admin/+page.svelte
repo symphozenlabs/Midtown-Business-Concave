@@ -362,10 +362,19 @@
 	let walkInDismissed = $state<unknown>(null);
 	const walkInFeedback = $derived(form !== walkInDismissed && (form as WalkInFeedback)?.walkIn ? (form as WalkInFeedback) : null);
 
+	// The ticket chosen and the amount received; choosing a ticket fills in its full price.
+	let walkInDraft = $state<{ ticketType: '' | (typeof TICKET_TYPES)[number]; amountRupees: string }>({ ticketType: '', amountRupees: '' });
+
 	function openWalkIn() {
 		walkInDismissed = form;
+		walkInDraft = { ticketType: '', amountRupees: '' };
 		walkInOpen = true;
 		requestAnimationFrame(() => walkInName?.focus());
+	}
+
+	function chooseWalkInTicket(t: (typeof TICKET_TYPES)[number]) {
+		walkInDraft.ticketType = t;
+		if (data.available) walkInDraft.amountRupees = String(data.prices[t]);
 	}
 
 	const addWalkIn: SubmitFunction = () => {
@@ -639,7 +648,7 @@
 				<OpsDialog
 					bind:open={walkInOpen}
 					title="Walk-in pass"
-					description="For someone registering at the desk. They are added as paid at the ticket’s price, with a QR pass and no email."
+					description="For someone registering at the desk. They are added as paid with what they paid, with a QR pass and no email."
 				>
 					<form method="post" action={act('createWalkIn')} class="ops-form" use:enhance={addWalkIn}>
 						{#if walkInFeedback?.message}
@@ -665,7 +674,14 @@
 							<div class="ticket-options">
 								{#each TICKET_TYPES as t (t)}
 									<label class="ticket-option">
-										<input type="radio" name="ticketType" value={t} required />
+										<input
+											type="radio"
+											name="ticketType"
+											value={t}
+											required
+											checked={walkInDraft.ticketType === t}
+											onchange={() => chooseWalkInTicket(t)}
+										/>
 										<span>
 											<strong>{TICKET_LABEL[t]}</strong>
 											<small>{formatRupees(data.prices[t])}</small>
@@ -675,6 +691,35 @@
 							</div>
 							{#if walkInFeedback?.errors?.ticketType}<small class="ops-field-error">{walkInFeedback.errors.ticketType}</small>{/if}
 						</fieldset>
+						<div class="pair">
+							<label class="ops-label">
+								Amount received
+								<span class="prefixed">
+									<span aria-hidden="true">₹</span>
+									<input
+										name="amountRupees"
+										inputmode="decimal"
+										autocomplete="off"
+										required
+										placeholder={walkInDraft.ticketType ? '' : 'Choose the ticket'}
+										bind:value={walkInDraft.amountRupees}
+									/>
+								</span>
+								{#if walkInFeedback?.errors?.amountRupees}
+									<small class="ops-field-error">{walkInFeedback.errors.amountRupees}</small>
+								{:else if walkInDraft.ticketType}
+									<small>
+										Full price {formatRupees(data.prices[walkInDraft.ticketType])}.
+										<button type="button" class="link" onclick={() => (walkInDraft.amountRupees = '0')}>Make it complimentary</button>
+									</small>
+								{/if}
+							</label>
+							<label class="ops-label">
+								UPI reference ID <small>Optional. Empty for cash</small>
+								<input name="upiTxnId" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="12 digits" />
+								{#if walkInFeedback?.errors?.upiTxnId}<small class="ops-field-error">{walkInFeedback.errors.upiTxnId}</small>{/if}
+							</label>
+						</div>
 						<label class="ops-check">
 							<input type="checkbox" name="print" checked />
 							Print the label now
@@ -948,6 +993,8 @@
 										{#if copied === r.id}<span class="copied">Copied</span>{/if}
 									{:else if r.voucherCode && r.amountRupees === 0}
 										<span class="muted">Free (voucher)</span>
+									{:else if r.walkIn}
+										<span class="muted">{r.amountRupees === 0 ? 'Complimentary' : 'Paid at the desk'}</span>
 									{:else}
 										<span class="muted">Not entered</span>
 									{/if}
@@ -1987,6 +2034,66 @@
 	.ticket-option small {
 		font-size: 12px;
 		color: var(--text-supporting);
+	}
+
+	/* Amount received and UPI reference, side by side (same as the stall booking form). */
+	.pair {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+		align-items: start;
+	}
+
+	.prefixed {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-height: 40px;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-sm);
+		background: var(--white);
+	}
+
+	.prefixed:focus-within {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 1px;
+	}
+
+	.prefixed span {
+		color: var(--text-supporting);
+	}
+
+	/* The shared .ops-label input style would draw a second box inside. */
+	:global(.ops-label) .prefixed input {
+		flex: 1;
+		min-width: 0;
+		min-height: 38px;
+		padding: 0;
+		border: 0;
+		background: none;
+		font-variant-numeric: tabular-nums;
+	}
+
+	:global(.ops-label) .prefixed input:focus {
+		outline: none;
+	}
+
+	.link {
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--gold-ink);
+		font: inherit;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+
+	@media (max-width: 640px) {
+		.pair {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 
 	.label-error {

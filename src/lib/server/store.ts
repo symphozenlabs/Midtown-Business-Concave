@@ -605,13 +605,29 @@ function ensureWalkIns() {
 	return walkInsReady;
 }
 
+/** Whether a stall booking already holds this UPI reference. The stall tables are made on first use, so may not exist yet. */
+async function stallBookingHasUtr(upiTxnId: string): Promise<boolean> {
+	try {
+		return (await sql()`select 1 from stall_bookings where upi_txn_id = ${upiTxnId} limit 1`).length > 0;
+	} catch (e) {
+		if ((e as { code?: string }).code === '42P01') return false; // undefined_table
+		throw e;
+	}
+}
+
+export type WalkInResult ={ ok: true; registration: Registration } | { ok: false; reason: 'utr_used' };
+
 /**
- * A walk-in's pass, made by an organiser at the desk: paid and confirmed at once, at the
- * ticket's current price, with a new MBC- or MBCV- code. No poster and no ticket email.
+ * A walk-in's pass, made by an organiser at the desk: paid and confirmed at once with
+ * what they paid (the rest of `priceRupees` is recorded as the discount) and a new MBC-
+ * or MBCV- code. No poster and no ticket email. A UPI reference already on another
+ * registration or a stall booking is refused.
  */
-export async function createWalkIn(input: WalkInInput, by: string): Promise<Registration> {
-	const amountRupees = priceFor(await getPaymentSettings(), input.ticketType);
+export async function createWalkIn(input: WalkInInput, priceRupees: number, by: string): Promise<WalkInResult> {
+	const { amountRupees, upiTxnId } = input;
+	const discountRupees = Math.max(0, Math.round((priceRupees - amountRupees) * 100) / 100);
 	if (useMemory) {
+		if (upiTxnId && [...mem.rows.values()].some((r) => r.upiTxnId === upiTxnId)) return { ok: false, reason: 'utr_used' };
 		const row: Registration = {
 			...input,
 			email: '',
@@ -627,11 +643,9 @@ export async function createWalkIn(input: WalkInInput, by: string): Promise<Regi
 			heardFrom: null,
 			whatsappUpdates: false,
 			posterFraming: { zoom: 1, dx: 0, dy: 0 },
-			amountRupees,
 			id: crypto.randomUUID(),
 			code: newCode(input.ticketType),
 			status: 'paid',
-			upiTxnId: null,
 			paymentSubmittedAt: null,
 			reviewedAt: now(),
 			reviewedBy: by,
@@ -644,31 +658,35 @@ export async function createWalkIn(input: WalkInInput, by: string): Promise<Regi
 			ticketBackKey: null,
 			postKey: null,
 			voucherCode: null,
-			discountRupees: 0,
+			discountRupees,
 			walkIn: true,
 			createdAt: now()
 		};
 		mem.rows.set(row.id, row);
-		return row;
+		return { ok: true, registration: row };
 	}
 
-	await Promise.all([ensureWalkIns(), ensureTicketTypeColumn()]);
+	await Promise.all([ensureWalkIns(), ensureTicketTypeColumn(), ensureVoucherColumns()]);
+	// A UPI reference can be claimed once: by a registration (the unique index) or a stall booking.
+	if (upiTxnId && (await stallBookingHasUtr(upiTxnId))) return { ok: false, reason: 'utr_used' };
 	for (let attempt = 0; attempt < 4; attempt++) {
 		try {
 			const rows = await sql()`
 				insert into registrations (
 					code, full_name, email, phone, photo_key, company_name, designation, industry, city,
 					interests, consent, whatsapp_updates, status, reviewed_at, reviewed_by,
-					ticket_type, amount_rupees, walk_in
+					ticket_type, amount_rupees, discount_rupees, upi_txn_id, walk_in
 				) values (
 					${newCode(input.ticketType)}, ${input.fullName}, '', '', '', ${input.companyName}, ${input.designation}, '', '',
 					'{}', false, false, 'paid', now(), ${by},
-					${input.ticketType}, ${amountRupees}, true
+					${input.ticketType}, ${amountRupees}, ${discountRupees}, ${upiTxnId}, true
 				)
 				returning *`;
-			return fromRow(rows[0]);
+			return { ok: true, registration: fromRow(rows[0]) };
 		} catch (e) {
-			if (uniqueViolation(e) === 'registrations_code_key') continue;
+			const constraint = uniqueViolation(e);
+			if (constraint === 'registrations_code_key') continue;
+			if (constraint === 'registrations_upi_txn_id_key') return { ok: false, reason: 'utr_used' };
 			throw e;
 		}
 	}
