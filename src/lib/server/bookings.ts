@@ -368,6 +368,91 @@ export async function createStallBooking(input: StallBookingInput): Promise<Crea
 	throw new Error('Could not create a booking code.');
 }
 
+export interface ConfirmedStallBookingInput {
+	fullName: string;
+	businessName: string;
+	email: string;
+	phone: string;
+	offer: StallOffer;
+	allottedStall: number;
+	/** What the exhibitor paid, up to the offer's price. 0 for a complimentary stall. */
+	amountRupees: number;
+	upiTxnId: string | null;
+}
+
+export type ConfirmedBookingResult = { ok: true; booking: StallBooking } | { ok: false; reason: 'stall_taken' | 'utr_used' };
+
+/**
+ * Adds a booking an organiser took offline, already confirmed (paid or
+ * complimentary) with its stall, which is locked from then on like any other.
+ * Refused when the stall is confirmed for someone else, or the UPI transaction
+ * ID is already on a stall booking or a delegate registration.
+ */
+export async function createConfirmedStallBooking(input: ConfirmedStallBookingInput, by: string): Promise<ConfirmedBookingResult> {
+	await ensureReady();
+	const { offer, allottedStall, upiTxnId } = input;
+	const base = {
+		fullName: input.fullName.trim().replace(/\s+/g, ' '),
+		businessName: input.businessName.trim().replace(/\s+/g, ' '),
+		email: input.email.trim().toLowerCase(),
+		phone: normalisePhone(input.phone)!,
+		// Shown as the exhibitor's choice too, so the list doesn't say "Any".
+		preferredStall: allottedStall,
+		allottedStall,
+		stallType: `${offer.name} (${offer.sizeLabel})`,
+		priceRupees: offer.priceRupees,
+		voucherCode: null,
+		discountRupees: Math.round((offer.priceRupees - input.amountRupees) * 100) / 100,
+		amountRupees: input.amountRupees,
+		payeeVpa: offer.vpa,
+		payeeName: offer.payeeName,
+		upiTxnId
+	};
+
+	if (useMemory) {
+		if (memory.bookings.some((b) => b.status === 'paid' && b.allottedStall === allottedStall)) return { ok: false, reason: 'stall_taken' };
+		if (upiTxnId && memory.bookings.some((b) => b.upiTxnId === upiTxnId)) return { ok: false, reason: 'utr_used' };
+		const now = new Date().toISOString();
+		const booking: StallBooking = {
+			...base,
+			id: crypto.randomUUID(),
+			code: newCode(),
+			status: 'paid',
+			paymentSubmittedAt: null,
+			reviewedAt: now,
+			reviewedBy: by,
+			rejectionReason: null,
+			createdAt: now
+		};
+		memory.bookings.push(booking);
+		return { ok: true, booking };
+	}
+
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const code = newCode();
+		try {
+			const rows = await sql()`
+				insert into stall_bookings (code, full_name, business_name, email, phone, preferred_stall, allotted_stall, stall_type,
+					price_rupees, discount_rupees, amount_rupees, payee_vpa, payee_name, status, upi_txn_id, reviewed_at, reviewed_by)
+				select ${code}, ${base.fullName}, ${base.businessName}, ${base.email}, ${base.phone}, ${allottedStall}, ${allottedStall},
+					${base.stallType}, ${base.priceRupees}, ${base.discountRupees}, ${base.amountRupees}, ${base.payeeVpa}, ${base.payeeName},
+					'paid', ${upiTxnId}, now(), ${by}
+				where not exists (select 1 from stall_bookings where status = 'paid' and allotted_stall = ${allottedStall})
+					and (${upiTxnId}::text is null or (
+						not exists (select 1 from stall_bookings where upi_txn_id = ${upiTxnId})
+						and not exists (select 1 from registrations where upi_txn_id = ${upiTxnId})))
+				returning *`;
+			if (rows[0]) return { ok: true, booking: bookingFrom(rows[0]) };
+			return { ok: false, reason: (await takenStalls()).includes(allottedStall) ? 'stall_taken' : 'utr_used' };
+		} catch (e) {
+			// A code collision, or the same UPI ID saved a moment ago: the retry reports that.
+			if (uniqueViolation(e) && attempt < 2) continue;
+			throw e;
+		}
+	}
+	throw new Error('Could not create a booking code.');
+}
+
 export async function findStallBooking(code: string, email: string): Promise<StallBooking | null> {
 	const wantedEmail = email.trim().toLowerCase();
 	if (useMemory) return memory.bookings.find((b) => b.code === code && b.email === wantedEmail) ?? null;

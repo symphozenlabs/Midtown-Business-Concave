@@ -2,6 +2,7 @@
  * Stall booking and sponsor requests: the rules the browser and the server share.
  */
 
+import { formatRupees, normaliseUtr } from './payment.ts';
 import { normalisePhone } from './registration.ts';
 
 /**
@@ -67,6 +68,42 @@ export function validateStallBooking(input: StallBookingInput): Partial<Record<S
 	if (!normalisePhone(input.phone)) errors.phone = 'Enter a 10-digit Indian mobile number.';
 	if (input.preferredStall !== null && !STALL_NUMBERS.includes(input.preferredStall)) {
 		errors.preferredStall = 'Choose a stall number from the layout.';
+	}
+	return errors;
+}
+
+/**
+ * A booking an organiser adds in Admin → Stalls for someone who booked offline:
+ * already paid (or complimentary), with its stall allotted.
+ */
+export interface ManualStallBookingInput {
+	fullName: string;
+	businessName: string;
+	email: string;
+	phone: string;
+	allottedStall: number | null;
+	/** What the exhibitor paid. 0 for a complimentary stall; NaN when not a number. */
+	amountRupees: number;
+	/** Optional: the 12-digit UPI transaction ID, as typed. */
+	upiTxnId: string;
+}
+
+export type ManualStallField = Exclude<StallField, 'preferredStall'> | 'allottedStall' | 'amountRupees' | 'upiTxnId';
+
+export function validateManualStallBooking(input: ManualStallBookingInput, priceRupees: number): Partial<Record<ManualStallField, string>> {
+	// The website's checks for the exhibitor; no preferred stall, so no error for it.
+	const errors: Partial<Record<ManualStallField, string>> = validateStallBooking({ ...input, preferredStall: null, stallTypeId: '', promoCode: '' });
+	if (input.allottedStall === null || !STALL_NUMBERS.includes(input.allottedStall)) {
+		errors.allottedStall = 'Choose a stall number from the layout.';
+	}
+	const amount = input.amountRupees;
+	if (!Number.isFinite(amount) || amount < 0 || Math.round(amount * 100) !== amount * 100) {
+		errors.amountRupees = 'Enter the amount received in rupees, or 0 for a complimentary stall.';
+	} else if (amount > priceRupees) {
+		errors.amountRupees = `This stall type costs ${formatRupees(priceRupees)}. Enter that or less.`;
+	}
+	if (input.upiTxnId.trim() && !normaliseUtr(input.upiTxnId)) {
+		errors.upiTxnId = 'A UPI transaction ID is 12 digits. Leave it empty for cash or a bank transfer.';
 	}
 	return errors;
 }
