@@ -3,6 +3,7 @@ import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/ev
 import { DEFAULT_PAYMENT, isTicketType, priceFor, type PaymentSettings, type TicketType } from '#lib/payment.ts';
 import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
 import { codePrefix, codeVariants, withTicketPrefix } from '#lib/registration-code.ts';
+import type { WalkInInput } from '#lib/walk-in.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 import { findVoucher, listVouchers } from './vouchers.ts';
 
@@ -61,6 +62,11 @@ export interface Registration extends RegistrationInput {
 	/** Delegate-pass voucher applied on the payment step; amountRupees is already reduced by it. */
 	voucherCode: string | null;
 	discountRupees: number;
+	/**
+	 * Made at the help desk (see #lib/walk-in.ts): name, designation, company and ticket
+	 * only. Email, phone, photo, industry and city are empty and no ticket email goes out.
+	 */
+	walkIn: boolean;
 	createdAt: string;
 }
 
@@ -158,6 +164,7 @@ function fromRow(r: Record<string, any>): Registration {
 		postKey: r.post_key ?? null,
 		voucherCode: r.voucher_code ?? null,
 		discountRupees: Number(r.discount_rupees ?? 0),
+		walkIn: r.walk_in === true,
 		createdAt: iso(r.created_at)!
 	};
 }
@@ -513,6 +520,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			postKey: null,
 			voucherCode: null,
 			discountRupees: 0,
+			walkIn: false,
 			createdAt: now()
 		};
 		mem.rows.set(row.id, row);
@@ -541,6 +549,126 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
 			const constraint = uniqueViolation(e);
 			if (constraint === 'registrations_code_key') continue;
 			if (constraint === 'registrations_email_key') throw new DuplicateEmailError();
+			throw e;
+		}
+	}
+	throw new Error('Could not allocate a registration code');
+}
+
+/* ---------- walk-ins, made at the help desk ---------- */
+
+/*
+ * Walk-in rows keep email, phone, photo, industry and city empty, so the checks that
+ * require them skip walk-ins, and the one-registration-per-email index ignores them.
+ * Same statements as db/schema.sql; each change is made only once.
+ */
+const WALK_IN_SCHEMA = String.raw`
+do $$
+declare c record;
+begin
+	alter table registrations add column if not exists walk_in boolean not null default false;
+	for c in select * from (values
+		('registrations_phone_check', $c$phone ~ '^\+91[6-9][0-9]{9}$'$c$),
+		('registrations_industry_check', 'char_length(industry) between 2 and 36'),
+		('registrations_city_check', 'char_length(city) between 2 and 60'),
+		('registrations_interests_check', 'cardinality(interests) between 1 and 5'),
+		('registrations_consent_check', 'consent')
+	) as t(name, expr) loop
+		if not exists (
+			select 1 from pg_constraint
+			where conrelid = 'registrations'::regclass and conname = c.name and pg_get_constraintdef(oid) like '%walk_in%'
+		) then
+			execute format('alter table registrations drop constraint if exists %I', c.name);
+			execute format('alter table registrations add constraint %I check (walk_in or (%s))', c.name, c.expr);
+		end if;
+	end loop;
+	if not exists (
+		select 1 from pg_indexes
+		where schemaname = current_schema() and indexname = 'registrations_email_key' and indexdef like '%walk_in%'
+	) then
+		drop index if exists registrations_email_key;
+		create unique index registrations_email_key on registrations (lower(email)) where not walk_in;
+	end if;
+end $$`;
+
+let walkInsReady: Promise<void> | null = null;
+
+/** Lets the registrations table hold walk-ins, once per server instance, if db/schema.sql has not been rerun. */
+function ensureWalkIns() {
+	walkInsReady ??= sql()
+		.query(WALK_IN_SCHEMA)
+		.then(() => undefined)
+		.catch((e) => {
+			walkInsReady = null;
+			throw e;
+		});
+	return walkInsReady;
+}
+
+/**
+ * A walk-in's pass, made by an organiser at the desk: paid and confirmed at once, at the
+ * ticket's current price, with a new MBC- or MBCV- code. No poster and no ticket email.
+ */
+export async function createWalkIn(input: WalkInInput, by: string): Promise<Registration> {
+	const amountRupees = priceFor(await getPaymentSettings(), input.ticketType);
+	if (useMemory) {
+		const row: Registration = {
+			...input,
+			email: '',
+			phone: '',
+			photoKey: '',
+			posterKey: '',
+			industry: '',
+			about: null,
+			website: null,
+			linkedin: null,
+			city: '',
+			interests: [],
+			heardFrom: null,
+			whatsappUpdates: false,
+			posterFraming: { zoom: 1, dx: 0, dy: 0 },
+			amountRupees,
+			id: crypto.randomUUID(),
+			code: newCode(input.ticketType),
+			status: 'paid',
+			upiTxnId: null,
+			paymentSubmittedAt: null,
+			reviewedAt: now(),
+			reviewedBy: by,
+			rejectionReason: null,
+			ticketEmailedAt: null,
+			ticketEmailId: null,
+			ticketEmailStatus: null,
+			ticketEmailEvent: null,
+			ticketEmailCheckedAt: null,
+			ticketBackKey: null,
+			postKey: null,
+			voucherCode: null,
+			discountRupees: 0,
+			walkIn: true,
+			createdAt: now()
+		};
+		mem.rows.set(row.id, row);
+		return row;
+	}
+
+	await Promise.all([ensureWalkIns(), ensureTicketTypeColumn()]);
+	for (let attempt = 0; attempt < 4; attempt++) {
+		try {
+			const rows = await sql()`
+				insert into registrations (
+					code, full_name, email, phone, photo_key, company_name, designation, industry, city,
+					interests, consent, whatsapp_updates, status, reviewed_at, reviewed_by,
+					ticket_type, amount_rupees, walk_in
+				) values (
+					${newCode(input.ticketType)}, ${input.fullName}, '', '', '', ${input.companyName}, ${input.designation}, '', '',
+					'{}', false, false, 'paid', now(), ${by},
+					${input.ticketType}, ${amountRupees}, true
+				)
+				returning *`;
+			return fromRow(rows[0]);
+		} catch (e) {
+			if (uniqueViolation(e) === 'registrations_code_key') continue;
 			throw e;
 		}
 	}
@@ -696,7 +824,7 @@ async function queryRegistrations(
 		const needle = q.toLowerCase();
 		const all = [...mem.rows.values()]
 			.filter((r) => filter.status === 'all' || r.status === filter.status)
-			.filter((r) => email === 'all' || (r.status === 'paid' && emailStateOf(r) === email))
+			.filter((r) => email === 'all' || (r.status === 'paid' && !!r.email && emailStateOf(r) === email))
 			.filter(
 				(r) =>
 					!needle ||
@@ -715,7 +843,7 @@ async function queryRegistrations(
 	const rows = await sql()`
 		select *, count(*) over ()::int as total_matches from registrations
 		where (${filter.status}::text = 'all' or status = ${filter.status})
-			and (${email}::text = 'all' or (status = 'paid' and (
+			and (${email}::text = 'all' or (status = 'paid' and email <> '' and (
 				case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end
 			) = ${email}))
 			and (${q}::text = '' or full_name ilike ${like} or email ilike ${like} or code ilike ${like}
@@ -738,7 +866,8 @@ export async function getStats(): Promise<Stats> {
 			counts[r.status]++;
 			if (r.status === 'paid') {
 				collectedRupees += r.amountRupees;
-				email[emailStateOf(r)]++;
+				// Walk-ins have no email address, so no ticket email to count.
+				if (r.email) email[emailStateOf(r)]++;
 			}
 		}
 		return { counts, collectedRupees, ticketsToSend: email.not_sent, email };
@@ -750,7 +879,7 @@ export async function getStats(): Promise<Stats> {
 		sql()`
 			select case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end as state,
 				count(*)::int as n
-			from registrations where status = 'paid' group by 1`
+			from registrations where status = 'paid' and email <> '' group by 1`
 	]);
 	for (const r of rows) {
 		counts[r.status as Status] = r.n;
@@ -824,17 +953,17 @@ export async function markManyPaid(ids: string[], by: string): Promise<Registrat
 	return rows.map(fromRow);
 }
 
-/** Paid registrations whose ticket has not been emailed, oldest approval first. */
+/** Paid registrations whose ticket has not been emailed, oldest approval first. Walk-ins have no email. */
 export async function listUnsentTickets(limit: number): Promise<Registration[]> {
 	if (useMemory) {
 		return [...mem.rows.values()]
-			.filter((r) => r.status === 'paid' && !r.ticketEmailedAt)
+			.filter((r) => r.status === 'paid' && r.email && !r.ticketEmailedAt)
 			.sort((a, b) => (a.reviewedAt ?? '').localeCompare(b.reviewedAt ?? ''))
 			.slice(0, limit);
 	}
 	const rows = await sql()`
 		select * from registrations
-		where status = 'paid' and ticket_emailed_at is null
+		where status = 'paid' and email <> '' and ticket_emailed_at is null
 		order by reviewed_at asc nulls first
 		limit ${limit}`;
 	return rows.map(fromRow);
