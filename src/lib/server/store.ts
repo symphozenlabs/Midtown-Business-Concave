@@ -652,6 +652,30 @@ export async function listRegistrations(filter: RegistrationFilter): Promise<Reg
 	return (await queryRegistrations(filter, 500, 0)).rows;
 }
 
+export type LabelRegistration = Pick<Registration, 'id' | 'fullName' | 'designation' | 'companyName' | 'ticketType'>;
+
+/** Every paid registration, no cap: Delegates then Visitors, each by name. For printing QR labels. */
+export async function listPaidForLabels(): Promise<LabelRegistration[]> {
+	if (useMemory) {
+		return [...mem.rows.values()]
+			.filter((r) => r.status === 'paid')
+			.sort((a, b) => (a.ticketType === b.ticketType ? a.fullName.localeCompare(b.fullName) : a.ticketType === 'delegate' ? -1 : 1))
+			.map(({ id, fullName, designation, companyName, ticketType }) => ({ id, fullName, designation, companyName, ticketType }));
+	}
+	await ensureTicketTypeColumn();
+	const rows = await sql()`
+		select id, full_name, designation, company_name, ticket_type from registrations
+		where status = 'paid'
+		order by case ticket_type when 'visitor' then 1 else 0 end, lower(full_name), id`;
+	return rows.map((r) => ({
+		id: r.id,
+		fullName: r.full_name,
+		designation: r.designation,
+		companyName: r.company_name,
+		ticketType: isTicketType(r.ticket_type) ? r.ticket_type : 'delegate'
+	}));
+}
+
 /** One page of the matching registrations, with how many match in all. */
 export async function listRegistrationsPage(
 	filter: RegistrationFilter,

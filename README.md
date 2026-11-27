@@ -106,6 +106,10 @@ and what a scan does depends on the signed-in handler's assigned category:
   history). `/admin/event-setup` holds gates, halls and sessions, meals (times, servings per delegate, who may
   collect), the re-entry rule, certificate rules and **Reissue QR** (revokes a lost or shared pass).
   `/admin/activity` shows totals by category and handler, filterable scan history, CSV export and the audit log.
+  **QR labels** on the Participants table downloads every paid Delegate and Visitor as Excel or CSV
+  (`/admin/qr-labels?format=xlsx|csv`) for printing labels in OpenLabel. Columns: Visitor Type, Name, URL for QR
+  (the same pass link as the QR on the ID card back, so a reissued QR means printing that label again),
+  Designation, Company.
 - **Handlers** sign in at `/login` (the same page as the organiser) with their username or email; `/handler/login`
   also works. One category opens its desk straight away; several show a choice. Tap
   **Start scanning**: the camera reads passes (rear or front camera, torch where the phone has one), each result
