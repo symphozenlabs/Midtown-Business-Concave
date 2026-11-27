@@ -102,6 +102,39 @@ create unique index if not exists registrations_upi_txn_id_key on registrations 
 create index if not exists registrations_created_at_idx on registrations (created_at desc);
 create index if not exists registrations_status_idx on registrations (status, payment_submitted_at desc);
 
+-- Walk-ins: passes made at the help desk (Admin → Participants → Walk-in) with only a
+-- name, designation, company and ticket. Their email, phone, photo, industry and city
+-- are empty, so the checks that require those skip walk-ins and the one-registration-
+-- per-email index ignores them. The app makes the same change on first use
+-- (ensureWalkIns in src/lib/server/store.ts); each step runs only once.
+alter table registrations add column if not exists walk_in boolean not null default false;
+do $$
+declare c record;
+begin
+  for c in select * from (values
+    ('registrations_phone_check', $c$phone ~ '^\+91[6-9][0-9]{9}$'$c$),
+    ('registrations_industry_check', 'char_length(industry) between 2 and 36'),
+    ('registrations_city_check', 'char_length(city) between 2 and 60'),
+    ('registrations_interests_check', 'cardinality(interests) between 1 and 5'),
+    ('registrations_consent_check', 'consent')
+  ) as t(name, expr) loop
+    if not exists (
+      select 1 from pg_constraint
+      where conrelid = 'registrations'::regclass and conname = c.name and pg_get_constraintdef(oid) like '%walk_in%'
+    ) then
+      execute format('alter table registrations drop constraint if exists %I', c.name);
+      execute format('alter table registrations add constraint %I check (walk_in or (%s))', c.name, c.expr);
+    end if;
+  end loop;
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = current_schema() and indexname = 'registrations_email_key' and indexdef like '%walk_in%'
+  ) then
+    drop index if exists registrations_email_key;
+    create unique index registrations_email_key on registrations (lower(email)) where not walk_in;
+  end if;
+end $$;
+
 -- Admin-editable settings: ticket price and the UPI details behind the payment QR.
 create table if not exists settings (
   key        text primary key,

@@ -49,6 +49,8 @@ export async function listPeople(me: string): Promise<DirectoryPerson[]> {
 		from registrations r
 		left join directory_members m on m.registration_id = r.id
 		where r.status = 'paid' and r.id <> ${me}
+			-- Walk-ins have no email, so can't sign in to read messages: leave them out.
+			and r.email <> ''
 			and not coalesce(m.hidden, false) and not coalesce(m.admin_hidden, false)
 			and not exists (
 				select 1 from directory_blocks b

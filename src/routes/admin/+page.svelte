@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { enhance } from '$app/forms';
+	import { enhance, type SubmitFunction } from '$app/forms';
 	import { afterNavigate, invalidateAll } from '$app/navigation';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -33,11 +33,14 @@
 		Search,
 		Send,
 		Trash2,
+		UserPlus,
 		X
 	} from '@lucide/svelte';
+	import OpsDialog from '#lib/components/ops/OpsDialog.svelte';
 	import { eventLabels, type EventSettings } from '#lib/event-settings.ts';
 	import { INTERESTS } from '#lib/registration.ts';
-	import { formatRupees } from '#lib/payment.ts';
+	import { formatRupees, TICKET_LABEL, TICKET_TYPES } from '#lib/payment.ts';
+	import { WALK_IN_LIMITS, type WalkInErrors } from '#lib/walk-in.ts';
 
 	let { data, form } = $props();
 
@@ -308,9 +311,13 @@
 	let labelFrame: HTMLIFrameElement | null = null;
 	$effect(() => () => labelFrame?.remove());
 
-	async function printLabel(e: MouseEvent, id: string) {
+	function printLabel(e: MouseEvent, id: string) {
 		if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
 		e.preventDefault();
+		printLabelFor(id);
+	}
+
+	async function printLabelFor(id: string) {
 		if (label && !label.error) return;
 		label = { id, error: null };
 		try {
@@ -342,6 +349,45 @@
 			label = { id, error: err instanceof Error && err.message ? err.message : 'Could not print the label.' };
 		}
 	}
+
+	/*
+	 * Walk-in: a pass made at the help desk for someone registering on the day. Name,
+	 * designation, company and ticket only; it is added as paid and its label printed.
+	 */
+	type WalkInFeedback = { walkIn?: boolean; errors?: WalkInErrors; message?: string } | null;
+	let walkInOpen = $state(false);
+	let walkInSaving = $state(false);
+	let walkInName: HTMLInputElement | undefined = $state();
+	// A failed attempt's errors belong to it; opening the form again starts clean.
+	let walkInDismissed = $state<unknown>(null);
+	const walkInFeedback = $derived(form !== walkInDismissed && (form as WalkInFeedback)?.walkIn ? (form as WalkInFeedback) : null);
+
+	function openWalkIn() {
+		walkInDismissed = form;
+		walkInOpen = true;
+		requestAnimationFrame(() => walkInName?.focus());
+	}
+
+	const addWalkIn: SubmitFunction = () => {
+		walkInSaving = true;
+		return async ({ result, update }) => {
+			await update({ reset: result.type === 'success' });
+			walkInSaving = false;
+			if (result.type !== 'success') return;
+			walkInOpen = false;
+			const created = result.data as { id?: string; print?: boolean } | undefined;
+			if (created?.id && created.print) printLabelFor(created.id);
+		};
+	};
+
+	const initials = (name: string) =>
+		name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((w) => w[0])
+			.join('')
+			.toUpperCase();
 
 	async function copy(text: string, key: string) {
 		try {
@@ -490,7 +536,7 @@
 	</div>
 {/if}
 
-{#if form?.message}
+{#if form?.message && !form?.walkIn}
 	<div class="banner error" role="alert">
 		<CircleAlert size={16} aria-hidden="true" />
 		<p>{form.message}</p>
@@ -582,6 +628,68 @@
 						aria-label="Search registrations"
 					/>
 				</form>
+				<button
+					type="button"
+					class="btn btn-primary btn-sm"
+					onclick={openWalkIn}
+					title="Make a pass for someone registering at the desk, and print their label"
+				>
+					<UserPlus size={15} aria-hidden="true" /> Walk-in
+				</button>
+				<OpsDialog
+					bind:open={walkInOpen}
+					title="Walk-in pass"
+					description="For someone registering at the desk. They are added as paid at the ticket’s price, with a QR pass and no email."
+				>
+					<form method="post" action={act('createWalkIn')} class="ops-form" use:enhance={addWalkIn}>
+						{#if walkInFeedback?.message}
+							<div class="ops-banner error" role="alert"><CircleAlert size={16} aria-hidden="true" /><p>{walkInFeedback.message}</p></div>
+						{/if}
+						<label class="ops-label">
+							Name <small>As it should print on the label</small>
+							<input bind:this={walkInName} name="fullName" maxlength={WALK_IN_LIMITS.fullName} required autocomplete="off" />
+							{#if walkInFeedback?.errors?.fullName}<small class="ops-field-error">{walkInFeedback.errors.fullName}</small>{/if}
+						</label>
+						<label class="ops-label">
+							Designation
+							<input name="designation" maxlength={WALK_IN_LIMITS.designation} required autocomplete="off" />
+							{#if walkInFeedback?.errors?.designation}<small class="ops-field-error">{walkInFeedback.errors.designation}</small>{/if}
+						</label>
+						<label class="ops-label">
+							Company
+							<input name="companyName" maxlength={WALK_IN_LIMITS.companyName} required autocomplete="off" />
+							{#if walkInFeedback?.errors?.companyName}<small class="ops-field-error">{walkInFeedback.errors.companyName}</small>{/if}
+						</label>
+						<fieldset class="ticket-choice">
+							<legend>Ticket</legend>
+							<div class="ticket-options">
+								{#each TICKET_TYPES as t (t)}
+									<label class="ticket-option">
+										<input type="radio" name="ticketType" value={t} required />
+										<span>
+											<strong>{TICKET_LABEL[t]}</strong>
+											<small>{formatRupees(data.prices[t])}</small>
+										</span>
+									</label>
+								{/each}
+							</div>
+							{#if walkInFeedback?.errors?.ticketType}<small class="ops-field-error">{walkInFeedback.errors.ticketType}</small>{/if}
+						</fieldset>
+						<label class="ops-check">
+							<input type="checkbox" name="print" checked />
+							Print the label now
+						</label>
+						<div class="ops-dialog-actions">
+							<button type="button" class="btn btn-ghost btn-sm" onclick={() => (walkInOpen = false)}>Cancel</button>
+							<button type="submit" class="btn btn-primary btn-sm" disabled={walkInSaving}>
+								{#if walkInSaving}<LoaderCircle size={15} class="spin" aria-hidden="true" /> Adding…{:else}<UserPlus
+										size={15}
+										aria-hidden="true"
+									/> Add walk-in{/if}
+							</button>
+						</div>
+					</form>
+				</OpsDialog>
 				<form method="post" action={act('checkDelivery')} use:enhance={working('check')}>
 					<button
 						type="submit"
@@ -813,14 +921,23 @@
 								</td>
 								<td class="delegate">
 									<div class="person">
-										<img class="photo" src={media(r.photoKey)} alt="" width="34" height="34" loading="lazy" />
+										{#if r.photoKey}
+											<img class="photo" src={media(r.photoKey)} alt="" width="34" height="34" loading="lazy" />
+										{:else}
+											<span class="photo initials" aria-hidden="true">{initials(r.fullName)}</span>
+										{/if}
 										<div class="who">
 											<strong>{r.fullName}</strong>
-											<span class="mono code">{r.code}{#if r.ticketType === 'visitor'} · <span class="ticket-tag">Visitor</span>{/if}</span>
+											<span class="mono code"
+												>{r.code}{#if r.ticketType === 'visitor'} · <span class="ticket-tag">Visitor</span>{/if}{#if r.walkIn}
+													· <span class="ticket-tag">Walk-in</span>{/if}</span
+											>
 										</div>
 									</div>
 								</td>
-								<td class="email"><a href="mailto:{r.email}">{r.email}</a></td>
+								<td class="email">
+									{#if r.email}<a href="mailto:{r.email}">{r.email}</a>{:else}<span class="muted">—</span>{/if}
+								</td>
 								<td class="utr">
 									{#if r.upiTxnId}
 										<button type="button" class="copy mono" onclick={() => copy(r.upiTxnId!, r.id)} title="Copy">
@@ -845,7 +962,9 @@
 									<span class="status {r.status}">{STATUS_LABEL[r.status as Status]}</span>
 								</td>
 								<td class="mail">
-									{#if r.status === 'paid'}
+									{#if r.status === 'paid' && r.walkIn}
+										<span class="muted">Walk-in · no email</span>
+									{:else if r.status === 'paid'}
 										{@const state = emailState(r)}
 										<span class="mail-pill {state}">
 											<span class="dot" aria-hidden="true"></span>
@@ -886,6 +1005,7 @@
 													/>{/if}
 												<span class="action-label">Print label</span>
 											</a>
+											{#if !r.walkIn}
 											<form method="post" action={act('resend')} use:enhance={working(r.id)}>
 												<input type="hidden" name="id" value={r.id} />
 												<button
@@ -905,6 +1025,7 @@
 													<span class="action-label">{state === 'not_sent' ? 'Send now' : 'Resend'}</span>
 												</button>
 											</form>
+											{/if}
 										{:else}
 											<form method="post" action={act('markPaid')} use:enhance={working(r.id)}>
 												<input type="hidden" name="id" value={r.id} />
@@ -1011,8 +1132,8 @@
 													{#if r.status === 'paid'}
 														<p class="note">
 															<BadgeCheck size={14} aria-hidden="true" />
-															Confirmed {fmt(r.reviewedAt)}{r.reviewedBy ? ` by ${r.reviewedBy}` : ''}
-															{#if r.ticketEmailedAt}· ticket emailed {fmt(r.ticketEmailedAt)}{#if r.ticketEmailEvent}
+															{r.walkIn ? 'Walk-in added' : 'Confirmed'} {fmt(r.reviewedAt)}{r.reviewedBy ? ` by ${r.reviewedBy}` : ''}
+															{#if r.walkIn}· no email, so print their label{:else if r.ticketEmailedAt}· ticket emailed {fmt(r.ticketEmailedAt)}{#if r.ticketEmailEvent}
 																({r.ticketEmailEvent.replace(/_/g, ' ')}{r.ticketEmailCheckedAt
 																	? `, checked ${fmt(r.ticketEmailCheckedAt)}`
 																	: ''}){/if}{:else}· ticket not emailed yet{/if}
@@ -1027,10 +1148,10 @@
 													{/if}
 
 													<dl class="facts">
-														<div><dt>Phone</dt><dd><a href="tel:{r.phone}">{r.phone}</a></dd></div>
+														<div><dt>Phone</dt><dd>{#if r.phone}<a href="tel:{r.phone}">{r.phone}</a>{:else}—{/if}</dd></div>
 														<div><dt>Designation</dt><dd>{r.designation}</dd></div>
 														<div><dt>Company</dt><dd>{r.companyName}</dd></div>
-														<div><dt>Industry</dt><dd>{r.industry}</dd></div>
+														<div><dt>Industry</dt><dd>{r.industry || '—'}</dd></div>
 														<div><dt>About the business</dt><dd>{r.about ?? '—'}</dd></div>
 														<div>
 															<dt>Website</dt>
@@ -1041,8 +1162,8 @@
 														{#if r.linkedin}
 															<div><dt>LinkedIn</dt><dd><a href={r.linkedin} target="_blank" rel="noopener">{r.linkedin}</a></dd></div>
 														{/if}
-														<div><dt>Travelling from</dt><dd>{r.city}</dd></div>
-														<div><dt>Interested in</dt><dd>{r.interests.map(interestLabel).join(', ')}</dd></div>
+														<div><dt>Travelling from</dt><dd>{r.city || '—'}</dd></div>
+														<div><dt>Interested in</dt><dd>{r.interests.map(interestLabel).join(', ') || '—'}</dd></div>
 														<div><dt>Heard from</dt><dd>{r.heardFrom ?? '—'}</dd></div>
 														<div><dt>WhatsApp updates</dt><dd>{r.whatsappUpdates ? 'Yes' : 'No'}</dd></div>
 														<div><dt>Registered</dt><dd>{fmt(r.createdAt)}</dd></div>
@@ -1054,7 +1175,7 @@
 														{/if}
 													</dl>
 
-													{#if r.status === 'paid' && data.directoryFlags}
+													{#if r.status === 'paid' && !r.walkIn && data.directoryFlags}
 														{@const dir = data.directoryFlags[r.id]}
 														<form method="post" action={act('directoryFlags')} use:enhance={working(r.id)} class="dir-flags">
 															<input type="hidden" name="id" value={r.id} />
@@ -1796,6 +1917,76 @@
 
 	.row-actions form {
 		display: contents;
+	}
+
+	/* A walk-in has no photo: their initials instead. */
+	.photo.initials {
+		display: grid;
+		place-items: center;
+		font-size: 12px;
+		font-weight: 700;
+		color: var(--charcoal);
+	}
+
+	/* Walk-in form: Delegate or Visitor, with what they pay. */
+	.ticket-choice {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+
+	.ticket-choice legend {
+		margin-bottom: var(--space-2);
+		padding: 0;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--charcoal);
+	}
+
+	.ticket-options {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-2);
+	}
+
+	.ticket-option {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-height: 48px;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-sm);
+		background: var(--white);
+		cursor: pointer;
+	}
+
+	.ticket-option:has(input:checked) {
+		border-color: var(--gold-ink);
+		box-shadow: inset 0 0 0 1px var(--gold-ink);
+	}
+
+	.ticket-option:has(input:focus-visible) {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 1px;
+	}
+
+	.ticket-option input {
+		width: 18px;
+		height: 18px;
+		margin: 0;
+		accent-color: var(--gold-ink);
+	}
+
+	.ticket-option span {
+		display: grid;
+		line-height: 1.25;
+	}
+
+	.ticket-option small {
+		font-size: 12px;
+		color: var(--text-supporting);
 	}
 
 	.label-error {

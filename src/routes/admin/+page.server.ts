@@ -15,13 +15,17 @@ import { deleteObject, getObject, isR2Configured } from '#lib/server/r2.ts';
 import { cardBacksToMake, markPassEmailed, passEmailFor, passesToSend } from '#lib/server/ops/passes.ts';
 import { adminFlagsFor, setAdminFlags } from '#lib/server/directory/people.ts';
 import { directoryReady } from '#lib/server/directory/settings.ts';
-import { getDefaultEvent } from '#lib/server/ops/event.ts';
+import { audit, getDefaultEvent, opsReady } from '#lib/server/ops/event.ts';
+import { TICKET_LABEL, priceFor } from '#lib/payment.ts';
+import { readWalkIn } from '#lib/walk-in.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
+	createWalkIn,
 	deleteRegistration,
 	getEventSettings,
 	getFrontsOutdated,
+	getPaymentSettings,
 	getRegistration,
 	setFrontsOutdated,
 	getStats,
@@ -54,7 +58,8 @@ const CHECK_BATCH = 25;
 /** ID card backs the organiser's browser should draw now, with what each needs. Never blocks the page. */
 async function cardBackJobs(origin: string) {
 	try {
-		const paid = await listRegistrations({ status: 'paid', q: '' });
+		// Walk-ins get a printed label, not an emailed ID card.
+		const paid = (await listRegistrations({ status: 'paid', q: '' })).filter((r) => !r.walkIn);
 		const jobs = await cardBacksToMake(paid, origin);
 		const byId = new Map(paid.map((r) => [r.id, r]));
 		return jobs.map((j) => {
@@ -116,13 +121,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 	const requestedPage = Math.max(1, Math.floor(Number(url.searchParams.get('page')) || 1));
 
-	const [table, passes, cardBacks, cardPosts, event, frontsOutdated] = await Promise.all([
+	const [table, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
 		tablePage({ status, q, email }, requestedPage),
 		passesToSend(1),
 		cardBackJobs(publicOrigin(url)),
 		cardPostJobs(),
 		getEventSettings(),
-		getFrontsOutdated()
+		getFrontsOutdated(),
+		getPaymentSettings()
 	]);
 	const directoryFlags = (await directoryReady()) ? await adminFlagsFor(table.rows.map((r) => r.id)) : null;
 	return {
@@ -137,7 +143,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		cardBacks,
 		cardPosts,
 		event,
-		frontsOutdated
+		frontsOutdated,
+		/** What a walk-in pays for each ticket. */
+		prices: { delegate: priceFor(payment, 'delegate'), visitor: priceFor(payment, 'visitor') }
 	};
 };
 
@@ -272,6 +280,43 @@ export const actions: Actions = {
 		return { success: parts.join(' ') };
 	},
 
+	/**
+	 * A walk-in's pass, made at the help desk: name, designation, company and ticket only.
+	 * Added as paid at the ticket's price; the dashboard then prints their label.
+	 */
+	createWalkIn: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { walkIn: true, message: 'Sign in again.' });
+		const form = await request.formData();
+		const read = readWalkIn({
+			fullName: form.get('fullName'),
+			designation: form.get('designation'),
+			companyName: form.get('companyName'),
+			ticketType: form.get('ticketType')
+		});
+		if (!read.ok) return fail(400, { walkIn: true, errors: read.errors, message: 'Check the highlighted fields.' });
+
+		const reg = await createWalkIn(read.input, locals.admin.email);
+		if (isDatabaseConfigured && (await opsReady())) {
+			const event = await getDefaultEvent();
+			await audit({
+				eventId: event.id,
+				actorType: 'admin',
+				actor: locals.admin.email,
+				action: 'registration.walk-in',
+				targetType: 'registration',
+				targetId: reg.id,
+				details: { code: reg.code, ticketType: reg.ticketType, amountRupees: reg.amountRupees }
+			});
+		}
+		console.info(`[admin] ${locals.admin.email} added walk-in ${reg.code} (${reg.fullName})`);
+		return {
+			id: reg.id,
+			walkIn: true,
+			print: form.get('print') === 'on',
+			success: `Added ${reg.fullName} as a walk-in ${TICKET_LABEL[reg.ticketType]} (${reg.code}).`
+		};
+	},
+
 	reject: async ({ request, locals }) => {
 		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
 		const form = await request.formData();
@@ -344,6 +389,7 @@ export const actions: Actions = {
 		const id = String((await request.formData()).get('id') ?? '');
 		const reg = await getRegistration(id);
 		if (!reg || reg.status !== 'paid') return fail(409, { id, message: 'Only paid registrations have a ticket to send.' });
+		if (!reg.email) return fail(409, { id, message: `${reg.fullName} is a walk-in with no email address: print their label instead.` });
 		try {
 			await emailTicket(reg, publicOrigin(url));
 		} catch (e) {
