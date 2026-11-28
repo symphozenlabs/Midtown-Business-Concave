@@ -18,6 +18,7 @@ import { directoryReady } from '#lib/server/directory/settings.ts';
 import { audit, getDefaultEvent, opsReady } from '#lib/server/ops/event.ts';
 import { TICKET_LABEL, formatRupees, normaliseUtr, priceFor } from '#lib/payment.ts';
 import { readWalkIn } from '#lib/walk-in.ts';
+import { isSegment, type Segment } from '#lib/segments.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
@@ -43,7 +44,8 @@ import {
 	setUpiTxnId,
 	type EmailFilter,
 	type Registration,
-	type Status
+	type Status,
+	segmentCounts
 } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -91,7 +93,7 @@ async function cardPostJobs() {
 const PAGE_SIZE = 25;
 
 /** One page of the table; a page past the end (e.g. after rows left the tab) shows the last page. */
-async function tablePage(filter: { status: Status | 'all'; q: string; email: EmailFilter }, requested: number) {
+async function tablePage(filter: { status: Status | 'all'; q: string; email: EmailFilter; segment: Segment }, requested: number) {
 	let page = requested;
 	let { rows, total } = await listRegistrationsPage(filter, page, PAGE_SIZE);
 	const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -121,9 +123,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedEmail = url.searchParams.get('email') as EmailFilter | null;
 	const email: EmailFilter = requestedEmail && EMAIL_FILTERS.includes(requestedEmail) ? requestedEmail : 'all';
 	const requestedPage = Math.max(1, Math.floor(Number(url.searchParams.get('page')) || 1));
+	const requestedSegment = url.searchParams.get('segment');
+	const segment: Segment = isSegment(requestedSegment) ? requestedSegment : 'all';
 
-	const [table, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
-		tablePage({ status, q, email }, requestedPage),
+	const [table, segments, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
+		tablePage({ status, q, email, segment }, requestedPage),
+		segmentCounts({ status, q, email }),
 		passesToSend(1),
 		cardBackJobs(publicOrigin(url)),
 		cardPostJobs(),
@@ -138,7 +143,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		directoryFlags,
 		stats,
 		passesToSend: passes.total,
-		filter: { status, q, email },
+		filter: { status, q, email, segment },
+		segments,
 		registrations: table.rows,
 		pagination: table.pagination,
 		cardBacks,

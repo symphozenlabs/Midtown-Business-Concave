@@ -42,6 +42,7 @@
 	import { INTERESTS } from '#lib/registration.ts';
 	import { formatRupees, TICKET_LABEL, TICKET_TYPES } from '#lib/payment.ts';
 	import { COMPLIMENTARY, WALK_IN_LIMITS, type WalkInErrors } from '#lib/walk-in.ts';
+	import { SEGMENTS, type Segment } from '#lib/segments.ts';
 
 	let { data, form } = $props();
 
@@ -244,7 +245,7 @@
 	// The current tab, ticket-email filter and search, as query parameters.
 	const filterQuery = $derived(
 		data.available
-			? `status=${data.filter.status}${data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}`
+			? `status=${data.filter.status}${data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${data.filter.segment !== 'all' ? `&segment=${data.filter.segment}` : ''}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}`
 			: ''
 	);
 	// Actions keep the current tab, search and page, so the list does not jump after a click.
@@ -426,10 +427,14 @@
 	}
 
 	const search = $derived(data.available && data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : '');
+	const segmentParam = $derived(data.available && data.filter.segment !== 'all' ? `&segment=${data.filter.segment}` : '');
+	/** A segment keeps the current tab, ticket-email filter and search; it starts again at page 1. */
+	const segmentHref = (value: Segment) =>
+		`?status=${data.available ? data.filter.status : 'all'}${data.available && data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${value === 'all' ? '' : `&segment=${value}`}${search}`;
 	const emailHref = (value: EmailState | 'all') =>
 		value === 'all'
-			? `?status=${data.available ? data.filter.status : 'all'}${search}`
-			: `?status=paid&email=${value}${search}`;
+			? `?status=${data.available ? data.filter.status : 'all'}${segmentParam}${search}`
+			: `?status=paid&email=${value}${segmentParam}${search}`;
 
 	/*
 	 * ID card backs: once a payment is confirmed, this browser draws the back (QR and
@@ -642,6 +647,7 @@
 					onsubmit={() => clearTimeout(searchTimer)}
 				>
 					<input type="hidden" name="status" value={data.filter.status} />
+					{#if data.filter.segment !== 'all'}<input type="hidden" name="segment" value={data.filter.segment} />{/if}
 					<Search size={15} aria-hidden="true" />
 					<input
 						type="search"
@@ -838,7 +844,7 @@
 			<nav class="tabs" aria-label="Filter by status">
 				{#each TABS as tab (tab.value)}
 					<a
-						href="?status={tab.value}{data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}"
+						href="?status={tab.value}{segmentParam}{data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}"
 						aria-current={data.filter.status === tab.value ? 'page' : undefined}
 					>
 						{tab.label}
@@ -886,6 +892,21 @@
 				{/if}
 			</div>
 		</div>
+
+		<nav class="email-tabs" aria-label="Filter by segment">
+			<span class="email-tabs-label">Segment</span>
+			{#each SEGMENTS as seg (seg.value)}
+				<a
+					href={segmentHref(seg.value)}
+					class="email-tab"
+					aria-current={data.filter.segment === seg.value ? 'page' : undefined}
+					data-sveltekit-noscroll
+				>
+					{seg.label}
+					<span class="count">{data.segments[seg.value]}</span>
+				</a>
+			{/each}
+		</nav>
 
 		<!-- Only paid delegates get a ticket email, so the filter belongs to Paid and All. -->
 		{#if paidTotal > 0 && (data.filter.status === 'paid' || data.filter.status === 'all')}
