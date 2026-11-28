@@ -82,7 +82,7 @@ export interface AwardApplication {
 
 export class DuplicateAwardError extends Error {}
 
-const memory = { rows: [] as AwardApplication[], open: true };
+const memory = { rows: [] as AwardApplication[], open: true, closesAt: null as string | null };
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L
 function newCode() {
@@ -122,20 +122,53 @@ function fromRow(r: Record<string, any>): AwardApplication {
 
 /* ---------- open / closed ---------- */
 
-/** Applications stay open until an organiser closes them. */
-export async function areAwardsOpen(): Promise<boolean> {
-	if (useMemory) return memory.open;
-	if (!isDatabaseConfigured) return false;
-	const value = (await readSetting('awards')) as { open?: boolean } | undefined;
-	return value?.open !== false;
+export interface AwardsWindow {
+	/** Taking applications right now. */
+	open: boolean;
+	/** The organisers' Open/Close switch, before the closing time is applied. */
+	switchedOn: boolean;
+	/** When applications close by themselves (ISO), or null for no closing time. */
+	closesAt: string | null;
 }
 
-export async function setAwardsOpen(open: boolean, by: string) {
+async function readAwardsSetting(): Promise<{ switchedOn: boolean; closesAt: string | null }> {
+	if (useMemory) return { switchedOn: memory.open, closesAt: memory.closesAt };
+	const value = ((await readSetting('awards')) ?? {}) as { open?: boolean; closesAt?: unknown };
+	const closesAt = typeof value.closesAt === 'string' && !Number.isNaN(Date.parse(value.closesAt)) ? value.closesAt : null;
+	return { switchedOn: value.open !== false, closesAt };
+}
+
+async function writeAwardsSetting(switchedOn: boolean, closesAt: string | null, by: string) {
 	if (useMemory) {
-		memory.open = open;
+		memory.open = switchedOn;
+		memory.closesAt = closesAt;
 		return;
 	}
-	await writeSetting('awards', { open }, by);
+	await writeSetting('awards', { open: switchedOn, closesAt }, by);
+}
+
+/** Open while the switch is on and the closing time, if any, has not passed. */
+export async function getAwardsWindow(now = Date.now()): Promise<AwardsWindow> {
+	if (!isAwardsStoreAvailable) return { open: false, switchedOn: false, closesAt: null };
+	const { switchedOn, closesAt } = await readAwardsSetting();
+	return { open: switchedOn && (!closesAt || now < Date.parse(closesAt)), switchedOn, closesAt };
+}
+
+export async function areAwardsOpen(): Promise<boolean> {
+	return (await getAwardsWindow()).open;
+}
+
+/** Opening again after the closing time has passed removes that closing time, so it really reopens. */
+export async function setAwardsOpen(open: boolean, by: string) {
+	const { closesAt } = await readAwardsSetting();
+	const passed = closesAt !== null && Date.parse(closesAt) <= Date.now();
+	await writeAwardsSetting(open, open && passed ? null : closesAt, by);
+}
+
+/** Sets or clears the automatic closing time; the Open/Close switch is left as it is. */
+export async function setAwardsClosingTime(closesAt: string | null, by: string) {
+	const { switchedOn } = await readAwardsSetting();
+	await writeAwardsSetting(switchedOn, closesAt, by);
 }
 
 /* ---------- applications ---------- */

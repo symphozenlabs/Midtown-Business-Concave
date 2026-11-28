@@ -7,6 +7,10 @@
 
 	const when = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
 	const fmt = (iso: string) => when.format(new Date(iso));
+	/** The value a datetime-local box needs, in India time. */
+	const istLocal = (iso: string) => new Date(Date.parse(iso) + 330 * 60_000).toISOString().slice(0, 16);
+	/** The closing time passed while the switch was still on. */
+	const deadlinePassed = $derived(data.available && data.switchedOn && !data.open);
 	const PILL: Record<AwardStatus, string> = { new: 'requested', shortlisted: 'inactive', winner: 'success', rejected: 'rejected' };
 
 	let filter = $state<'all' | AwardStatus>('all');
@@ -69,15 +73,39 @@
 		<div class="ops-banner ok" role="status"><CircleCheck size={18} aria-hidden="true" /><p>{form.success}</p></div>
 	{/if}
 
-	<section class="ops-panel switch" aria-label="Open or close applications">
-		<p>
-			<span class="ops-pill {data.open ? 'success' : 'rejected'}">{data.open ? 'Open' : 'Closed'}</span>
-			{data.open ? 'The website is taking applications.' : 'The website shows that applications are closed.'}
-		</p>
-		<form method="post" action="?/setOpen" use:enhance={saving}>
-			<input type="hidden" name="open" value={data.open ? 'false' : 'true'} />
-			<button class="btn btn-secondary ops-btn-sm" disabled={busy}>{data.open ? 'Close applications' : 'Open applications'}</button>
+	<section class="ops-panel window" aria-label="Open or close applications">
+		<div class="switch">
+			<p>
+				<span class="ops-pill {data.open ? 'success' : 'rejected'}">{data.open ? 'Open' : 'Closed'}</span>
+				{#if data.open && data.closesAt}
+					Taking applications. They close automatically on <strong>{fmt(data.closesAt)}</strong>.
+				{:else if data.open}
+					Taking applications, with no closing time. They stay open until you close them.
+				{:else if deadlinePassed && data.closesAt}
+					Closed automatically at the closing time, <strong>{fmt(data.closesAt)}</strong>.
+				{:else}
+					Closed. The website shows that applications are closed.
+				{/if}
+			</p>
+			<form method="post" action="?/setOpen" use:enhance={saving}>
+				<input type="hidden" name="open" value={data.open ? 'false' : 'true'} />
+				<button class="btn btn-secondary ops-btn-sm" disabled={busy}>{data.open ? 'Close now' : 'Open applications'}</button>
+			</form>
+		</div>
+
+		<form method="post" action="?/setClosingTime" class="closing" use:enhance={saving}>
+			<label class="ops-label">
+				Closing date and time <small>(India time)</small>
+				<input type="datetime-local" name="closesAt" value={data.closesAt && !deadlinePassed ? istLocal(data.closesAt) : ''} required />
+			</label>
+			<button class="btn btn-secondary ops-btn-sm" disabled={busy}>{data.closesAt && !deadlinePassed ? 'Change closing time' : 'Set closing time'}</button>
+			{#if data.closesAt}
+				<button class="btn btn-ghost ops-btn-sm" formaction="?/clearClosingTime" formnovalidate disabled={busy}>Remove closing time</button>
+			{/if}
 		</form>
+		{#if deadlinePassed}
+			<p class="ops-hint">To take applications again, press Open applications (this removes the old closing time), then set a new closing time if you want one.</p>
+		{/if}
 	</section>
 
 	<section class="ops-panel" aria-labelledby="apps-title">
@@ -164,6 +192,20 @@
 {/if}
 
 <style>
+	.window {
+		display: grid;
+		gap: var(--space-4);
+	}
+
+	.closing {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: var(--space-3);
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--rule);
+	}
+
 	.switch {
 		display: flex;
 		flex-wrap: wrap;

@@ -1,13 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { AWARD_STATUSES, type AwardStatus } from '#lib/awards.ts';
-import { areAwardsOpen, isAwardsStoreAvailable, listAwardApplications, setAwardsOpen, updateAwardApplication } from '#lib/server/awards.ts';
+import { getAwardsWindow, isAwardsStoreAvailable, listAwardApplications, setAwardsClosingTime, setAwardsOpen, updateAwardApplication } from '#lib/server/awards.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.admin) redirect(303, '/login');
 	if (!isAwardsStoreAvailable) return { available: false as const };
-	const [applications, open] = await Promise.all([listAwardApplications(), areAwardsOpen()]);
-	return { available: true as const, applications, open };
+	const [applications, awards] = await Promise.all([listAwardApplications(), getAwardsWindow()]);
+	return { available: true as const, applications, ...awards };
 };
 
 export const actions: Actions = {
@@ -28,5 +28,22 @@ export const actions: Actions = {
 		const open = String(form.get('open')) === 'true';
 		await setAwardsOpen(open, locals.admin.email);
 		return { success: open ? 'Applications are open.' : 'Applications are closed.' };
+	},
+	setClosingTime: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const form = await request.formData();
+		const local = String(form.get('closesAt') ?? '');
+		// The organisers type India time; store it as an exact moment.
+		if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return fail(400, { message: 'Choose a closing date and time.' });
+		const closesAt = new Date(`${local}:00+05:30`);
+		if (Number.isNaN(closesAt.getTime())) return fail(400, { message: 'Choose a closing date and time.' });
+		if (closesAt.getTime() <= Date.now()) return fail(400, { message: 'Choose a closing time in the future.' });
+		await setAwardsClosingTime(closesAt.toISOString(), locals.admin.email);
+		return { success: 'Closing time saved.' };
+	},
+	clearClosingTime: async ({ locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		await setAwardsClosingTime(null, locals.admin.email);
+		return { success: 'Closing time removed. Applications stay open until you close them.' };
 	}
 };
