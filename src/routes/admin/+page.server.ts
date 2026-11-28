@@ -18,7 +18,7 @@ import { directoryReady } from '#lib/server/directory/settings.ts';
 import { audit, getDefaultEvent, opsReady } from '#lib/server/ops/event.ts';
 import { TICKET_LABEL, formatRupees, normaliseUtr, priceFor } from '#lib/payment.ts';
 import { readWalkIn } from '#lib/walk-in.ts';
-import { isSegment, type Segment } from '#lib/segments.ts';
+import { isContactFilter, isSegment, isUpiFilter, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
@@ -45,7 +45,8 @@ import {
 	type EmailFilter,
 	type Registration,
 	type Status,
-	segmentCounts
+	segmentCounts,
+	listAmounts
 } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -93,7 +94,17 @@ async function cardPostJobs() {
 const PAGE_SIZE = 25;
 
 /** One page of the table; a page past the end (e.g. after rows left the tab) shows the last page. */
-async function tablePage(filter: { status: Status | 'all'; q: string; email: EmailFilter; segment: Segment }, requested: number) {
+type TableFilter = {
+	status: Status | 'all';
+	q: string;
+	email: EmailFilter;
+	segment: Segment;
+	contact: ContactFilter;
+	upi: UpiFilter;
+	amount: number | null;
+};
+
+async function tablePage(filter: TableFilter, requested: number) {
 	let page = requested;
 	let { rows, total } = await listRegistrationsPage(filter, page, PAGE_SIZE);
 	const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -125,10 +136,18 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedPage = Math.max(1, Math.floor(Number(url.searchParams.get('page')) || 1));
 	const requestedSegment = url.searchParams.get('segment');
 	const segment: Segment = isSegment(requestedSegment) ? requestedSegment : 'all';
+	// Column filters from the table headings.
+	const requestedContact = url.searchParams.get('contact');
+	const contact: ContactFilter = isContactFilter(requestedContact) ? requestedContact : 'all';
+	const requestedUpi = url.searchParams.get('upi');
+	const upi: UpiFilter = isUpiFilter(requestedUpi) ? requestedUpi : 'all';
+	const requestedAmount = url.searchParams.get('amount') ?? '';
+	const amount = /^\d{1,7}(\.\d{1,2})?$/.test(requestedAmount) ? Number(requestedAmount) : null;
 
-	const [table, segments, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
-		tablePage({ status, q, email, segment }, requestedPage),
-		segmentCounts({ status, q, email }),
+	const [table, segments, amounts, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
+		tablePage({ status, q, email, segment, contact, upi, amount }, requestedPage),
+		segmentCounts({ status, q, email, contact, upi, amount }),
+		listAmounts(),
 		passesToSend(1),
 		cardBackJobs(publicOrigin(url)),
 		cardPostJobs(),
@@ -143,8 +162,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		directoryFlags,
 		stats,
 		passesToSend: passes.total,
-		filter: { status, q, email, segment },
+		filter: { status, q, email, segment, contact, upi, amount },
 		segments,
+		amounts,
 		registrations: table.rows,
 		pagination: table.pagination,
 		cardBacks,
