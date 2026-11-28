@@ -51,7 +51,14 @@ export const UPI_FILTERS: { value: UpiFilter; label: string }[] = [
 export const isContactFilter = (v: unknown): v is ContactFilter => CONTACT_FILTERS.some((f) => f.value === v);
 export const isUpiFilter = (v: unknown): v is UpiFilter => UPI_FILTERS.some((f) => f.value === v);
 
+/** A registration date filter: one day in India time, as YYYY-MM-DD. */
+export const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+
+/** The India-time day of a moment, as YYYY-MM-DD. */
+export const istDay = (iso: string) => new Date(Date.parse(iso) + 330 * 60_000).toISOString().slice(0, 10);
+
 interface ColumnRow {
+	createdAt: string;
 	email: string;
 	upiTxnId: string | null;
 	voucherCode: string | null;
@@ -69,11 +76,12 @@ export function upiStateOf(r: ColumnRow): Exclude<UpiFilter, 'all'> {
 
 export function matchesColumns(
 	r: ColumnRow,
-	f: { contact?: ContactFilter; upi?: UpiFilter; amount?: number | null }
+	f: { contact?: ContactFilter; upi?: UpiFilter; amount?: number | null; day?: string | null }
 ): boolean {
 	if (f.contact === 'has' && !r.email) return false;
 	if (f.contact === 'none' && r.email) return false;
 	if (f.upi && f.upi !== 'all' && upiStateOf(r) !== f.upi) return false;
 	if (f.amount != null && r.amountRupees !== f.amount) return false;
+	if (f.day && istDay(r.createdAt) !== f.day) return false;
 	return true;
 }

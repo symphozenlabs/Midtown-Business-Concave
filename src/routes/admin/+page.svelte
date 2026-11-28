@@ -115,7 +115,7 @@
 	const selectable = $derived(registrations.filter((r) => r.status !== 'paid'));
 	const allSelected = $derived(selectable.length > 0 && selectable.every((r) => selected.has(r.id)));
 	const someSelected = $derived(selected.size > 0 && !allSelected);
-	const columns = $derived(selecting ? 9 : 8);
+	const columns = $derived(selecting ? 10 : 9);
 
 	// Drop selections that left the list (filtered away or now paid).
 	$effect(() => {
@@ -125,6 +125,10 @@
 
 	const when = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
 	const fmt = (iso: string | null) => (iso ? when.format(new Date(iso)) : '');
+	const regDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+	const regTime = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+	/** A YYYY-MM-DD day as the filter shows it, e.g. 28 Nov 2026. */
+	const dayLabel = (day: string) => regDate.format(new Date(`${day}T12:00:00+05:30`));
 	const interestLabel = (v: string) => INTERESTS.find((i) => i.value === v)?.label ?? v;
 	const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 	const media = (key: string | null) => (key ? `/admin/media/${key}` : '');
@@ -250,6 +254,7 @@
 		contact: ContactFilter;
 		upi: UpiFilter;
 		amount: number | null;
+		day: string | null;
 	};
 
 	/** The current tab, filters and search with some of them changed, as a link. Changing a filter starts at page 1. */
@@ -262,6 +267,7 @@
 		if (f.contact !== 'all') p.set('contact', f.contact);
 		if (f.upi !== 'all') p.set('upi', f.upi);
 		if (f.amount != null) p.set('amount', String(f.amount));
+		if (f.day) p.set('day', f.day);
 		if (f.q) p.set('q', f.q);
 		return `?${p}`;
 	}
@@ -270,9 +276,9 @@
 	const filterQuery = $derived(data.available ? hrefWith().slice(1) : '');
 	const filtering = $derived(
 		data.available &&
-			(data.filter.segment !== 'all' || data.filter.contact !== 'all' || data.filter.upi !== 'all' || data.filter.amount != null || data.filter.email !== 'all')
+			(data.filter.segment !== 'all' || data.filter.contact !== 'all' || data.filter.upi !== 'all' || data.filter.amount != null || data.filter.day != null || data.filter.email !== 'all')
 	);
-	const clearFilters = () => hrefWith({ segment: 'all', contact: 'all', upi: 'all', amount: null, email: 'all' });
+	const clearFilters = () => hrefWith({ segment: 'all', contact: 'all', upi: 'all', amount: null, day: null, email: 'all' });
 	const pickFilter = (change: Partial<TableFilter>) => goto(hrefWith(change), { reset: false });
 
 	// Actions keep the current tab, search and page, so the list does not jump after a click.
@@ -674,6 +680,7 @@
 					{#if data.filter.contact !== 'all'}<input type="hidden" name="contact" value={data.filter.contact} />{/if}
 					{#if data.filter.upi !== 'all'}<input type="hidden" name="upi" value={data.filter.upi} />{/if}
 					{#if data.filter.amount != null}<input type="hidden" name="amount" value={data.filter.amount} />{/if}
+					{#if data.filter.day}<input type="hidden" name="day" value={data.filter.day} />{/if}
 					<Search size={15} aria-hidden="true" />
 					<input
 						type="search"
@@ -1019,6 +1026,9 @@
 							<th>
 								{@render colFilter('Registration', data.filter.segment, data.filter.segment === 'all' ? null : SEGMENTS.find((x) => x.value === data.filter.segment)!.label, SEGMENTS, (v) => pickFilter({ segment: v as Segment }))}
 							</th>
+							<th class="col-date">
+								{@render colFilter('Registered on', data.filter.day ?? 'all', data.filter.day ? dayLabel(data.filter.day) : null, [{ value: 'all', label: 'All dates' }, ...data.days.map((d) => ({ value: d.day, label: `${dayLabel(d.day)} (${d.count})` }))], (v) => pickFilter({ day: v === 'all' ? null : v }))}
+							</th>
 							<th>
 								{@render colFilter('Email', data.filter.contact, data.filter.contact === 'all' ? null : CONTACT_FILTERS.find((x) => x.value === data.filter.contact)!.label, CONTACT_FILTERS, (v) => pickFilter({ contact: v as ContactFilter }))}
 							</th>
@@ -1081,6 +1091,9 @@
 											>
 										</div>
 									</div>
+								</td>
+								<td class="col-date">
+									<time datetime={r.createdAt}>{regDate.format(new Date(r.createdAt))}<small>{regTime.format(new Date(r.createdAt))}</small></time>
 								</td>
 								<td class="email">
 									{#if r.email}<a href="mailto:{r.email}">{r.email}</a>{:else}<span class="muted">—</span>{/if}
@@ -1797,6 +1810,16 @@
 	}
 
 	/* Column filters: the heading opens a dropdown; a chosen value shows under it in gold. */
+	td.col-date time {
+		display: grid;
+		white-space: nowrap;
+	}
+
+	td.col-date small {
+		font-size: 12px;
+		color: var(--text-supporting);
+	}
+
 	.th-filter {
 		position: relative;
 		display: inline-grid;
@@ -2720,6 +2743,7 @@
 		}
 
 		.col-amount,
+		.col-date,
 		.action-label {
 			display: none;
 		}

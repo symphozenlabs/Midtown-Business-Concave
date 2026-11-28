@@ -18,7 +18,7 @@ import { directoryReady } from '#lib/server/directory/settings.ts';
 import { audit, getDefaultEvent, opsReady } from '#lib/server/ops/event.ts';
 import { TICKET_LABEL, formatRupees, normaliseUtr, priceFor } from '#lib/payment.ts';
 import { readWalkIn } from '#lib/walk-in.ts';
-import { isContactFilter, isSegment, isUpiFilter, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
+import { isContactFilter, isDay, isSegment, isUpiFilter, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
 import {
 	EMAIL_FILTERS,
 	STATUSES,
@@ -46,7 +46,8 @@ import {
 	type Registration,
 	type Status,
 	segmentCounts,
-	listAmounts
+	listAmounts,
+	listRegistrationDays
 } from '#lib/server/store.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -102,6 +103,7 @@ type TableFilter = {
 	contact: ContactFilter;
 	upi: UpiFilter;
 	amount: number | null;
+	day: string | null;
 };
 
 async function tablePage(filter: TableFilter, requested: number) {
@@ -143,11 +145,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const upi: UpiFilter = isUpiFilter(requestedUpi) ? requestedUpi : 'all';
 	const requestedAmount = url.searchParams.get('amount') ?? '';
 	const amount = /^\d{1,7}(\.\d{1,2})?$/.test(requestedAmount) ? Number(requestedAmount) : null;
+	const requestedDay = url.searchParams.get('day');
+	const day = isDay(requestedDay) ? requestedDay : null;
 
-	const [table, segments, amounts, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
-		tablePage({ status, q, email, segment, contact, upi, amount }, requestedPage),
-		segmentCounts({ status, q, email, contact, upi, amount }),
+	const [table, segments, amounts, days, passes, cardBacks, cardPosts, event, frontsOutdated, payment] = await Promise.all([
+		tablePage({ status, q, email, segment, contact, upi, amount, day }, requestedPage),
+		segmentCounts({ status, q, email, contact, upi, amount, day }),
 		listAmounts(),
+		listRegistrationDays(),
 		passesToSend(1),
 		cardBackJobs(publicOrigin(url)),
 		cardPostJobs(),
@@ -162,9 +167,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		directoryFlags,
 		stats,
 		passesToSend: passes.total,
-		filter: { status, q, email, segment, contact, upi, amount },
+		filter: { status, q, email, segment, contact, upi, amount, day },
 		segments,
 		amounts,
+		days,
 		registrations: table.rows,
 		pagination: table.pagination,
 		cardBacks,
