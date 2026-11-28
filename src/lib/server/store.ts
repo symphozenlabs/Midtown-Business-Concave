@@ -3,6 +3,7 @@ import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/ev
 import { DEFAULT_PAYMENT, isTicketType, priceFor, type PaymentSettings, type TicketType } from '#lib/payment.ts';
 import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
 import { codePrefix, codeVariants, withTicketPrefix } from '#lib/registration-code.ts';
+import { inSegment, SEGMENTS, type Segment } from '#lib/segments.ts';
 import type { WalkInInput } from '#lib/walk-in.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 import { findVoucher, listVouchers } from './vouchers.ts';
@@ -791,6 +792,7 @@ export interface RegistrationFilter {
 	status: Status | 'all';
 	q: string;
 	email?: EmailFilter;
+	segment?: Segment;
 }
 
 /** Every registration matching the filter (up to 500), newest first within each status. */
@@ -838,10 +840,12 @@ async function queryRegistrations(
 ): Promise<{ rows: Registration[]; total: number }> {
 	const q = filter.q.trim();
 	const email = filter.email ?? 'all';
+	const segment = filter.segment ?? 'all';
 	if (useMemory) {
 		const needle = q.toLowerCase();
 		const all = [...mem.rows.values()]
 			.filter((r) => filter.status === 'all' || r.status === filter.status)
+			.filter((r) => inSegment(r, segment))
 			.filter((r) => email === 'all' || (r.status === 'paid' && !!r.email && emailStateOf(r) === email))
 			.filter(
 				(r) =>
@@ -866,6 +870,11 @@ async function queryRegistrations(
 			) = ${email}))
 			and (${q}::text = '' or full_name ilike ${like} or email ilike ${like} or code ilike ${like}
 				or company_name ilike ${like} or phone ilike ${like} or coalesce(upi_txn_id, '') ilike ${like})
+			and (${segment}::text = 'all'
+				or (${segment}::text in ('delegate', 'visitor') and ticket_type = ${segment})
+				or (${segment}::text = 'online' and not walk_in)
+				or (${segment}::text = 'walk_in' and walk_in)
+				or (${segment}::text = 'complimentary' and walk_in and amount_rupees = 0))
 		order by
 			case status when 'payment_submitted' then 0 when 'pending_payment' then 1 when 'paid' then 2 else 3 end,
 			coalesce(payment_submitted_at, created_at) desc, id
@@ -873,6 +882,36 @@ async function queryRegistrations(
 	// An offset past the end returns no rows, and so no total: count again.
 	if (!rows.length && offset > 0) return { rows: [], total: (await queryRegistrations(filter, 1, 0)).total };
 	return { rows: rows.map(fromRow), total: rows[0]?.total_matches ?? 0 };
+}
+
+/** How many registrations in each segment match the rest of the filter (status, ticket email, search). */
+export async function segmentCounts(filter: Omit<RegistrationFilter, 'segment'>): Promise<Record<Segment, number>> {
+	const q = filter.q.trim();
+	const email = filter.email ?? 'all';
+	if (useMemory) {
+		const needle = q.toLowerCase();
+		const rows = [...mem.rows.values()]
+			.filter((r) => filter.status === 'all' || r.status === filter.status)
+			.filter((r) => email === 'all' || (r.status === 'paid' && !!r.email && emailStateOf(r) === email))
+			.filter((r) => !needle || [r.fullName, r.email, r.code, r.companyName, r.phone, r.upiTxnId ?? ''].some((v) => v.toLowerCase().includes(needle)));
+		return Object.fromEntries(SEGMENTS.map(({ value }) => [value, rows.filter((r) => inSegment(r, value)).length])) as Record<Segment, number>;
+	}
+	const like = `%${q.replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+	const [r] = await sql()`
+		select count(*)::int as all,
+			count(*) filter (where ticket_type = 'delegate')::int as delegate,
+			count(*) filter (where ticket_type = 'visitor')::int as visitor,
+			count(*) filter (where not walk_in)::int as online,
+			count(*) filter (where walk_in)::int as walk_in,
+			count(*) filter (where walk_in and amount_rupees = 0)::int as complimentary
+		from registrations
+		where (${filter.status}::text = 'all' or status = ${filter.status})
+			and (${email}::text = 'all' or (status = 'paid' and email <> '' and (
+				case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end
+			) = ${email}))
+			and (${q}::text = '' or full_name ilike ${like} or email ilike ${like} or code ilike ${like}
+				or company_name ilike ${like} or phone ilike ${like} or coalesce(upi_txn_id, '') ilike ${like})`;
+	return Object.fromEntries(SEGMENTS.map(({ value }) => [value, Number(r?.[value] ?? 0)])) as Record<Segment, number>;
 }
 
 export async function getStats(): Promise<Stats> {
