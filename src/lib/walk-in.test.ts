@@ -22,7 +22,7 @@ describe('readWalkIn', () => {
 				fullName: 'Enter the name.',
 				designation: 'Enter the designation.',
 				companyName: 'Enter the company.',
-				ticketType: 'Choose Delegate or Visitor.',
+				ticketType: 'Choose Delegate, Visitor or Complimentary.',
 				amountRupees: 'Enter the amount received in rupees, or 0 for a complimentary pass.'
 			}
 		});
@@ -45,6 +45,13 @@ describe('readWalkIn', () => {
 		});
 		expect(readWalkIn({ ...base, amountRupees: '-1' }, prices)).toMatchObject({ ok: false });
 		expect(readWalkIn({ ...base, amountRupees: '10.555' }, prices)).toMatchObject({ ok: false });
+	});
+
+	it('makes the Complimentary choice a free Delegate pass, ignoring the amount and UPI fields', () => {
+		expect(readWalkIn({ ...base, ticketType: 'complimentary', amountRupees: '', upiTxnId: 'junk' }, prices)).toEqual({
+			ok: true,
+			input: { fullName: 'Narasimman T', designation: 'CEO', companyName: 'Mpeoples Business', ticketType: 'delegate', amountRupees: 0, upiTxnId: null }
+		});
 	});
 
 	it('keeps a 12-digit UPI reference and refuses anything else', () => {

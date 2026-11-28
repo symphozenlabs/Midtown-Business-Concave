@@ -1002,6 +1002,34 @@ export async function markPaid(id: string, by: string): Promise<Registration | n
 	return rows[0] ? fromRow(rows[0]) : null;
 }
 
+export type UtrResult = { ok: true; registration: Registration } | { ok: false; reason: 'not_found' | 'utr_used' };
+
+/**
+ * An organiser enters or corrects a registration's UPI transaction ID, e.g. when the
+ * delegate paid but never typed it in, or typed it wrong. The status is left as it is.
+ * An ID already on another registration or a stall booking is refused.
+ */
+export async function setUpiTxnId(id: string, utr: string): Promise<UtrResult> {
+	if (useMemory) {
+		const row = mem.rows.get(id);
+		if (!row) return { ok: false, reason: 'not_found' };
+		if ([...mem.rows.values()].some((r) => r.upiTxnId === utr && r.id !== id)) return { ok: false, reason: 'utr_used' };
+		row.upiTxnId = utr;
+		return { ok: true, registration: row };
+	}
+	if (await stallBookingHasUtr(utr)) return { ok: false, reason: 'utr_used' };
+	try {
+		const rows = await sql()`
+			update registrations set upi_txn_id = ${utr}, updated_at = now()
+			where id = ${id}
+			returning *`;
+		return rows[0] ? { ok: true, registration: fromRow(rows[0]) } : { ok: false, reason: 'not_found' };
+	} catch (e) {
+		if (uniqueViolation(e) === 'registrations_upi_txn_id_key') return { ok: false, reason: 'utr_used' };
+		throw e;
+	}
+}
+
 export async function markRejected(id: string, by: string, reason: string): Promise<Registration | null> {
 	if (useMemory) {
 		const row = mem.rows.get(id);

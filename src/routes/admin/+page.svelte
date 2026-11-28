@@ -27,6 +27,7 @@
 		MailWarning,
 		Mails,
 		MailX,
+		Pencil,
 		Printer,
 		QrCode,
 		RefreshCw,
@@ -40,7 +41,7 @@
 	import { eventLabels, type EventSettings } from '#lib/event-settings.ts';
 	import { INTERESTS } from '#lib/registration.ts';
 	import { formatRupees, TICKET_LABEL, TICKET_TYPES } from '#lib/payment.ts';
-	import { WALK_IN_LIMITS, type WalkInErrors } from '#lib/walk-in.ts';
+	import { COMPLIMENTARY, WALK_IN_LIMITS, type WalkInErrors } from '#lib/walk-in.ts';
 
 	let { data, form } = $props();
 
@@ -302,6 +303,19 @@
 		open.add(id);
 	}
 
+	// The row whose UPI transaction ID is being entered or corrected.
+	let editingUtr = $state<string | null>(null);
+	// The row whose last UPI save was refused, so its field shows the error.
+	const utrErrorId = $derived.by(() => {
+		const f = form as { utrError?: boolean; id?: string } | null;
+		return f?.utrError ? (f.id ?? null) : null;
+	});
+
+	function startUtr(id: string) {
+		editingUtr = editingUtr === id ? null : id;
+		open.add(id);
+	}
+
 	/*
 	 * Print label: one person's 75 x 50 mm name-and-QR label for the label printer. The
 	 * label page loads in a hidden frame and its print dialog opens. Cmd- or Ctrl-click
@@ -363,7 +377,10 @@
 	const walkInFeedback = $derived(form !== walkInDismissed && (form as WalkInFeedback)?.walkIn ? (form as WalkInFeedback) : null);
 
 	// The ticket chosen and the amount received; choosing a ticket fills in its full price.
-	let walkInDraft = $state<{ ticketType: '' | (typeof TICKET_TYPES)[number]; amountRupees: string }>({ ticketType: '', amountRupees: '' });
+	let walkInDraft = $state<{ ticketType: '' | (typeof TICKET_TYPES)[number] | typeof COMPLIMENTARY; amountRupees: string }>({
+		ticketType: '',
+		amountRupees: ''
+	});
 
 	function openWalkIn() {
 		walkInDismissed = form;
@@ -688,9 +705,24 @@
 										</span>
 									</label>
 								{/each}
+								<label class="ticket-option">
+									<input
+										type="radio"
+										name="ticketType"
+										value={COMPLIMENTARY}
+										required
+										checked={walkInDraft.ticketType === COMPLIMENTARY}
+										onchange={() => (walkInDraft.ticketType = COMPLIMENTARY)}
+									/>
+									<span>
+										<strong>Complimentary</strong>
+										<small>Free Delegate pass</small>
+									</span>
+								</label>
 							</div>
 							{#if walkInFeedback?.errors?.ticketType}<small class="ops-field-error">{walkInFeedback.errors.ticketType}</small>{/if}
 						</fieldset>
+						{#if walkInDraft.ticketType !== COMPLIMENTARY}
 						<div class="pair">
 							<label class="ops-label">
 								Amount received
@@ -720,6 +752,7 @@
 								{#if walkInFeedback?.errors?.upiTxnId}<small class="ops-field-error">{walkInFeedback.errors.upiTxnId}</small>{/if}
 							</label>
 						</div>
+						{/if}
 						<label class="ops-check">
 							<input type="checkbox" name="print" checked />
 							Print the label now
@@ -998,6 +1031,15 @@
 									{:else}
 										<span class="muted">Not entered</span>
 									{/if}
+									<button
+										type="button"
+										class="utr-edit"
+										onclick={() => startUtr(r.id)}
+										title={r.upiTxnId ? 'Edit the UPI transaction ID' : 'Enter the UPI transaction ID'}
+									>
+										<Pencil size={13} aria-hidden="true" />
+										<span class="visually-hidden">{r.upiTxnId ? 'Edit' : 'Enter'} UPI transaction ID for {r.fullName}</span>
+									</button>
 								</td>
 								<td class="col-amount num">
 									{formatRupees(r.amountRupees)}
@@ -1173,6 +1215,41 @@
 																	payment{/if}
 															</button>
 															<button type="button" class="btn btn-ghost btn-sm" onclick={() => (rejecting = null)}>Cancel</button>
+														</form>
+													{/if}
+
+													{#if editingUtr === r.id}
+														<form
+															method="post"
+															action={act('setUtr')}
+															use:enhance={working(r.id, (ok) => {
+																if (ok) editingUtr = null;
+															})}
+															class="utr-form"
+														>
+															<input type="hidden" name="id" value={r.id} />
+															<label>
+																<span>UPI transaction ID (12 digits)</span>
+																<!-- svelte-ignore a11y_autofocus -->
+																<input
+																	name="utr"
+																	value={r.upiTxnId ?? ''}
+																	inputmode="numeric"
+																	autocomplete="off"
+																	maxlength="20"
+																	placeholder="e.g. 412345678901"
+																	required
+																	autofocus
+																	aria-invalid={utrErrorId === r.id ? 'true' : undefined}
+																/>
+															</label>
+															<button class="btn btn-secondary btn-sm" disabled={busy === r.id}>
+																{#if busy === r.id}<LoaderCircle size={15} class="spin" aria-hidden="true" /> Saving…{:else}Save{/if}
+															</button>
+															<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingUtr = null)}>Cancel</button>
+															{#if utrErrorId === r.id}
+																<small class="utr-error" role="alert">{form?.message}</small>
+															{/if}
 														</form>
 													{/if}
 
@@ -1993,7 +2070,7 @@
 
 	.ticket-options {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: var(--space-2);
 	}
 
@@ -2296,6 +2373,65 @@
 		border-radius: var(--radius-sm);
 		background: var(--white);
 		font-size: 13px;
+	}
+
+	.utr-edit {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		margin-left: 4px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text-supporting);
+		cursor: pointer;
+		vertical-align: middle;
+	}
+
+	.utr-edit:hover {
+		background: var(--gold-tint, rgba(0, 0, 0, 0.06));
+		color: var(--gold-ink);
+	}
+
+	.utr-form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: var(--space-2) var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-sm);
+	}
+
+	.utr-form label {
+		display: grid;
+		gap: 4px;
+		flex: 1 1 240px;
+		font-size: 12px;
+		color: var(--charcoal);
+	}
+
+	.utr-form input {
+		min-height: 32px;
+		padding: 0 var(--space-3);
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-sm);
+		background: var(--white);
+		font: 600 13px ui-monospace, 'Cascadia Mono', Consolas, monospace;
+		letter-spacing: 0.04em;
+	}
+
+	.utr-form input[aria-invalid='true'] {
+		border-color: var(--danger);
+	}
+
+	.utr-error {
+		flex-basis: 100%;
+		color: var(--danger);
+		font-size: 12px;
 	}
 
 	:global(.btn-paid) {

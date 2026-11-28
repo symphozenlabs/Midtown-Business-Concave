@@ -20,6 +20,9 @@ export interface WalkInInput {
 	upiTxnId: string | null;
 }
 
+/** The walk-in form's third ticket choice: a free Delegate pass. */
+export const COMPLIMENTARY = 'complimentary';
+
 export type WalkInErrors = Partial<Record<keyof WalkInInput, string>>;
 
 const LABEL = { fullName: 'Name', designation: 'Designation', companyName: 'Company' } as const;
@@ -45,8 +48,14 @@ export function readWalkIn(
 		text[field] = value;
 	}
 
+	// Complimentary: a free Delegate pass, so nothing was received and there is no UPI reference.
+	if (raw.ticketType === COMPLIMENTARY) {
+		if (Object.keys(errors).length) return { ok: false, errors };
+		return { ok: true, input: { ...text, ticketType: 'delegate', amountRupees: 0, upiTxnId: null } };
+	}
+
 	const ticketType = raw.ticketType;
-	if (!isTicketType(ticketType)) errors.ticketType = 'Choose Delegate or Visitor.';
+	if (!isTicketType(ticketType)) errors.ticketType = 'Choose Delegate, Visitor or Complimentary.';
 
 	const amountText = tidy(raw.amountRupees).replace(/[₹,\s]/g, '');
 	const amount = amountText ? Number(amountText) : Number.NaN;
