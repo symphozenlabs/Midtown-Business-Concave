@@ -3,7 +3,7 @@ import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/ev
 import { DEFAULT_PAYMENT, isTicketType, priceFor, type PaymentSettings, type TicketType } from '#lib/payment.ts';
 import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
 import { codePrefix, codeVariants, withTicketPrefix } from '#lib/registration-code.ts';
-import { inSegment, matchesColumns, SEGMENTS, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
+import { inSegment, istDay, matchesColumns, SEGMENTS, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
 import type { WalkInInput } from '#lib/walk-in.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 import { findVoucher, listVouchers } from './vouchers.ts';
@@ -797,6 +797,8 @@ export interface RegistrationFilter {
 	contact?: ContactFilter;
 	upi?: UpiFilter;
 	amount?: number | null;
+	/** Registered on this day, India time (YYYY-MM-DD). */
+	day?: string | null;
 }
 
 /** Every registration matching the filter (up to 500), newest first within each status. */
@@ -845,7 +847,7 @@ async function queryRegistrations(
 	const q = filter.q.trim();
 	const email = filter.email ?? 'all';
 	const segment = filter.segment ?? 'all';
-	const { contact, upi, amount } = columnParams(filter);
+	const { contact, upi, amount, day } = columnParams(filter);
 	if (useMemory) {
 		const needle = q.toLowerCase();
 		const all = [...mem.rows.values()]
@@ -889,6 +891,7 @@ async function queryRegistrations(
 				or (${upi}::text = 'desk' and upi_txn_id is null and walk_in and amount_rupees > 0)
 				or (${upi}::text = 'missing' and upi_txn_id is null and not walk_in and not (voucher_code is not null and amount_rupees = 0)))
 			and (${amount}::numeric is null or amount_rupees = ${amount}::numeric)
+			and (${day}::date is null or (created_at at time zone 'Asia/Kolkata')::date = ${day}::date)
 		order by
 			case status when 'payment_submitted' then 0 when 'pending_payment' then 1 when 'paid' then 2 else 3 end,
 			coalesce(payment_submitted_at, created_at) desc, id
@@ -899,7 +902,7 @@ async function queryRegistrations(
 }
 
 function columnParams(filter: RegistrationFilter | Omit<RegistrationFilter, 'segment'>) {
-	return { contact: filter.contact ?? 'all', upi: filter.upi ?? 'all', amount: filter.amount ?? null };
+	return { contact: filter.contact ?? 'all', upi: filter.upi ?? 'all', amount: filter.amount ?? null, day: filter.day ?? null };
 }
 
 /** Every amount in the table, for the Amount column's filter. */
@@ -909,11 +912,24 @@ export async function listAmounts(): Promise<number[]> {
 	return rows.map((r) => Number(r.amount));
 }
 
+/** Each day people registered (India time, newest first), with how many registered that day. */
+export async function listRegistrationDays(): Promise<{ day: string; count: number }[]> {
+	if (useMemory) {
+		const counts = new Map<string, number>();
+		for (const r of mem.rows.values()) counts.set(istDay(r.createdAt), (counts.get(istDay(r.createdAt)) ?? 0) + 1);
+		return [...counts].map(([day, count]) => ({ day, count })).sort((a, b) => b.day.localeCompare(a.day));
+	}
+	const rows = await sql()`
+		select to_char((created_at at time zone 'Asia/Kolkata')::date, 'YYYY-MM-DD') as day, count(*)::int as count
+		from registrations group by 1 order by 1 desc`;
+	return rows.map((r) => ({ day: String(r.day), count: Number(r.count) }));
+}
+
 /** How many registrations in each segment match the rest of the filter (status, ticket email, search). */
 export async function segmentCounts(filter: Omit<RegistrationFilter, 'segment'>): Promise<Record<Segment, number>> {
 	const q = filter.q.trim();
 	const email = filter.email ?? 'all';
-	const { contact, upi, amount } = columnParams(filter);
+	const { contact, upi, amount, day } = columnParams(filter);
 	if (useMemory) {
 		const needle = q.toLowerCase();
 		const rows = [...mem.rows.values()]
@@ -945,7 +961,8 @@ export async function segmentCounts(filter: Omit<RegistrationFilter, 'segment'>)
 				or (${upi}::text = 'complimentary' and upi_txn_id is null and not (voucher_code is not null and amount_rupees = 0) and walk_in and amount_rupees = 0)
 				or (${upi}::text = 'desk' and upi_txn_id is null and walk_in and amount_rupees > 0)
 				or (${upi}::text = 'missing' and upi_txn_id is null and not walk_in and not (voucher_code is not null and amount_rupees = 0)))
-			and (${amount}::numeric is null or amount_rupees = ${amount}::numeric)`;
+			and (${amount}::numeric is null or amount_rupees = ${amount}::numeric)
+			and (${day}::date is null or (created_at at time zone 'Asia/Kolkata')::date = ${day}::date)`;
 	return Object.fromEntries(SEGMENTS.map(({ value }) => [value, Number(r?.[value] ?? 0)])) as Record<Segment, number>;
 }
 
