@@ -16,7 +16,7 @@ import { cardBacksToMake, markPassEmailed, passEmailFor, passesToSend } from '#l
 import { adminFlagsFor, setAdminFlags } from '#lib/server/directory/people.ts';
 import { directoryReady } from '#lib/server/directory/settings.ts';
 import { audit, getDefaultEvent, opsReady } from '#lib/server/ops/event.ts';
-import { TICKET_LABEL, formatRupees, priceFor } from '#lib/payment.ts';
+import { TICKET_LABEL, formatRupees, normaliseUtr, priceFor } from '#lib/payment.ts';
 import { readWalkIn } from '#lib/walk-in.ts';
 import {
 	EMAIL_FILTERS,
@@ -40,6 +40,7 @@ import {
 	markRejected,
 	markTicketEmailed,
 	recordEmailEvent,
+	setUpiTxnId,
 	type EmailFilter,
 	type Registration,
 	type Status
@@ -329,6 +330,36 @@ export const actions: Actions = {
 			print: form.get('print') === 'on',
 			success: `Added ${reg.fullName} as a walk-in ${TICKET_LABEL[reg.ticketType]} (${reg.code}), ${paid}.`
 		};
+	},
+
+	/** Enter or correct the UPI transaction ID on a registration. */
+	setUtr: async ({ request, locals }) => {
+		if (!locals.admin) return fail(401, { message: 'Sign in again.' });
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		const utr = normaliseUtr(String(form.get('utr') ?? ''));
+		if (!utr) return fail(400, { id, utrError: true, message: 'Enter the 12-digit UPI transaction ID.' });
+		const prev = await getRegistration(id);
+		const result = await setUpiTxnId(id, utr);
+		if (!result.ok) {
+			return result.reason === 'utr_used'
+				? fail(409, { id, utrError: true, message: 'That UPI transaction ID is already on another registration or stall booking.' })
+				: fail(404, { id, message: 'This registration no longer exists.' });
+		}
+		const reg = result.registration;
+		if (isDatabaseConfigured && (await opsReady())) {
+			const event = await getDefaultEvent();
+			await audit({
+				eventId: event.id,
+				actorType: 'admin',
+				actor: locals.admin.email,
+				action: 'registration.utr',
+				targetType: 'registration',
+				targetId: reg.id,
+				details: { code: reg.code, from: prev?.upiTxnId ?? null, to: utr }
+			});
+		}
+		return { id, success: `Saved UPI transaction ID ${utr} for ${reg.fullName}.` };
 	},
 
 	reject: async ({ request, locals }) => {
