@@ -3,7 +3,7 @@ import { DEFAULT_EVENT, isValidEventSettings, type EventSettings } from '#lib/ev
 import { DEFAULT_PAYMENT, isTicketType, priceFor, type PaymentSettings, type TicketType } from '#lib/payment.ts';
 import { discountFor, normaliseVoucherCode, type Voucher } from '#lib/voucher.ts';
 import { codePrefix, codeVariants, withTicketPrefix } from '#lib/registration-code.ts';
-import { inSegment, SEGMENTS, type Segment } from '#lib/segments.ts';
+import { inSegment, matchesColumns, SEGMENTS, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
 import type { WalkInInput } from '#lib/walk-in.ts';
 import { ensureColumn, isDatabaseConfigured, sql, uniqueViolation } from './db.ts';
 import { findVoucher, listVouchers } from './vouchers.ts';
@@ -793,6 +793,10 @@ export interface RegistrationFilter {
 	q: string;
 	email?: EmailFilter;
 	segment?: Segment;
+	/** Column filters from the table headings. */
+	contact?: ContactFilter;
+	upi?: UpiFilter;
+	amount?: number | null;
 }
 
 /** Every registration matching the filter (up to 500), newest first within each status. */
@@ -841,11 +845,13 @@ async function queryRegistrations(
 	const q = filter.q.trim();
 	const email = filter.email ?? 'all';
 	const segment = filter.segment ?? 'all';
+	const { contact, upi, amount } = columnParams(filter);
 	if (useMemory) {
 		const needle = q.toLowerCase();
 		const all = [...mem.rows.values()]
 			.filter((r) => filter.status === 'all' || r.status === filter.status)
 			.filter((r) => inSegment(r, segment))
+			.filter((r) => matchesColumns(r, filter))
 			.filter((r) => email === 'all' || (r.status === 'paid' && !!r.email && emailStateOf(r) === email))
 			.filter(
 				(r) =>
@@ -875,6 +881,14 @@ async function queryRegistrations(
 				or (${segment}::text = 'online' and not walk_in)
 				or (${segment}::text = 'walk_in' and walk_in)
 				or (${segment}::text = 'complimentary' and walk_in and amount_rupees = 0))
+			and (${contact}::text = 'all' or (${contact}::text = 'has' and email <> '') or (${contact}::text = 'none' and email = ''))
+			and (${upi}::text = 'all'
+				or (${upi}::text = 'upi' and upi_txn_id is not null)
+				or (${upi}::text = 'voucher' and upi_txn_id is null and voucher_code is not null and amount_rupees = 0)
+				or (${upi}::text = 'complimentary' and upi_txn_id is null and not (voucher_code is not null and amount_rupees = 0) and walk_in and amount_rupees = 0)
+				or (${upi}::text = 'desk' and upi_txn_id is null and walk_in and amount_rupees > 0)
+				or (${upi}::text = 'missing' and upi_txn_id is null and not walk_in and not (voucher_code is not null and amount_rupees = 0)))
+			and (${amount}::numeric is null or amount_rupees = ${amount}::numeric)
 		order by
 			case status when 'payment_submitted' then 0 when 'pending_payment' then 1 when 'paid' then 2 else 3 end,
 			coalesce(payment_submitted_at, created_at) desc, id
@@ -884,14 +898,27 @@ async function queryRegistrations(
 	return { rows: rows.map(fromRow), total: rows[0]?.total_matches ?? 0 };
 }
 
+function columnParams(filter: RegistrationFilter | Omit<RegistrationFilter, 'segment'>) {
+	return { contact: filter.contact ?? 'all', upi: filter.upi ?? 'all', amount: filter.amount ?? null };
+}
+
+/** Every amount in the table, for the Amount column's filter. */
+export async function listAmounts(): Promise<number[]> {
+	if (useMemory) return [...new Set([...mem.rows.values()].map((r) => r.amountRupees))].sort((a, b) => a - b);
+	const rows = await sql()`select distinct amount_rupees::float8 as amount from registrations order by 1`;
+	return rows.map((r) => Number(r.amount));
+}
+
 /** How many registrations in each segment match the rest of the filter (status, ticket email, search). */
 export async function segmentCounts(filter: Omit<RegistrationFilter, 'segment'>): Promise<Record<Segment, number>> {
 	const q = filter.q.trim();
 	const email = filter.email ?? 'all';
+	const { contact, upi, amount } = columnParams(filter);
 	if (useMemory) {
 		const needle = q.toLowerCase();
 		const rows = [...mem.rows.values()]
 			.filter((r) => filter.status === 'all' || r.status === filter.status)
+			.filter((r) => matchesColumns(r, filter))
 			.filter((r) => email === 'all' || (r.status === 'paid' && !!r.email && emailStateOf(r) === email))
 			.filter((r) => !needle || [r.fullName, r.email, r.code, r.companyName, r.phone, r.upiTxnId ?? ''].some((v) => v.toLowerCase().includes(needle)));
 		return Object.fromEntries(SEGMENTS.map(({ value }) => [value, rows.filter((r) => inSegment(r, value)).length])) as Record<Segment, number>;
@@ -910,7 +937,15 @@ export async function segmentCounts(filter: Omit<RegistrationFilter, 'segment'>)
 				case when ticket_emailed_at is null then 'not_sent' else coalesce(ticket_email_status, 'sent') end
 			) = ${email}))
 			and (${q}::text = '' or full_name ilike ${like} or email ilike ${like} or code ilike ${like}
-				or company_name ilike ${like} or phone ilike ${like} or coalesce(upi_txn_id, '') ilike ${like})`;
+				or company_name ilike ${like} or phone ilike ${like} or coalesce(upi_txn_id, '') ilike ${like})
+			and (${contact}::text = 'all' or (${contact}::text = 'has' and email <> '') or (${contact}::text = 'none' and email = ''))
+			and (${upi}::text = 'all'
+				or (${upi}::text = 'upi' and upi_txn_id is not null)
+				or (${upi}::text = 'voucher' and upi_txn_id is null and voucher_code is not null and amount_rupees = 0)
+				or (${upi}::text = 'complimentary' and upi_txn_id is null and not (voucher_code is not null and amount_rupees = 0) and walk_in and amount_rupees = 0)
+				or (${upi}::text = 'desk' and upi_txn_id is null and walk_in and amount_rupees > 0)
+				or (${upi}::text = 'missing' and upi_txn_id is null and not walk_in and not (voucher_code is not null and amount_rupees = 0)))
+			and (${amount}::numeric is null or amount_rupees = ${amount}::numeric)`;
 	return Object.fromEntries(SEGMENTS.map(({ value }) => [value, Number(r?.[value] ?? 0)])) as Record<Segment, number>;
 }
 

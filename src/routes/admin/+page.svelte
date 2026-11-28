@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
-	import { afterNavigate, invalidateAll } from '$app/navigation';
+	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -42,7 +42,7 @@
 	import { INTERESTS } from '#lib/registration.ts';
 	import { formatRupees, TICKET_LABEL, TICKET_TYPES } from '#lib/payment.ts';
 	import { COMPLIMENTARY, WALK_IN_LIMITS, type WalkInErrors } from '#lib/walk-in.ts';
-	import { SEGMENTS, type Segment } from '#lib/segments.ts';
+	import { CONTACT_FILTERS, SEGMENTS, UPI_FILTERS, type ContactFilter, type Segment, type UpiFilter } from '#lib/segments.ts';
 
 	let { data, form } = $props();
 
@@ -242,12 +242,39 @@
 		searchInput.setSelectionRange(end, end);
 	});
 
-	// The current tab, ticket-email filter and search, as query parameters.
-	const filterQuery = $derived(
-		data.available
-			? `status=${data.filter.status}${data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${data.filter.segment !== 'all' ? `&segment=${data.filter.segment}` : ''}${data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}`
-			: ''
+	type TableFilter = {
+		status: Status | 'all';
+		q: string;
+		email: EmailState | 'all';
+		segment: Segment;
+		contact: ContactFilter;
+		upi: UpiFilter;
+		amount: number | null;
+	};
+
+	/** The current tab, filters and search with some of them changed, as a link. Changing a filter starts at page 1. */
+	function hrefWith(change: Partial<TableFilter> = {}) {
+		if (!data.available) return '?';
+		const f = { ...(data.filter as TableFilter), ...change };
+		const p = new URLSearchParams({ status: f.status });
+		if (f.email !== 'all') p.set('email', f.email);
+		if (f.segment !== 'all') p.set('segment', f.segment);
+		if (f.contact !== 'all') p.set('contact', f.contact);
+		if (f.upi !== 'all') p.set('upi', f.upi);
+		if (f.amount != null) p.set('amount', String(f.amount));
+		if (f.q) p.set('q', f.q);
+		return `?${p}`;
+	}
+
+	// The current tab, filters and search, as query parameters.
+	const filterQuery = $derived(data.available ? hrefWith().slice(1) : '');
+	const filtering = $derived(
+		data.available &&
+			(data.filter.segment !== 'all' || data.filter.contact !== 'all' || data.filter.upi !== 'all' || data.filter.amount != null || data.filter.email !== 'all')
 	);
+	const clearFilters = () => hrefWith({ segment: 'all', contact: 'all', upi: 'all', amount: null, email: 'all' });
+	const pickFilter = (change: Partial<TableFilter>) => goto(hrefWith(change), { reset: false });
+
 	// Actions keep the current tab, search and page, so the list does not jump after a click.
 	const keep = $derived(
 		data.available ? `&${filterQuery}${data.pagination.page > 1 ? `&page=${data.pagination.page}` : ''}` : ''
@@ -427,14 +454,9 @@
 	}
 
 	const search = $derived(data.available && data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : '');
-	const segmentParam = $derived(data.available && data.filter.segment !== 'all' ? `&segment=${data.filter.segment}` : '');
-	/** A segment keeps the current tab, ticket-email filter and search; it starts again at page 1. */
-	const segmentHref = (value: Segment) =>
-		`?status=${data.available ? data.filter.status : 'all'}${data.available && data.filter.email !== 'all' ? `&email=${data.filter.email}` : ''}${value === 'all' ? '' : `&segment=${value}`}${search}`;
-	const emailHref = (value: EmailState | 'all') =>
-		value === 'all'
-			? `?status=${data.available ? data.filter.status : 'all'}${segmentParam}${search}`
-			: `?status=paid&email=${value}${segmentParam}${search}`;
+	const segmentHref = (value: Segment) => hrefWith({ segment: value });
+	// Only paid registrations get a ticket email, so picking one moves to the Paid tab.
+	const emailHref = (value: EmailState | 'all') => (value === 'all' ? hrefWith({ email: 'all' }) : hrefWith({ status: 'paid', email: value }));
 
 	/*
 	 * ID card backs: once a payment is confirmed, this browser draws the back (QR and
@@ -647,7 +669,11 @@
 					onsubmit={() => clearTimeout(searchTimer)}
 				>
 					<input type="hidden" name="status" value={data.filter.status} />
+					{#if data.filter.email !== 'all'}<input type="hidden" name="email" value={data.filter.email} />{/if}
 					{#if data.filter.segment !== 'all'}<input type="hidden" name="segment" value={data.filter.segment} />{/if}
+					{#if data.filter.contact !== 'all'}<input type="hidden" name="contact" value={data.filter.contact} />{/if}
+					{#if data.filter.upi !== 'all'}<input type="hidden" name="upi" value={data.filter.upi} />{/if}
+					{#if data.filter.amount != null}<input type="hidden" name="amount" value={data.filter.amount} />{/if}
 					<Search size={15} aria-hidden="true" />
 					<input
 						type="search"
@@ -844,7 +870,7 @@
 			<nav class="tabs" aria-label="Filter by status">
 				{#each TABS as tab (tab.value)}
 					<a
-						href="?status={tab.value}{segmentParam}{data.filter.q ? `&q=${encodeURIComponent(data.filter.q)}` : ''}"
+						href={hrefWith({ status: tab.value, email: 'all' })}
 						aria-current={data.filter.status === tab.value ? 'page' : undefined}
 					>
 						{tab.label}
@@ -906,6 +932,7 @@
 					<span class="count">{data.segments[seg.value]}</span>
 				</a>
 			{/each}
+			{#if filtering}<a class="clear-filters" href={clearFilters()} data-sveltekit-noscroll>Clear filters</a>{/if}
 		</nav>
 
 		<!-- Only paid delegates get a ticket email, so the filter belongs to Paid and All. -->
@@ -980,12 +1007,33 @@
 								</th>
 							{/if}
 							<th class="col-toggle"><span class="visually-hidden">Details</span></th>
-							<th>Registration</th>
-							<th>Email</th>
-							<th>UPI transaction ID</th>
-							<th class="col-amount num">Amount</th>
-							<th>Status</th>
-							<th>Ticket email</th>
+							{#snippet colFilter(label: string, current: string, shown: string | null, options: { value: string; label: string }[], onpick: (v: string) => void)}
+								<div class="th-filter" class:filtered={shown !== null}>
+									<span class="th-label">{label} <ChevronDown size={13} aria-hidden="true" /></span>
+									{#if shown !== null}<span class="th-chosen">{shown}</span>{/if}
+									<select aria-label="Filter by {label}" value={current} onchange={(e) => onpick(e.currentTarget.value)}>
+										{#each options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+									</select>
+								</div>
+							{/snippet}
+							<th>
+								{@render colFilter('Registration', data.filter.segment, data.filter.segment === 'all' ? null : SEGMENTS.find((x) => x.value === data.filter.segment)!.label, SEGMENTS, (v) => pickFilter({ segment: v as Segment }))}
+							</th>
+							<th>
+								{@render colFilter('Email', data.filter.contact, data.filter.contact === 'all' ? null : CONTACT_FILTERS.find((x) => x.value === data.filter.contact)!.label, CONTACT_FILTERS, (v) => pickFilter({ contact: v as ContactFilter }))}
+							</th>
+							<th>
+								{@render colFilter('UPI transaction ID', data.filter.upi, data.filter.upi === 'all' ? null : UPI_FILTERS.find((x) => x.value === data.filter.upi)!.label, UPI_FILTERS, (v) => pickFilter({ upi: v as UpiFilter }))}
+							</th>
+							<th class="col-amount num">
+								{@render colFilter('Amount', data.filter.amount == null ? 'all' : String(data.filter.amount), data.filter.amount == null ? null : formatRupees(data.filter.amount), [{ value: 'all', label: 'All amounts' }, ...data.amounts.map((a) => ({ value: String(a), label: formatRupees(a) }))], (v) => pickFilter({ amount: v === 'all' ? null : Number(v) }))}
+							</th>
+							<th>
+								{@render colFilter('Status', data.filter.status, data.filter.status === 'all' ? null : TABS.find((x) => x.value === data.filter.status)!.label, TABS.map((t) => ({ value: t.value, label: t.label })), (v) => pickFilter({ status: v as Status | 'all', email: 'all' }))}
+							</th>
+							<th>
+								{@render colFilter('Ticket email', data.filter.email, data.filter.email === 'all' ? null : EMAIL_TABS.find((x) => x.value === data.filter.email)!.label, EMAIL_TABS, (v) => pickFilter(v === 'all' ? { email: 'all' } : { status: 'paid', email: v as EmailState }))}
+							</th>
 							<th class="col-actions"><span class="visually-hidden">Actions</span></th>
 						</tr>
 					</thead>
@@ -1746,6 +1794,70 @@
 
 	th:first-child {
 		border-top-left-radius: var(--radius-sm);
+	}
+
+	/* Column filters: the heading opens a dropdown; a chosen value shows under it in gold. */
+	.th-filter {
+		position: relative;
+		display: inline-grid;
+		justify-items: start;
+		gap: 3px;
+		padding: 2px 4px;
+		margin: -2px -4px;
+		border-radius: 6px;
+		cursor: pointer;
+	}
+
+	.th-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		white-space: nowrap;
+	}
+
+	.th-label :global(svg) {
+		flex: none;
+	}
+
+	.th-filter:hover,
+	.th-filter:focus-within {
+		background: var(--mist);
+		color: var(--charcoal);
+	}
+
+	.th-filter:focus-within {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 1px;
+	}
+
+	.th-filter select {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	.th-filter.filtered {
+		color: var(--charcoal);
+	}
+
+	.th-chosen {
+		padding: 1px 7px;
+		border-radius: 999px;
+		background: var(--gold-tint);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold-ink) 35%, transparent);
+		color: var(--gold-ink);
+		font-size: 11px;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.clear-filters {
+		margin-left: var(--space-2);
+		color: var(--gold-ink);
+		font-size: 12px;
+		font-weight: 600;
 	}
 
 	th:last-child {
